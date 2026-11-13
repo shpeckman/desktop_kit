@@ -153,6 +153,7 @@ module Apprt
     fun gtk_css_provider_load_from_string(css_provider : Void*, string : UInt8*)
     fun gtk_style_context_add_provider_for_display(display : Void*, provider : Void*, priority : UInt32)
     fun gtk_style_context_remove_provider_for_display(display : Void*, provider : Void*)
+    fun gtk_css_section_to_string(section : Void*) : UInt8*
     fun gtk_uri_launcher_new(uri : UInt8*) : Void*
     fun gtk_uri_launcher_launch(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
     fun gtk_uri_launcher_launch_finish(self_ : Void*, result : Void*, error : GError**) : Int32

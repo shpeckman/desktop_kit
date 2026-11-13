@@ -8,7 +8,9 @@ pty or renderer code. The implementation plan lives in
 ## Commands
 
 ```sh
-make spec     # crystal spec --threads 2
+make spec     # crystal spec --threads 2 (what `dev repo ship` runs)
+make spec-pure # spec/pure only: no display, no bus
+make spec-gtk  # spec/gtk only
 make gen      # regenerate src/apprt/c/*.cr from GIR + data/gir/ allowlists
 make docs     # crystal docs src/apprt.cr -o docs
 make format   # crystal tool format src spec tools
@@ -25,7 +27,8 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
 - `src/apprt/c/` - `Apprt::C` (`:nodoc:`), the C bindings.
   - `glib.cr gobject.cr gio.cr gdk.cr gtk.cr adw.cr` - generated, never edit.
   - `manual.cr` - what the generator cannot emit: `GValue` (holds a union)
-    and the GLib macros `PRIORITY_DEFAULT_IDLE`, `SOURCE_REMOVE`.
+    and GIR constants (`PRIORITY_DEFAULT`, `PRIORITY_DEFAULT_IDLE`,
+    `SOURCE_REMOVE`, `STYLE_PROVIDER_PRIORITY_APPLICATION`, `..._USER`).
 - `src/apprt/glib/` - the GLib/GObject layer every component builds on.
   - `error.cr` - `GLibError` (public).
   - `native.cr` - `Native` (`:nodoc:`): C string, strv and GList helpers.
@@ -36,13 +39,27 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   - `variant.cr` - `Variant` (public).
   - `widget.cr` - `Widget` (public): borrowed widget handle.
   - `signals.cr` - `Signals` (`:nodoc:`): signal connections.
+- `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance` (public).
+- `src/apprt/ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
+  cross-thread queue.
+- `src/apprt/systemd.cr` - `Systemd` (public `notify`; `ready`, `reloading`,
+  `stopping` protected for `App`).
+- `src/apprt/app.cr` - `App` (public): lifecycle, signals, CSS, appearance.
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
 - `spec/pure/` - specs needing no display: generator (fixture
   `spec/data/Fixture-1.0.gir` + `.txt`), bindings (every generated `fun`
   resolves with `dlsym`, `GValue` size, a GType round trip), the glib layer
-  (`glib_spec.cr`, signals on Gio objects) and `Variant`.
+  (`glib_spec.cr`, signals on Gio objects), `Variant` and `Systemd`
+  (`with_notify_socket` in `spec/spec_helper.cr`).
+- `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
+  `before_all`) runs a private `gtk4-broadwayd` (loopback port, socket in a
+  temporary `XDG_RUNTIME_DIR`) and `dbus-daemon`, and points `GDK_BACKEND`,
+  `BROADWAY_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `XDG_CONFIG_HOME` and
+  `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
+  session. `Spec.after_suite` stops both. Test apps hold the GApplication in
+  `on_startup`: without windows or a hold it quits as soon as it is idle.
 
 ## GLib layer
 
@@ -90,6 +107,40 @@ Internal contracts of `src/apprt/glib/`:
   (`Variant.signature(T)`); enums travel as snake-case strings. Its `hash`
   hashes the type string and the printed form because `g_variant_hash`
   rejects containers.
+
+## Runtime core
+
+- GTK runs on one `Fiber::ExecutionContext::Isolated` thread named `"gtk"`
+  that `App#run` starts per run; the calling fiber waits on it. Hooks and
+  every GTK call happen there. A later run starts a new thread; GTK and the
+  default `GMainContext` survive across runs.
+- `UIThread.enter` marks the thread; `current?` / `assert!` check it.
+  `post` pushes onto a `Sync::Exclusive` deque and schedules one
+  `g_idle_add_full(PRIORITY_DEFAULT)` drain while none is pending (atomic
+  flag); the drain clears the flag first, so blocks posted while it runs
+  schedule the next one. Exceptions in posted blocks are logged
+  (`"posted block"`). `dispatch` runs inline on the UI thread and posts
+  elsewhere. `enter` drops the queue when the run ends.
+- `App` state mutators (`quit`, `reload`, `css=`, `appearance=`) store and
+  `dispatch`, and act only while `running?` (set in startup before the CSS
+  and appearance are applied, cleared first thing in shutdown). Stored CSS
+  and appearance are applied at startup.
+- Startup order: CSS provider (priority `STYLE_PROVIDER_PRIORITY_USER`,
+  `parsing-error` → `Log.warn "css parsing failed at <section>: <message>"`),
+  appearance, `notify::dark` handler, `on_startup`, first `on_color_scheme`.
+  The appearance is applied before the handler connects, so no change is
+  reported twice.
+- `quit` destroys only `gtk_application_get_windows` (Ghostty: destroying
+  every toplevel double-frees fcitx windows), then `g_application_quit`.
+- `run` passes GApplication only the program name: without `HANDLES_OPEN`
+  it rejects file arguments. Signals are trapped with `Signal#trap` (the
+  handlers run on a default-context fiber and post) and reset after the run.
+- `Systemd` speaks `sd_notify` over an `AF_UNIX` datagram socket; `@` in
+  `NOTIFY_SOCKET` is an abstract address. `MONOTONIC_USEC` comes from
+  `CLOCK_MONOTONIC` (Crystal's monotonic clock is `CLOCK_BOOTTIME`).
+  `READY=1` follows the first activation; reloads send `RELOADING=1` then
+  `READY=1`; shutdown sends `STOPPING=1`.
+- Hooks are `protected` with `# :showdoc:` so the docs list them.
 
 ## Bindings
 

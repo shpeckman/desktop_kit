@@ -13,7 +13,11 @@ module Apprt
       data : UInt64[2]
     end
 
-    PRIORITY_DEFAULT_IDLE = 200
-    SOURCE_REMOVE         =   0
+    # GLib and GTK constants (GIR <constant>s, which the generator skips).
+    PRIORITY_DEFAULT                    =       0
+    PRIORITY_DEFAULT_IDLE               =     200
+    SOURCE_REMOVE                       =       0
+    STYLE_PROVIDER_PRIORITY_APPLICATION = 600_u32
+    STYLE_PROVIDER_PRIORITY_USER        = 800_u32
   end
 end

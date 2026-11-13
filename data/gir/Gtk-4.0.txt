@@ -142,6 +142,7 @@ gtk_css_provider_new
 gtk_css_provider_load_from_string
 gtk_style_context_add_provider_for_display
 gtk_style_context_remove_provider_for_display
+gtk_css_section_to_string
 
 # uris
 gtk_uri_launcher_new
