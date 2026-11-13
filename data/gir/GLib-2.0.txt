@@ -25,6 +25,7 @@ g_timeout_add_full
 g_source_remove
 g_main_context_default
 g_main_context_wakeup
+g_main_context_iteration
 
 # variants
 GVariantClass
@@ -59,6 +60,7 @@ g_variant_get_type_string
 g_variant_is_of_type
 g_variant_classify
 g_variant_print
+g_variant_equal
 g_variant_parse
 g_variant_ref
 g_variant_ref_sink

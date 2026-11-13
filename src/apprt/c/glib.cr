@@ -59,6 +59,7 @@ module Apprt
     fun g_source_remove(tag : UInt32) : Int32
     fun g_main_context_default : Void*
     fun g_main_context_wakeup(context : Void*)
+    fun g_main_context_iteration(context : Void*, may_block : Int32) : Int32
     fun g_variant_new_boolean(value : Int32) : Void*
     fun g_variant_new_int32(value : Int32) : Void*
     fun g_variant_new_uint32(value : UInt32) : Void*
@@ -90,6 +91,7 @@ module Apprt
     fun g_variant_is_of_type(value : Void*, type_ : Void*) : Int32
     fun g_variant_classify(value : Void*) : GVariantClass
     fun g_variant_print(value : Void*, type_annotate : Int32) : UInt8*
+    fun g_variant_equal(one : Void*, two : Void*) : Int32
     fun g_variant_parse(type_ : Void*, text : UInt8*, limit : UInt8*, endptr : UInt8**, error : GError**) : Void*
     fun g_variant_ref(value : Void*) : Void*
     fun g_variant_ref_sink(value : Void*) : Void*
