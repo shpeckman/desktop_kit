@@ -1,0 +1,19 @@
+name: apprt
+version: 0.1.0
+
+authors:
+  - shpeckman
+
+description: |
+  Native application runtime for Crystal programs on Linux: GTK 4 and
+  libadwaita windows, tabs, splits and surfaces driven by typed actions,
+  with desktop notifications, global shortcuts, DBus IPC and systemd
+  integration. A port of Ghostty's apprt.
+
+crystal: ">= 1.23.0"
+
+libraries:
+  libadwaita-1: ">= 1.7"
+  gtk4: ">= 4.18"
+
+license: MIT

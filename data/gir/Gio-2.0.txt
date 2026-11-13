@@ -1,0 +1,77 @@
+# data/gir/Gio-2.0.txt
+# Gio symbols of Apprt::C (src/apprt/c/gio.cr); see tools/gir/generator.cr.
+
+# application
+GApplication
+g_application_id_is_valid
+g_application_run
+g_application_register
+g_application_activate
+g_application_hold
+g_application_release
+g_application_quit
+g_application_get_application_id
+g_application_get_is_remote
+g_application_get_dbus_connection
+g_application_get_dbus_object_path
+g_application_send_notification
+g_application_withdraw_notification
+
+# actions
+g_simple_action_new
+g_simple_action_new_stateful
+g_simple_action_set_enabled
+g_simple_action_set_state
+g_simple_action_group_new
+g_action_map_add_action
+g_action_map_remove_action
+g_action_map_lookup_action
+g_action_group_activate_action
+g_action_group_has_action
+g_action_group_list_actions
+g_action_name_is_valid
+g_action_parse_detailed_name
+g_action_print_detailed_name
+
+# menus
+g_menu_new
+g_menu_append
+g_menu_append_section
+
+# notifications and icons
+g_notification_new
+g_notification_set_title
+g_notification_set_body
+g_notification_set_priority
+g_notification_set_icon
+g_notification_set_default_action_and_target_value
+g_themed_icon_new
+
+# async
+g_cancellable_new
+g_cancellable_cancel
+g_async_result_get_source_object
+
+# dbus
+g_bus_get
+g_bus_get_finish
+g_bus_get_sync
+g_bus_own_name
+g_bus_unown_name
+g_dbus_connection_call
+g_dbus_connection_call_finish
+g_dbus_connection_call_sync
+g_dbus_connection_emit_signal
+g_dbus_connection_get_unique_name
+g_dbus_connection_signal_subscribe
+g_dbus_connection_signal_unsubscribe
+g_dbus_connection_register_object
+g_dbus_connection_unregister_object
+g_dbus_connection_flush_sync
+GDBusInterfaceVTable
+g_dbus_node_info_new_for_xml
+g_dbus_node_info_lookup_interface
+g_dbus_node_info_unref
+g_dbus_method_invocation_return_value
+g_dbus_method_invocation_return_dbus_error
+g_dbus_method_invocation_get_sender

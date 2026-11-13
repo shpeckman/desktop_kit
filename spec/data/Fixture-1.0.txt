@@ -1,0 +1,16 @@
+# spec/data/Fixture-1.0.txt: allowlist of spec/pure/gir_generator_spec.cr
+FixThing            # get-type
+fix_thing_new
+fix_thing_set_flags
+fix_thing_get_size
+fix_thing_get_mode
+fix_mode_to_string
+fix_strv
+fix_log
+fix_load
+fix_each
+fix_id
+fix_opaque_get
+fix_list
+FixPoint
+FixBig

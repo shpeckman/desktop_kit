@@ -1,0 +1,73 @@
+# data/gir/GLib-2.0.txt
+# GLib symbols of Apprt::C (src/apprt/c/glib.cr); see tools/gir/generator.cr.
+
+# errors
+GError
+g_error_free
+g_error_new_literal
+g_quark_from_string
+g_quark_to_string
+
+# memory and strings
+g_free
+g_strdup
+g_strfreev
+g_strv_length
+
+# lists
+GList
+g_list_free
+g_list_length
+
+# main loop
+g_idle_add_full
+g_timeout_add_full
+g_source_remove
+g_main_context_default
+g_main_context_wakeup
+
+# variants
+GVariantClass
+g_variant_new_boolean
+g_variant_new_int32
+g_variant_new_uint32
+g_variant_new_int64
+g_variant_new_uint64
+g_variant_new_double
+g_variant_new_string
+g_variant_new_object_path
+g_variant_new_strv
+g_variant_new_variant
+g_variant_new_tuple
+g_variant_new_array
+g_variant_new_dict_entry
+g_variant_new_maybe
+g_variant_get_boolean
+g_variant_get_int32
+g_variant_get_uint32
+g_variant_get_int64
+g_variant_get_uint64
+g_variant_get_double
+g_variant_get_string
+g_variant_get_strv
+g_variant_get_variant
+g_variant_get_maybe
+g_variant_get_child_value
+g_variant_n_children
+g_variant_lookup_value
+g_variant_get_type_string
+g_variant_is_of_type
+g_variant_classify
+g_variant_print
+g_variant_parse
+g_variant_ref
+g_variant_ref_sink
+g_variant_take_ref
+g_variant_unref
+g_variant_type_new
+g_variant_type_free
+g_variant_type_peek_string
+g_variant_builder_new
+g_variant_builder_add_value
+g_variant_builder_end
+g_variant_builder_unref

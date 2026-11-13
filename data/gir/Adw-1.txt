@@ -1,0 +1,76 @@
+# data/gir/Adw-1.txt
+# Adw symbols of Apprt::C (src/apprt/c/adw.cr); see tools/gir/generator.cr.
+
+# application and style
+adw_init
+adw_application_new
+adw_style_manager_get_default
+adw_style_manager_get_dark
+adw_style_manager_set_color_scheme
+
+# windows and bars
+adw_application_window_new
+adw_application_window_set_content
+adw_toolbar_view_new
+adw_toolbar_view_set_content
+adw_toolbar_view_add_top_bar
+adw_toolbar_view_set_top_bar_style
+adw_header_bar_new
+adw_header_bar_pack_start
+adw_header_bar_pack_end
+adw_header_bar_set_title_widget
+adw_window_title_new
+adw_window_title_set_title
+adw_window_title_set_subtitle
+adw_bin_new
+adw_bin_set_child
+adw_bin_get_child
+
+# tabs
+adw_tab_bar_new
+adw_tab_bar_set_view
+adw_tab_bar_set_autohide
+adw_tab_view_new
+adw_tab_view_append
+adw_tab_view_get_n_pages
+adw_tab_view_get_nth_page
+adw_tab_view_get_page
+adw_tab_view_get_page_position
+adw_tab_view_get_selected_page
+adw_tab_view_set_selected_page
+adw_tab_view_close_page
+adw_tab_view_close_page_finish
+adw_tab_view_close_other_pages
+adw_tab_view_close_pages_after
+adw_tab_view_reorder_page
+adw_tab_view_transfer_page
+adw_tab_page_get_child
+adw_tab_page_get_title
+adw_tab_page_set_title
+adw_tab_page_set_tooltip
+adw_tab_page_set_needs_attention
+adw_tab_overview_new
+adw_tab_overview_set_view
+adw_tab_overview_set_child
+adw_tab_overview_set_open
+adw_tab_overview_get_open
+adw_tab_overview_set_enable_new_tab
+
+# toasts
+adw_toast_overlay_new
+adw_toast_overlay_set_child
+adw_toast_overlay_add_toast
+adw_toast_new
+adw_toast_set_timeout
+
+# dialogs
+adw_dialog_present
+adw_dialog_close
+adw_alert_dialog_new
+adw_alert_dialog_add_response
+adw_alert_dialog_set_response_appearance
+adw_alert_dialog_set_default_response
+adw_alert_dialog_set_close_response
+adw_alert_dialog_set_extra_child
+adw_alert_dialog_choose
+adw_alert_dialog_choose_finish

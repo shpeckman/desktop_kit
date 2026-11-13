@@ -1,0 +1,133 @@
+<?xml version="1.0"?>
+<!-- spec/data/Fixture-1.0.gir: input of spec/pure/gir_generator_spec.cr -->
+<repository version="1.2"
+            xmlns="http://www.gtk.org/introspection/core/1.0"
+            xmlns:c="http://www.gtk.org/introspection/c/1.0"
+            xmlns:glib="http://www.gtk.org/introspection/glib/1.0">
+  <include name="Missing" version="9.0"/>
+  <package name="fixture-1"/>
+  <c:include name="fixture.h"/>
+  <namespace name="Fix" version="1.0" shared-library="libfixture.so.1" c:identifier-prefixes="Fix" c:symbol-prefixes="fix">
+    <alias name="Id" c:type="FixId">
+      <type name="guint32" c:type="guint32"/>
+    </alias>
+    <enumeration name="Mode" c:type="FixMode" glib:type-name="FixMode" glib:get-type="fix_mode_get_type">
+      <member name="off" value="0" c:identifier="FIX_MODE_OFF" glib:nick="off" glib:name="FIX_MODE_OFF"/>
+      <member name="on" value="1" c:identifier="FIX_MODE_ON"/>
+      <member name="invalid" value="-1" c:identifier="FIX_MODE_INVALID"/>
+      <member name="2d" value="2" c:identifier="FIX_MODE_2D"/>
+      <function name="to_string" c:identifier="fix_mode_to_string">
+        <return-value transfer-ownership="none"><type name="utf8" c:type="const char*"/></return-value>
+        <parameters><parameter name="mode"><type name="Mode" c:type="FixMode"/></parameter></parameters>
+      </function>
+    </enumeration>
+    <enumeration name="Big" c:type="FixBig">
+      <member name="small" value="1" c:identifier="FIX_BIG_SMALL"/>
+      <member name="huge" value="4294967295" c:identifier="FIX_BIG_HUGE"/>
+    </enumeration>
+    <bitfield name="Flags" c:type="FixFlags">
+      <member name="none" value="0" c:identifier="FIX_FLAGS_NONE"/>
+      <member name="first_bit" value="1" c:identifier="FIX_FLAGS_FIRST_BIT"/>
+      <member name="second_bit" value="2" c:identifier="FIX_FLAGS_SECOND_BIT"/>
+      <member name="all" value="3" c:identifier="FIX_FLAGS_ALL"/>
+      <member name="high" value="-2147483648" c:identifier="FIX_FLAGS_HIGH"/>
+    </bitfield>
+    <callback name="Func" c:type="FixFunc">
+      <return-value transfer-ownership="none"><type name="gint" c:type="int"/></return-value>
+      <parameters>
+        <parameter name="value"><type name="gint" c:type="int"/></parameter>
+        <parameter name="user_data" closure="1"><type name="gpointer" c:type="gpointer"/></parameter>
+      </parameters>
+    </callback>
+    <callback name="Notify" c:type="FixNotify">
+      <return-value transfer-ownership="none"><type name="none" c:type="void"/></return-value>
+    </callback>
+    <record name="Point" c:type="FixPoint">
+      <field name="x" writable="1"><type name="gint" c:type="int"/></field>
+      <field name="end" writable="1"><type name="gdouble" c:type="double"/></field>
+      <field name="func" writable="1"><type name="Func" c:type="FixFunc"/></field>
+      <field name="inline_cb"><callback name="inline_cb"><return-value><type name="none" c:type="void"/></return-value></callback></field>
+      <field name="padding" private="1"><array zero-terminated="0" fixed-size="4"><type name="gpointer" c:type="gpointer"/></array></field>
+    </record>
+    <record name="Opaque" c:type="FixOpaque" disguised="1"/>
+    <record name="Packed" c:type="FixPacked">
+      <field name="bit" bits="1"><type name="guint" c:type="guint"/></field>
+    </record>
+    <record name="Value" c:type="FixValue">
+      <field name="type"><type name="GType" c:type="GType"/></field>
+      <union name="data" c:type="data"><field name="v_int"><type name="gint" c:type="gint"/></field></union>
+    </record>
+    <class name="Thing" c:type="FixThing" glib:type-name="FixThing" glib:get-type="fix_thing_get_type">
+      <constructor name="new" c:identifier="fix_thing_new">
+        <return-value transfer-ownership="full"><type name="Thing" c:type="FixThing*"/></return-value>
+        <parameters><parameter name="mode"><type name="Mode" c:type="FixMode"/></parameter></parameters>
+      </constructor>
+      <method name="set_flags" c:identifier="fix_thing_set_flags">
+        <return-value><type name="none" c:type="void"/></return-value>
+        <parameters>
+          <instance-parameter name="thing"><type name="Thing" c:type="FixThing*"/></instance-parameter>
+          <parameter name="flags"><type name="Flags" c:type="FixFlags"/></parameter>
+        </parameters>
+      </method>
+      <method name="get_size" c:identifier="fix_thing_get_size">
+        <return-value><type name="none" c:type="void"/></return-value>
+        <parameters>
+          <instance-parameter name="thing"><type name="Thing" c:type="const FixThing*"/></instance-parameter>
+          <parameter name="width" direction="out" caller-allocates="0"><type name="gint" c:type="int*"/></parameter>
+          <parameter name="height" direction="out" caller-allocates="0"><type name="gint"/></parameter>
+          <parameter name="point" direction="out" caller-allocates="1"><type name="Point" c:type="FixPoint*"/></parameter>
+        </parameters>
+      </method>
+      <method name="get_mode" c:identifier="fix_thing_get_mode">
+        <return-value><type name="Mode"/></return-value>
+        <parameters>
+          <instance-parameter name="thing"><type name="Thing"/></instance-parameter>
+          <parameter name="end"><type name="Opaque"/></parameter>
+        </parameters>
+      </method>
+    </class>
+    <class name="Base" c:type="FixBase" glib:type-name="FixBase" glib:get-type="intern"/>
+    <function name="strv" c:identifier="fix_strv">
+      <return-value><type name="gboolean" c:type="gboolean"/></return-value>
+      <parameters>
+        <parameter name="items"><array c:type="const char* const*"><type name="utf8"/></array></parameter>
+        <parameter name="names"><array zero-terminated="1"><type name="utf8"/></array></parameter>
+      </parameters>
+    </function>
+    <function name="log" c:identifier="fix_log">
+      <return-value><type name="none" c:type="void"/></return-value>
+      <parameters>
+        <parameter name="format"><type name="utf8" c:type="const char*"/></parameter>
+        <parameter name="..."><varargs/></parameter>
+      </parameters>
+    </function>
+    <function name="load" c:identifier="fix_load" throws="1">
+      <return-value><type name="gboolean" c:type="gboolean"/></return-value>
+      <parameters><parameter name="path"><type name="filename" c:type="const char*"/></parameter></parameters>
+    </function>
+    <function name="each" c:identifier="fix_each">
+      <return-value><type name="none" c:type="void"/></return-value>
+      <parameters>
+        <parameter name="func" scope="call" closure="1"><type name="Func" c:type="FixFunc"/></parameter>
+        <parameter name="data"><type name="gpointer" c:type="gpointer"/></parameter>
+        <parameter name="done"><type name="Notify" c:type="FixNotify"/></parameter>
+      </parameters>
+    </function>
+    <function name="id" c:identifier="fix_id">
+      <return-value><type name="Id" c:type="FixId"/></return-value>
+    </function>
+    <function name="opaque_get" c:identifier="fix_opaque_get">
+      <return-value><type name="Opaque" c:type="FixOpaque*"/></return-value>
+      <parameters><parameter name="foreign"><type name="Other.Thing" c:type="OtherThing*"/></parameter></parameters>
+    </function>
+    <function name="by_value" c:identifier="fix_by_value">
+      <return-value><type name="none" c:type="void"/></return-value>
+      <parameters><parameter name="o"><type name="Opaque" c:type="FixOpaque"/></parameter></parameters>
+    </function>
+    <function name="list" c:identifier="fix_list">
+      <return-value><type name="none" c:type="void"/></return-value>
+      <parameters><parameter name="p"><type name="Point" c:type="FixPoint*"/></parameter></parameters>
+    </function>
+    <function-inline name="inline" c:identifier="fix_inline"/>
+  </namespace>
+</repository>
