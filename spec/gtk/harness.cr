@@ -13,6 +13,25 @@ module GtkHarness
     for_window [app_id=".*"] floating enable
     SWAY
 
+  # A session bus without service directories: calls to names nobody owns,
+  # such as the desktop portal, fail instead of starting the host's services.
+  private def self.bus_config(dir : String) : String
+    <<-XML
+      <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+        "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+      <busconfig>
+        <type>session</type>
+        <listen>unix:path=#{dir}/bus</listen>
+        <auth>EXTERNAL</auth>
+        <policy context="default">
+          <allow send_destination="*" eavesdrop="true"/>
+          <allow eavesdrop="true"/>
+          <allow own="*"/>
+        </policy>
+      </busconfig>
+      XML
+  end
+
   @@dir : String?
   @@processes = [] of Process
 
@@ -22,6 +41,7 @@ module GtkHarness
     Dir.mkdir(dir, 0o700)
     @@dir = dir
     File.write("#{dir}/sway.conf", SWAY_CONFIG)
+    File.write("#{dir}/bus.conf", bus_config(dir))
     sway_env = {
       "XDG_RUNTIME_DIR"         => dir,
       "WLR_BACKENDS"            => "headless",
@@ -31,8 +51,7 @@ module GtkHarness
       "DISPLAY"                 => nil,
     }
     @@processes << Process.new("sway", ["-c", "#{dir}/sway.conf"], env: sway_env, output: :close, error: :close)
-    @@processes << Process.new("dbus-daemon", ["--session", "--nofork", "--address=unix:path=#{dir}/bus"],
-      output: :close, error: :close)
+    @@processes << Process.new("dbus-daemon", ["--config-file=#{dir}/bus.conf", "--nofork"], output: :close, error: :close)
     display = nil.as(String?)
     1000.times do
       display = Dir.children(dir).find { |name| name.starts_with?("wayland-") && !name.ends_with?(".lock") }

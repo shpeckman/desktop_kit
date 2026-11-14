@@ -7,10 +7,19 @@ desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
 Status: early. This release holds the application lifecycle, windows with
 tabs and splits of surfaces, an OpenGL drawing canvas with keyboard, input
-method and pointer input, the clipboard, actions and key bindings, and the
-GLib layer the runtime builds on, and desktop notifications. IPC follows.
-The built-in action `OpenUrl` is not carried out yet, and global bindings
-are not registered with the desktop yet.
+method and pointer input, the clipboard, actions with local and global key
+bindings, desktop notifications, IPC, configuration reload and the GLib
+layer the runtime builds on. The built-in action `OpenUrl` is not carried
+out yet.
+
+`examples/` holds runnable programs; `make examples` builds them into
+`bin/`:
+
+| Example     | Shows                                                                 |
+|-------------|-----------------------------------------------------------------------|
+| `hello.cr`  | windows, tabs and splits of text entries, bindings, a global binding, notifications, reload |
+| `canvas.cr` | an OpenGL canvas following pointer, buttons, scrolling and typed text |
+| `ipc.cr`    | opens a window in a running `hello.cr`                                |
 
 ## Requirements
 
@@ -79,6 +88,7 @@ Hooks, all called on the GTK thread:
 | `on_activate`              | at launch, and on each relaunch of a single instance |
 | `on_color_scheme(scheme)`  | after `on_startup`, then whenever light/dark changes |
 | `on_reload`                | on `#reload` and SIGUSR2                            |
+| `on_binding_failed(binding, message)` | when the desktop does not bind a global binding |
 | `on_shutdown`              | when quitting, while the windows still exist        |
 
 These methods are callable from any thread:
@@ -87,7 +97,8 @@ These methods are callable from any thread:
   iteration, in posting order. Blocks posted before `#run` run once the
   application is active; blocks still queued when it quits are dropped.
 - `#quit` closes the application windows and quits; `#reload` calls
-  `on_reload`. Both do nothing unless `#running?`.
+  `on_reload`, then `Content#on_reload` of every surface's content. Both do
+  nothing unless `#running?`.
 - `#css=` sets the application style sheet, applied above the theme;
   parse errors are logged as warnings.
 - `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
@@ -276,7 +287,7 @@ end
 | *gname*    | the action name: letters, digits, `-` and `.`, unique per scope      |
 | `scope:`   | `:app` (default), `:window`, `:tab` or `:split`                      |
 | `payload:` | named fields of types `Apprt::Variant` carries; flags enums are not  |
-| `ipc:`     | whether other processes may trigger it; `:app` actions only          |
+| `ipc:`     | whether `Apprt::IPC.send` may send it; `:app` actions only           |
 | block      | definitions added to the struct, such as its payload enums           |
 
 `perform` returns whether it handled the action; actions nobody handles are
@@ -326,8 +337,17 @@ app.bindings = [
 
 Bindings become GTK accelerators: `app` actions work in every window, the
 others act on the focused window, tab or split. A trigger bound twice keeps
-its first binding. `global: true` marks a binding that works
-while the application is not focused.
+its first binding.
+
+`global: true` marks a binding that works while the application is not
+focused. Global bindings go to the desktop's global shortcuts portal
+(`org.freedesktop.portal.GlobalShortcuts`), which may ask the user to
+confirm them; the action then acts on the active window, tab or split, like
+a key binding. The portal identifies the application by its id, which must
+match the basename of an installed `.desktop` file, or by the systemd scope
+the desktop launched it in. The `on_binding_failed` hook receives each
+global binding the desktop does not bind and the reason; by default it logs
+a warning. Desktops without the portal fail every global binding.
 
 `Apprt::Trigger.parse` reads a trigger: modifiers and a key joined by `+`.
 
@@ -344,6 +364,31 @@ to its GTK accelerator (`#to_gtk_accel`, `"<Shift><Control>t"`), its XDG
 shortcut (`#to_xdg`, `"SHIFT+CTRL+t"`, as global shortcut portals expect),
 a label for the user (`#label`, `"Shift+Ctrl+T"`) and back to text
 (`#to_s`, `"shift+ctrl+t"`).
+
+### IPC
+
+`Apprt::IPC.send(app_id, action)` triggers an `ipc: true` action in the
+running single instance of the application *app_id*, such as
+`Apprt::Action::NewWindow`; other actions fail to compile. It blocks until
+the application answers and raises `Apprt::GLibError` when none runs, and
+`ArgumentError` for an invalid id. Call it from another process, or from
+a thread other than the target application's GTK thread:
+
+```crystal
+Apprt::IPC.send("org.example.Hello", Apprt::Action::NewWindow.new)
+```
+
+GApplication exports every `app` action on the session bus, so `ipc:`
+selects what `IPC.send` sends, not what other DBus clients can call.
+
+### Configuration reload
+
+`App#reload`, SIGUSR2 and the `ReloadConfig` action call `on_reload`, where
+the application rereads its configuration and applies what lives on the
+app, such as `#css=`, `#appearance=` and `#bindings=`. Then each surface's
+content gets `Content#on_reload`; an exception there is logged and the
+other contents still reload. Under systemd the reload runs between
+`RELOADING=1` and `READY=1`.
 
 ### systemd
 

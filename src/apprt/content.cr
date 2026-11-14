@@ -13,6 +13,19 @@ module Apprt
     # :nodoc:
     # The widget the surface shows. GTK takes over its floating reference.
     abstract def widget : Widget
+
+    # :showdoc:
+    #
+    # Called on `App#reload`, after `App#on_reload`, so the content can apply
+    # the new configuration.
+    protected def on_reload : Nil
+    end
+
+    # Calls `#on_reload` with an implicit receiver, which reaches overrides
+    # defined outside `Apprt`.
+    protected def reload : Nil
+      on_reload
+    end
   end
 
   # Content showing a GTK widget.

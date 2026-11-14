@@ -38,6 +38,9 @@ require "./apprt/split_view"
 require "./apprt/tab"
 require "./apprt/window"
 require "./apprt/notifications"
+require "./apprt/ipc"
+require "./apprt/portal"
+require "./apprt/global_shortcuts"
 
 # Native application runtime: GTK 4 and libadwaita windows, tabs, splits and
 # surfaces driven by typed actions.

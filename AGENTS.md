@@ -12,8 +12,9 @@ make spec     # crystal spec --threads 2 (what `dev repo ship` runs)
 make spec-pure # spec/pure only: no display, no bus
 make spec-gtk  # spec/gtk only
 make gen      # regenerate src/apprt/c/*.cr from GIR + data/gir/ allowlists
+make examples # build examples/*.cr into bin/
 make docs     # crystal docs src/apprt.cr -o docs
-make format   # crystal tool format src spec tools
+make format   # crystal tool format src spec tools examples
 make clean
 ```
 
@@ -79,6 +80,14 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt/notifications.cr` - `Notifications` (`:nodoc:`): a surface's
   sent notifications; reopens `App` with `notify` and the
   `DesktopNotification` and `PresentSurface` overloads.
+- `src/apprt/ipc.cr` - `IPC` (public): `IPC.send` over `org.gtk.Actions`.
+- `src/apprt/portal.cr` - `Portal` (`:nodoc:`): XDG desktop portal requests
+  and the host registry.
+- `src/apprt/global_shortcuts.cr` - `GlobalShortcuts` (`:nodoc:`): the
+  global bindings' portal session.
+- `examples/` - `hello.cr`, `canvas.cr`, `ipc.cr` (`make examples`). They
+  declare their own `lib LibGtk` / `lib LibGL` funs rather than use the
+  `:nodoc:` `Apprt::C`.
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
@@ -88,7 +97,7 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   (`glib_spec.cr`, signals on Gio objects), `Variant`, `Systemd`
   (`with_notify_socket` in `spec/spec_helper.cr`), actions (codecs, detailed
   names, registry), triggers, `SplitTree` (Ghostty's diagram cases) and
-  the `Notifications` bookkeeping.
+  the `Notifications` bookkeeping and portal request paths.
 - `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
   `before_all`) runs a private headless `sway` (`WLR_BACKENDS=headless`,
   `WLR_RENDERER=pixman`, one 1280x800 output at scale 1, floating windows,
@@ -106,10 +115,16 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `TestApp` (`make_content` builds each surface's content, a `GtkEntry` by
   default; `new_surface` records the contexts), `AppIds`, `run_app` and
   the step helpers `run_steps`, `settle`, `eventually` and `trigger`.
+  The bus runs from a generated config (`bus.conf`) with no service
+  directories: names nobody owns, such as the desktop portal or the
+  accessibility bus, fail with `ServiceUnknown` instead of starting the
+  host's services.
   `window_spec.cr` covers windows, tabs, splits, titles and dialogs;
   `canvas_spec.cr` the canvas, pointer, bell and clipboard;
   `notifications_spec.cr` notifications against `FakeNotifications`
-  (`fake_notifications.cr`).
+  (`fake_notifications.cr`); `ipc_spec.cr` IPC round trips;
+  `global_shortcuts_spec.cr` global bindings against `FakePortal`
+  (`fake_portal.cr`); `reload_spec.cr` content reload.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -192,6 +207,12 @@ Internal contracts of `src/apprt/glib/`:
   `CLOCK_MONOTONIC` (Crystal's monotonic clock is `CLOCK_BOOTTIME`).
   `READY=1` follows the first activation; reloads send `RELOADING=1` then
   `READY=1`; shutdown sends `STOPPING=1`.
+- `reload_now` runs `on_reload`, then `Content#reload` of each registered
+  surface (`rescue` + `Log.error "content reload"` per content), inside
+  `RELOADING=1` … `READY=1`. `Content#reload` is a protected wrapper that
+  calls `on_reload` with an implicit receiver: `App` cannot call a
+  protected method on a subclass defined outside `Apprt` (the same reason
+  as `App#dispatch`).
 - Hooks are `protected` with `# :showdoc:` so the docs list them.
 
 ## Actions
@@ -218,7 +239,8 @@ Internal contracts of `src/apprt/glib/`:
 - `Binding` triggers become `gtk_application_set_accels_for_action` entries
   keyed by `Action#detailed_name`; GTK resolves non-`app` names from the
   focus widget upward. The previous set is cleared first. Global bindings
-  are skipped here (portal, step 11).
+  get no accelerator; `apply_bindings` hands them to `GlobalShortcuts`
+  (see Global shortcuts).
 - `Trigger` normalizes the keyval to lower case and validates it with
   `gtk_accelerator_valid` plus a name round trip (unnamed keyvals such as
   emoji have no accelerator). Accelerator names and labels come from GTK;
@@ -378,11 +400,62 @@ Internals of `notifications.cr`, ported from Ghostty's
   `org.freedesktop.Notifications` on the app's own bus connection
   (`RequestName` with `DO_NOT_QUEUE` must return 1), records `Notify` and
   `CloseNotification` calls, and `#click(id)` emits `ActionInvoked`.
-- GIO's freedesktop backend crashes (recursive `g_object_unref` in
-  `g_fdo_notification_backend_dispose`) when the application goes away
-  while a `Notify` reply is pending. `serve` therefore settles before
-  closing the windows and again before stopping; that also keeps the
-  withdrawals of one example's quit out of the next example's fake.
+- GIO's freedesktop backend (GLib 2.84.4, unfixed on main) watches
+  `org.freedesktop.Notifications`; its `name_vanished_handler_cb` frees the
+  notification list before clearing it. Once the GApplication is gone, only
+  the remaining notifications keep the backend alive, so the last unref
+  disposes it, dispose frees the same list again and the recursion
+  overflows the stack. The vanish is an idle on the default main context,
+  so a later run in the same process dispatches it. `serve` therefore
+  settles before closing the windows, again before stopping and once more
+  after stopping, while the app still holds its backend; that also keeps
+  the withdrawals of one example's quit out of the next example's fake.
+
+## IPC
+
+- `IPC.send` validates the id with `g_application_id_is_valid`, opens the
+  session bus with `g_bus_get_sync` and calls `org.gtk.Actions.Activate`
+  `(sava{sv})` (action name, `[to_variant]` or `[]`, empty platform data)
+  on GApplication's object path: `/` plus the id with `.` → `/` and `-` →
+  `_`, as in Ghostty's `src/apprt/gtk/ipc/DBus.zig`. The `ipc: true` check
+  is the macro's `:nodoc:` `IPC` constant, read at compile time.
+- GApplication exports every `app` action; refusing non-ipc actions on the
+  receiving side would need a GDBus filter, which runs on GDBus's worker
+  thread. The call is synchronous, so a send to the application's own GTK
+  thread waits for the timeout; `ipc_spec.cr` sends from an `Isolated`
+  thread and polls a channel from the GTK thread.
+
+## Global shortcuts
+
+Ported from Ghostty's `src/apprt/gtk/class/global_shortcuts.zig` and
+`src/apprt/gtk/portal.zig`:
+- `Portal.request_path(unique_name, token)` predicts the request object
+  path (`/org/freedesktop/portal/desktop/request/<unique name without ':',
+  '.' → '_'>/<token>`); `Portal::Request` subscribes to its `Response`
+  before the async call, so no response is missed. Response 0 is success,
+  1 cancelled, 2 ended; a call error or another code reaches the callback
+  as a message. Tokens are `apprt_<16 hex>`.
+- `App#run` sends `org.freedesktop.host.portal.Registry.Register(app id)`
+  (`NO_AUTO_START`, errors ignored) on the shared session connection before
+  `g_application_run`: the registry accepts it only before any other portal
+  call on the connection, and GTK calls the settings portal during startup.
+  Host apps outside Flatpak and systemd app scopes need it for the portal
+  to know their id (Ghostty relies on its systemd scope instead).
+- `GlobalShortcuts` lives from startup to shutdown on GApplication's bus
+  connection. `#bind` closes the previous session (`Session.Close`, async,
+  unsubscribe `Activated`), maps `Trigger#to_xdg` → first global binding,
+  then `CreateSession` → subscribe `Activated` (arg0 = session handle,
+  `MATCH_ARG0_PATH`) → `BindShortcuts` with `description` = the detailed
+  action name and `preferred_trigger` = the id. Ids missing from the
+  response's `shortcuts`, or any failed request, go to
+  `App#on_binding_failed`. `Activated` performs the action on the target
+  of its scope (`perform_global` in `binding.cr`).
+- `FakePortal` serves on its own `Isolated` thread, `GMainContext` and bus
+  connection, like the portal process, so it answers while the app under
+  test starts and stops. It records `Register`, sessions, closes and
+  shortcuts (mutex-guarded), emits `Response` to the caller after
+  replying, and `#activate(id)` emits `Activated`. `FakePortal.poll` waits
+  without iterating a main loop, for checks after the app stopped.
 
 ## Bindings
 

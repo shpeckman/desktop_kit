@@ -60,6 +60,10 @@ module Apprt
     fun g_main_context_default : Void*
     fun g_main_context_wakeup(context : Void*)
     fun g_main_context_iteration(context : Void*, may_block : Int32) : Int32
+    fun g_main_context_new : Void*
+    fun g_main_context_unref(context : Void*)
+    fun g_main_context_push_thread_default(context : Void*)
+    fun g_main_context_pop_thread_default(context : Void*)
     fun g_variant_new_boolean(value : Int32) : Void*
     fun g_variant_new_int32(value : Int32) : Void*
     fun g_variant_new_uint32(value : UInt32) : Void*

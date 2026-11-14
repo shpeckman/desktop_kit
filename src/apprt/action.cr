@@ -4,9 +4,9 @@ module Apprt
   # per *payload* field, registered as the GAction *gname*.
   #
   # *scope* says where the action lives: `:app` (the application), `:window`,
-  # `:tab` or `:split` (the focused split of a tab). *ipc* allows other
-  # processes to trigger an `:app` action. A block adds definitions to the
-  # struct, such as the enums its payload uses.
+  # `:tab` or `:split` (the focused split of a tab). *ipc* lets other
+  # processes send an `:app` action with `IPC.send`. A block adds
+  # definitions to the struct, such as the enums its payload uses.
   #
   # ```
   # Apprt.action Refresh, "refresh", payload: {force: Bool}
@@ -35,6 +35,8 @@ module Apprt
       NAME = {{ gname }}
       # :nodoc:
       SCOPE = ::Apprt::Action::Scope::{{ scope.id.camelcase }}
+      # :nodoc:
+      IPC = {{ ipc }}
 
       {% for key, type in fields %}
         getter {{ key.id }} : {{ type }}
@@ -55,7 +57,7 @@ module Apprt
 
       # :nodoc:
       def ipc? : Bool
-        {{ ipc }}
+        IPC
       end
 
       # :nodoc:

@@ -71,8 +71,10 @@ class FakeNotifications
   # Serves on *app*'s bus connection while the block runs. Before it stops it
   # settles, closes *app*'s windows and settles again: GIO gets the replies
   # to its `Notify` calls before the withdrawals, and the withdrawals reach
-  # this fake rather than the one of a later example. GIO crashes when an app
-  # goes away while a `Notify` reply is pending.
+  # this fake rather than the one of a later example. After it stops it
+  # settles once more, so GIO sees the name vanish while *app* still holds
+  # its notification backend: GLib's vanish handler crashes a backend that
+  # only its notifications keep alive.
   def self.serve(app : Apprt::App, & : FakeNotifications ->) : Nil
     fake = new(Apprt::C.g_application_get_dbus_connection(app))
     begin
@@ -82,6 +84,7 @@ class FakeNotifications
       app.windows.each(&.close)
       settle
       fake.stop
+      settle
     end
   end
 

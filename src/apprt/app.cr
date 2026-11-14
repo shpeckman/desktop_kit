@@ -278,6 +278,7 @@ module Apprt
       # GApplication rejects file arguments without HANDLES_OPEN, so it only
       # sees the program name.
       argv = [PROGRAM_NAME.to_unsafe, Pointer(UInt8).null]
+      register_with_portal
       C.g_application_run(@application, 1, argv.to_unsafe)
     ensure
       C.g_object_unref(@application) unless @application.null?
@@ -291,6 +292,7 @@ module Apprt
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
       @running.set(true)
       Action.install(@application, :app) { |action| perform(self, action) }
+      start_global_shortcuts
       apply_bindings
       load_css
       apply_appearance
@@ -313,6 +315,8 @@ module Apprt
       Systemd.stopping
       on_shutdown
     ensure
+      @global_shortcuts.try(&.release)
+      @global_shortcuts = nil
       @windows.clear
       @tabs.clear
       @surfaces.clear
@@ -356,9 +360,28 @@ module Apprt
       Systemd.reloading
       begin
         on_reload
+        @surfaces.each_value do |surface|
+          surface.content.reload
+        rescue ex
+          Log.error(exception: ex) { "content reload" }
+        end
       ensure
         Systemd.ready
       end
+    end
+
+    # Tells the desktop portal the application id before GTK makes its own
+    # portal calls on the session bus: a process outside a sandbox or an
+    # application scope has none the portal can find.
+    private def register_with_portal : Nil
+      error = Pointer(C::GError).null
+      bus = C.g_bus_get_sync(C::GBusType::Session, Pointer(Void).null, pointerof(error))
+      if bus.null?
+        Log.debug { "session bus: #{GLibError.take(error).message}" } unless error.null?
+        return
+      end
+      Portal.register(bus, @id)
+      C.g_object_unref(bus)
     end
 
     private def load_css : Nil

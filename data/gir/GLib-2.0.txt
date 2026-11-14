@@ -26,6 +26,10 @@ g_source_remove
 g_main_context_default
 g_main_context_wakeup
 g_main_context_iteration
+g_main_context_new
+g_main_context_unref
+g_main_context_push_thread_default
+g_main_context_pop_thread_default
 
 # variants
 GVariantClass

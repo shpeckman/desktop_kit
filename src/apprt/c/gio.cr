@@ -41,6 +41,17 @@ module Apprt
     end
 
     @[Flags]
+    enum GDBusConnectionFlags : UInt32
+      AuthenticationClient          =  1
+      AuthenticationServer          =  2
+      AuthenticationAllowAnonymous  =  4
+      MessageBusConnection          =  8
+      DelayMessageProcessing        = 16
+      AuthenticationRequireSameUser = 32
+      CrossNamespace                = 64
+    end
+
+    @[Flags]
     enum GApplicationFlags : UInt32
       IsService          =   1
       IsLauncher         =   2
@@ -125,6 +136,8 @@ module Apprt
     fun g_dbus_connection_register_object(connection : Void*, object_path : UInt8*, interface_info : Void*, vtable : GDBusInterfaceVTable*, user_data : Void*, user_data_free_func : GDestroyNotify, error : GError**) : UInt32
     fun g_dbus_connection_unregister_object(connection : Void*, registration_id : UInt32) : Int32
     fun g_dbus_connection_flush_sync(connection : Void*, cancellable : Void*, error : GError**) : Int32
+    fun g_dbus_connection_new_for_address_sync(address : UInt8*, flags : GDBusConnectionFlags, observer : Void*, cancellable : Void*, error : GError**) : Void*
+    fun g_dbus_connection_close_sync(connection : Void*, cancellable : Void*, error : GError**) : Int32
     fun g_dbus_node_info_new_for_xml(xml_data : UInt8*, error : GError**) : Void*
     fun g_dbus_node_info_lookup_interface(info : Void*, name : UInt8*) : Void*
     fun g_dbus_node_info_unref(info : Void*)
