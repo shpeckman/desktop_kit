@@ -35,7 +35,9 @@ time, with `--threads 2` (`CRFLAGS`).
 - `cases.yml` - the cases; `spec/subject_spec.cr` checks that it parses.
 - `goldens/<case>/<shot>.png` - the screenshots the cases compare with,
   written by mode `sway` (`ARGS=-u`). Modes share them; the shots hold
-  the window only, client-side decorated.
+  the window only, client-side decorated and opaque (livetest composites
+  KWin's translucent captures over black). The shots allow a difference
+  of 2 per channel for KDE's corner antialiasing.
 - `shard.override.yml` - takes livetest from `../../livetest`; apprt is
   the parent directory (`path: ..`).
 - `bin/`, `lib/`, `out/`, `shard.lock` - generated, ignored.

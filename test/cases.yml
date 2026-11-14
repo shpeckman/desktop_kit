@@ -1,5 +1,7 @@
 # cases.yml
-# The cases of the apprt live tests; see README.md.
+# The cases of the apprt live tests; see README.md. Shots allow a color
+# difference of 2: KDE antialiases the window's bottom corners slightly
+# differently from sway.
 
 # The global binding fires through the desktop's global shortcuts portal
 # while the window has the focus. Global bindings have no window shortcut,
@@ -28,7 +30,7 @@ sequences:
     - expect sequence tables=
     - key ctrl+a
     - settle
-    - shoot pending
+    - shoot pending tolerance=2
     - key ctrl+t
     - expect capture tables=
     - close
@@ -41,7 +43,7 @@ key-tables:
     - expect window
     - key ctrl+a e
     - settle
-    - shoot mode
+    - shoot mode tolerance=2
     - key x
     - expect table tables=mode
     - key x
@@ -66,7 +68,7 @@ progress:
     - key ctrl+a p
     - expect progress 40
     - settle
-    - shoot progress
+    - shoot progress tolerance=2
     - key ctrl+a shift+p
     - expect progress -1
     - close
