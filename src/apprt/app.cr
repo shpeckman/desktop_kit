@@ -332,6 +332,7 @@ module Apprt
       @global_shortcuts.try(&.release)
       @global_shortcuts = nil
       release_open_uri
+      undo_stack.clear
       @windows.clear
       @tabs.clear
       @surfaces.clear

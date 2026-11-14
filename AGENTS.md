@@ -97,6 +97,11 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt/window_style.cr` - `WindowStyle` (public; `to_css`
   `:nodoc:`); reopens `App` with `window_style` and the runtime style
   sheet.
+- `src/apprt/undo_stack.cr` - `UndoStack` (`:nodoc:`): closed surfaces,
+  tabs and windows kept for undo; reopens `App` with `undo_timeout` and
+  the `Undo`/`Redo` overloads.
+- `src/apprt/progress.cr` - `Progress` (public), `LauncherEntry`
+  (`:nodoc:`); reopens `App` with `sync_progress`.
 - `src/apprt/notifications.cr` - `Notifications` (`:nodoc:`): a surface's
   sent notifications; reopens `App` with `notify` and the
   `DesktopNotification` and `PresentSurface` overloads.
@@ -150,7 +155,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `sequence_spec.cr` key sequences, emitting `key-pressed` on the window's
   `@sequence_keys`; `key_table_spec.cr` key tables and the key state
   overlay; `window_actions_spec.cr` visibility, window size, background
-  opacity, title copy and read-only;
+  opacity, title copy and read-only; `undo_spec.cr` undo and redo of
+  surfaces, tabs and windows and the timeout; `progress_spec.cr` the
+  progress bar, tab loading and the launcher entry signal;
   `window_style_spec.cr` pane headers, the active mark, tab icons, tabs
   in the header bar, header bar content and `on_window`;
   `canvas_spec.cr` the canvas, pointer, bell and clipboard;
@@ -693,6 +700,38 @@ optional `MemoryHigh`, `TasksMax` and `ManagedOOMMemoryPressure=kill`,
 then polls `/proc/<pid>/cgroup` every 25 ms until the unified path ends
 in the unit name. Ghostty's `pre_exec` wait in the child is left out:
 Crystal's `Process` has no hook between fork and exec.
+
+## Undo
+
+- Closing records instead of releasing: `Tab#remove` records a
+  `ClosedSurface` (the tab's tree before and after) while the tab keeps
+  other surfaces, else a `ClosedTab` (`TabState`: tree, active surface,
+  title override; plus window and page position); `Window#forget` records
+  one `ClosedWindow` with its tabs in page order and destroys them with
+  `keep: true`. Each entry has an `Idle.after(App#undo_timeout)` timer
+  that releases its surfaces (`Surface#release`); a zero timeout releases
+  at once. Shutdown clears the stack before the registries.
+- `Undo` pops the newest entry. A surface goes back with the old tree when
+  `SplitTree#same?` (shared node array, same zoom) says the tab's tree is
+  still the one left after closing, else it splits right of the active
+  surface; a tab whose tab or window is gone goes to the newest open
+  window, or a new one. Reopened tabs are built with
+  `Tab.new(app, tree, active)` and `Window#add_tab(tab, position)`.
+- `Redo` closes the newest reopened object that is still open; recording
+  a close outside redo forgets the reopened list.
+
+## Progress
+
+- `Surface#progress=` drives an osd `GtkProgressBar` overlaid at the top
+  of the pane (`.surface-progress`, `error`/`paused` classes recolour it
+  in `Surface::STYLE`); an indeterminate value pulses every 100 ms through
+  `Idle.after` until it changes or the surface is released. The tab sets
+  `adw_tab_page_set_loading` while any of its surfaces has progress.
+- `App#sync_progress` averages the registered surfaces' values
+  (indeterminate counts as 0) and, when the mean changes, emits
+  `com.canonical.Unity.LauncherEntry.Update` `(sa{sv})` on GApplication's
+  connection from `/com/canonical/unity/launcherentry/apprt`: the app URI
+  `application://<id>.desktop`, `progress` and `progress-visible`.
 
 ## Live tests
 

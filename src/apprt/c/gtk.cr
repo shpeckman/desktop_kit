@@ -250,5 +250,9 @@ module Apprt
     fun gtk_widget_set_opacity(widget : Void*, opacity : Float64)
     fun gtk_button_set_has_frame(button : Void*, has_frame : Int32)
     fun gtk_window_set_interactive_debugging(enable : Int32)
+    fun gtk_progress_bar_new : Void*
+    fun gtk_progress_bar_set_fraction(pbar : Void*, fraction : Float64)
+    fun gtk_progress_bar_pulse(pbar : Void*)
+    fun gtk_progress_bar_set_pulse_step(pbar : Void*, fraction : Float64)
   end
 end

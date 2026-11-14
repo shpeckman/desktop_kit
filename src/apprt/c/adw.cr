@@ -108,5 +108,6 @@ module Apprt
     fun adw_toolbar_view_remove(self_ : Void*, widget : Void*)
     fun adw_header_bar_set_show_title(self_ : Void*, show_title : Int32)
     fun adw_tab_bar_set_expand_tabs(self_ : Void*, expand_tabs : Int32)
+    fun adw_tab_page_set_loading(self_ : Void*, loading : Int32)
   end
 end

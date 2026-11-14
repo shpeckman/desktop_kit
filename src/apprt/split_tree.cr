@@ -112,6 +112,12 @@ module Apprt
       @nodes.unsafe_fetch(handle)
     end
 
+    # Whether *other* is this tree, not just an equal one: trees that
+    # share their nodes and zoom.
+    def same?(other : SplitTree(V)) : Bool
+      @nodes.same?(other.nodes) && @zoomed == other.zoomed
+    end
+
     # Returns the view at *handle*. Raises `ArgumentError` when it is a split.
     def view(handle : Int32) : V
       node = self[handle]

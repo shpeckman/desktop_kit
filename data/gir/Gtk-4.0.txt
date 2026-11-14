@@ -224,3 +224,7 @@ gtk_label_set_label
 gtk_widget_set_opacity
 gtk_button_set_has_frame
 gtk_window_set_interactive_debugging
+gtk_progress_bar_new
+gtk_progress_bar_set_fraction
+gtk_progress_bar_pulse
+gtk_progress_bar_set_pulse_step

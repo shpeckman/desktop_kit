@@ -27,6 +27,16 @@ module Apprt
       @app.register(self)
     end
 
+    # Reopens the surfaces of *tree* in a new tab, *active* focused.
+    protected def initialize(@app : App, tree : SplitTree(Surface), active : Surface?)
+      tree.each { |_, surface| surface.tab = self }
+      active ||= tree.first[1]
+      self.active = active
+      @view.focus = active
+      @view.tree = tree
+      @app.register(self)
+    end
+
     # Returns the window showing the tab, or `nil` once it is closed.
     def window : Window?
       @window unless @destroyed
@@ -111,11 +121,43 @@ module Apprt
       surface
     end
 
-    # Drops *surface*; dropping the last one closes the tab without asking.
+    # Drops *surface*, kept for undo; dropping the last one closes the tab
+    # without asking.
     protected def remove(surface : Surface) : Nil
       return if @destroyed || !@view.tree.locate(surface)
+      before = state
+      window = @window
+      position = window.try { |window| C.adw_tab_view_get_page_position(window.tab_view, page(window)) }
       detach(surface)
-      surface.release
+      if before.tree.split?
+        @app.undo_stack.record(UndoStack::ClosedSurface.new(surface, self, before.tree, @view.tree))
+      elsif window && position
+        @app.undo_stack.record(UndoStack::ClosedTab.new(before, window, position))
+      else
+        surface.release
+      end
+    end
+
+    # Puts *surface* back: the tree returns to *before* while it is still
+    # *after*, otherwise *surface* splits off the active surface. False
+    # once the tab is closed.
+    protected def restore(surface : Surface, before : SplitTree(Surface), after : SplitTree(Surface)) : Bool
+      return false if @destroyed
+      tree = @view.tree
+      if tree.same?(after)
+        @view.tree = before
+      else
+        target = @active || tree.first?.try(&.[1]) || return false
+        handle = tree.locate(target) || return false
+        @view.tree = tree.split(handle, :right, SplitTree(Surface).new(surface))
+      end
+      surface.tab = self
+      activate(surface)
+      true
+    end
+
+    protected def state : UndoStack::TabState
+      UndoStack::TabState.new(@view.tree, @active, @title_override)
     end
 
     # Moves *surface*, from this or another tab, next to *target* on its
@@ -250,8 +292,17 @@ module Apprt
         icon = @active.try(&.icon).try { |name| C.g_themed_icon_new(name) } || Pointer(Void).null
         C.adw_tab_page_set_icon(page, icon)
         C.g_object_unref(icon) unless icon.null?
+        C.adw_tab_page_set_loading(page, @view.tree.any? { |_, surface| surface.progress } ? 1 : 0)
       end
       window.sync_title
+    end
+
+    # Shows a spinner on the tab while any of its surfaces has progress.
+    protected def sync_progress : Nil
+      return if @destroyed
+      window = @window || return
+      page = page(window)
+      C.adw_tab_page_set_loading(page, @view.tree.any? { |_, surface| surface.progress } ? 1 : 0) unless page.null?
     end
 
     # Moves the active mark from the previous active surface to *surface*.
@@ -262,15 +313,23 @@ module Apprt
       surface
     end
 
-    # Forgets the tab and its surfaces once its page is gone; GTK disposes
-    # the widgets.
-    protected def destroy : Nil
+    # Forgets the tab once its page is gone; GTK disposes the widgets. A
+    # tab closed at *position* of its window is kept for undo, *keep* leaves
+    # the surfaces to the caller, and otherwise they are released.
+    protected def destroy(position : Int32? = nil, *, keep : Bool = false) : Nil
       return if @destroyed
+      state = self.state
+      window = @window
       @destroyed = true
       @view.destroy
-      @view.tree.each { |_, surface| surface.release }
       self.active = nil
       @app.unregister(self)
+      return if keep || state.tree.empty?
+      if position && window
+        @app.undo_stack.record(UndoStack::ClosedTab.new(state, window, position))
+      else
+        state.tree.each { |_, surface| surface.release }
+      end
     end
 
     private def close_now : Nil

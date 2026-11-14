@@ -106,6 +106,8 @@ These methods are callable from any thread:
 - `#css=` sets the application style sheet, applied above the theme;
   parse errors are logged as warnings.
 - `#window_style=` sets the look of all windows (see Window style).
+- `#undo_timeout=` sets how long `Undo` can reopen closed surfaces, tabs
+  and windows; 5 seconds by default, zero turns undo off.
 - `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
   the default), `Light` or `Dark`.
 
@@ -159,6 +161,7 @@ elsewhere.
 | `Surface#icon=`                  | sets a themed icon name for its pane header and, while active, its tab |
 | `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
 | `Window#key_tables`              | the names of its active key tables, innermost last                |
+| `Surface#progress=`              | shows an `Apprt::Progress` on its pane, tab and the taskbar; `nil` hides it |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -166,6 +169,22 @@ while there is more than one tab. Closing the last surface of a tab closes
 the tab, and closing the last tab closes the window. Once closed,
 `#closed?` is true, `Window#new_tab` and `Surface#split` raise
 `RuntimeError`, and the objects leave the registries.
+
+`Undo` reopens the latest closed surface, tab or window within
+`App#undo_timeout`: a surface returns to its place in the split tree when
+the tab has not changed since, and next to the active surface otherwise;
+a tab returns to its position, a window with all its tabs. The content is
+the same object, so its state survives; it is released, and `#closed?`
+becomes true, only once the timeout passes. `Redo` closes what `Undo`
+reopened last.
+
+`Apprt::Progress.new(value, state)` describes a long task: *value* from 0
+to 1, or `nil` for an indeterminate bar, and `state` `Normal`, `Error` or
+`Paused`. `Surface#progress=` shows it as a bar at the top of the pane and
+a loading indicator on the tab, and sends the mean of all surfaces'
+progress to the taskbar through `com.canonical.Unity.LauncherEntry`,
+which KDE Plasma and Ubuntu's dock read for the desktop file named after
+the application id.
 
 #### Window style
 
@@ -432,7 +451,7 @@ Built-in actions, all nested in `Apprt::Action`:
 
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `ShowGtkInspector`                                                                              |
+| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
 | `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
 | `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly` |

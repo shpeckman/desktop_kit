@@ -25,6 +25,13 @@ module Apprt
     # Hides every window, or shows them all again when none is visible.
     Apprt.action ToggleVisibility, "toggle-visibility"
 
+    # Reopens the latest closed surface, tab or window while
+    # `App#undo_timeout` has not passed.
+    Apprt.action Undo, "undo"
+
+    # Closes again what `Undo` reopened last.
+    Apprt.action Redo, "redo"
+
     # Opens the GTK inspector.
     Apprt.action ShowGtkInspector, "show-gtk-inspector"
 

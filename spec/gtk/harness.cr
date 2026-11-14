@@ -112,8 +112,11 @@ class TestApp < Apprt::App
     Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new)).as(Apprt::Content)
   end
 
+  # Closed surfaces are released at once unless a spec sets
+  # `#undo_timeout`, so `#closed?` holds right after closing.
   def initialize(id : String = AppIds.next, *, single_instance : Bool = false)
     super(id, single_instance: single_instance)
+    self.undo_timeout = Time::Span.zero
   end
 
   # Without windows or a hold, GApplication quits as soon as it is idle.

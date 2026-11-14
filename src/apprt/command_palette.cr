@@ -34,6 +34,8 @@ module Apprt
         new("Reset Window Size", Action::ResetWindowSize.new),
         new("Hide All Windows", Action::ToggleVisibility.new),
         new("GTK Inspector", Action::ShowGtkInspector.new),
+        new("Undo Close", Action::Undo.new),
+        new("Redo Close", Action::Redo.new),
         new("Change Window Title", Action::PromptTitle.new(:window)),
         new("Tab Overview", Action::ToggleTabOverview.new),
         new("New Tab", Action::NewTab.new),

@@ -43,6 +43,8 @@ module Apprt
     STYLE = <<-CSS
       .surface-header { padding: 2px 4px 2px 10px; }
       .surface-read-only { margin: 8px; padding: 6px; border-radius: 6px; }
+      .surface-progress.paused progress { background-color: @warning_bg_color; }
+      .surface-progress.error progress { background-color: @error_bg_color; }
       .surface-drag-handle {
         background-color: alpha(@window_fg_color, 0.15);
         opacity: 0;
@@ -94,6 +96,7 @@ module Apprt
       @header_icon = Widget.new(C.gtk_image_new_from_icon_name(nil))
       @header_title = Widget.new(C.gtk_label_new(Window.default_title))
       @read_only_badge = Widget.new(C.gtk_image_new_from_icon_name("changes-prevent-symbolic"))
+      @progress_bar = Widget.new(C.gtk_progress_bar_new)
       layout
       apply_style(@app.window_style)
       install_drag_and_drop
@@ -127,6 +130,22 @@ module Apprt
 
     # Returns whether the surface is marked read-only.
     getter? read_only = false
+
+    # Returns the progress shown on the surface, or nil.
+    getter progress : Progress? = nil
+
+    @pulse = 0_u32
+
+    # Shows *progress* as a bar along the top of the surface, a spinner on
+    # its tab and the taskbar entry's progress; nil removes it.
+    def progress=(progress : Progress?) : Progress?
+      @progress = progress
+      return progress if @closed
+      sync_progress
+      @tab.try(&.sync_progress)
+      @app.sync_progress
+      progress
+    end
 
     # Marks the surface read-only, which shows a lock over it, or writable.
     # The content decides what read-only stops; it reads `#read_only?`.
@@ -290,6 +309,13 @@ module Apprt
       @drop_indicator.add_css_class("surface-drop-indicator")
       C.gtk_widget_set_can_target(@drop_indicator, 0)
       C.gtk_overlay_add_overlay(overlay, @drop_indicator)
+      @progress_bar.add_css_class("osd")
+      @progress_bar.add_css_class("surface-progress")
+      @progress_bar.visible = false
+      C.gtk_widget_set_can_target(@progress_bar, 0)
+      C.gtk_widget_set_valign(@progress_bar, C::GtkAlign::Start)
+      C.gtk_progress_bar_set_pulse_step(@progress_bar, 0.1)
+      C.gtk_overlay_add_overlay(overlay, @progress_bar)
       @read_only_badge.add_css_class("osd")
       @read_only_badge.add_css_class("surface-read-only")
       @read_only_badge.tooltip = "Read-only"
@@ -460,8 +486,44 @@ module Apprt
       @closed = true
       @tab = nil
       @notifications.clear
+      stop_pulse
       @app.unregister(self)
+      @app.sync_progress if @progress
       C.g_object_unref(@host)
+    end
+
+    # Updates the bar: a fraction, or a pulse every `PULSE` while the
+    # value is unknown.
+    private def sync_progress : Nil
+      progress = @progress
+      @progress_bar.visible = !progress.nil?
+      {Progress::State::Error => "error", Progress::State::Paused => "paused"}.each do |state, name|
+        progress.try(&.state) == state ? @progress_bar.add_css_class(name) : @progress_bar.remove_css_class(name)
+      end
+      if value = progress.try(&.value)
+        stop_pulse
+        C.gtk_progress_bar_set_fraction(@progress_bar, value)
+      elsif progress && @pulse == 0
+        pulse
+      elsif progress.nil?
+        stop_pulse
+      end
+    end
+
+    private PULSE = 100.milliseconds
+
+    private def pulse : Nil
+      C.gtk_progress_bar_pulse(@progress_bar)
+      @pulse = Idle.after(PULSE) do
+        @pulse = 0_u32
+        pulse if !@closed && @progress.try(&.indeterminate?)
+      end
+    end
+
+    private def stop_pulse : Nil
+      return if @pulse == 0
+      Idle.cancel(@pulse)
+      @pulse = 0_u32
     end
   end
 

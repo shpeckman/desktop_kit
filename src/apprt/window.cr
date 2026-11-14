@@ -282,10 +282,17 @@ module Apprt
 
     protected def open_tab(kind : SurfaceContext::Kind, parent : Surface?) : Tab
       raise RuntimeError.new("the window is closed") if @closed
-      tab = Tab.new(@app, @app.create_surface(kind, parent))
-      selected = C.adw_tab_view_get_selected_page(@tab_view)
-      position = selected.null? ? page_count : C.adw_tab_view_get_page_position(@tab_view, selected) + 1
-      page = C.adw_tab_view_insert(@tab_view, tab.root, position)
+      add_tab(Tab.new(@app, @app.create_surface(kind, parent)), nil)
+    end
+
+    # Inserts *tab* at *position*, or after the selected tab, and selects
+    # it.
+    protected def add_tab(tab : Tab, position : Int32?) : Tab
+      position ||= begin
+        selected = C.adw_tab_view_get_selected_page(@tab_view)
+        selected.null? ? page_count : C.adw_tab_view_get_page_position(@tab_view, selected) + 1
+      end
+      page = C.adw_tab_view_insert(@tab_view, tab.root, position.clamp(0, page_count))
       C.adw_tab_view_set_selected_page(@tab_view, page)
       tab.sync_title
       tab
@@ -503,10 +510,15 @@ module Apprt
       C.gtk_window_destroy(@widget)
     end
 
-    # Marks the window closed and destroys its tabs.
+    # Marks the window closed and destroys its tabs, keeping their
+    # surfaces for undo.
     private def forget : Nil
+      ordered = tabs
       @closed = true
+      states = ordered.compact_map { |tab| tab.state unless tab.state.tree.empty? }
+      ordered.each(&.destroy(keep: true))
       @app.tabs.each { |tab| tab.destroy if tab.window == self }
+      @app.undo_stack.record(UndoStack::ClosedWindow.new(states)) unless states.empty?
     end
 
     private def page_count : Int32
@@ -707,15 +719,17 @@ module Apprt
     private def close_page(page : Void*) : Nil
       tab = @app.tab_for(C.adw_tab_page_get_child(page))
       if tab.nil? || tab.close_unconfirmed?
+        position = C.adw_tab_view_get_page_position(@tab_view, page)
         C.adw_tab_view_close_page_finish(@tab_view, page, 1)
-        tab.try(&.destroy)
+        tab.try(&.destroy(position))
         return
       end
       C.g_object_ref(page)
       Dialogs.confirm_close(@widget, :tab) do |confirmed|
         unless @closed
+          position = C.adw_tab_view_get_page_position(@tab_view, page)
           C.adw_tab_view_close_page_finish(@tab_view, page, confirmed ? 1 : 0)
-          tab.destroy if confirmed
+          tab.destroy(position) if confirmed
         end
         C.g_object_unref(page)
       end
