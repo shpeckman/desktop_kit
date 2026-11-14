@@ -157,5 +157,9 @@ module Apprt
     fun gtk_uri_launcher_new(uri : UInt8*) : Void*
     fun gtk_uri_launcher_launch(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
     fun gtk_uri_launcher_launch_finish(self_ : Void*, result : Void*, error : GError**) : Int32
+    fun gtk_accelerator_name(accelerator_key : UInt32, accelerator_mods : GdkModifierType) : UInt8*
+    fun gtk_accelerator_parse(accelerator : UInt8*, accelerator_key : UInt32*, accelerator_mods : GdkModifierType*) : Int32
+    fun gtk_accelerator_valid(keyval : UInt32, modifiers : GdkModifierType) : Int32
+    fun gtk_accelerator_get_label(accelerator_key : UInt32, accelerator_mods : GdkModifierType) : UInt8*
   end
 end

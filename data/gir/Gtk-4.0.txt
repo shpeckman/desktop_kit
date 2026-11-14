@@ -148,3 +148,9 @@ gtk_css_section_to_string
 gtk_uri_launcher_new
 gtk_uri_launcher_launch
 gtk_uri_launcher_launch_finish
+
+# accelerators
+gtk_accelerator_name
+gtk_accelerator_parse
+gtk_accelerator_valid
+gtk_accelerator_get_label

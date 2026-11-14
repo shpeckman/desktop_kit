@@ -12,4 +12,21 @@ module Apprt
     Light
     Dark
   end
+
+  # Direction on screen, relative to a split or a window.
+  enum Direction
+    Left
+    Right
+    Up
+    Down
+  end
+
+  # Keyboard modifiers.
+  @[Flags]
+  enum Mods : UInt8
+    Shift
+    Ctrl
+    Alt
+    Super
+  end
 end

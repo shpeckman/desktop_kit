@@ -144,6 +144,33 @@ module Apprt
     protected def on_shutdown : Nil
     end
 
+    # :showdoc:
+    #
+    # Carries out *action* on *target*, the application or the surface the
+    # action was triggered from, and returns whether it was handled.
+    #
+    # Each action type has its own overload; define one for each action the
+    # application declares, or redefine a built-in one. The overload with an
+    # unrestricted *action* handles nothing.
+    protected def perform(target, action : Action) : Bool
+      false
+    end
+
+    protected def perform(target : App, action : Action::Quit) : Bool
+      quit_now
+      true
+    end
+
+    protected def perform(target : App, action : Action::CloseAllWindows) : Bool
+      destroy_windows
+      true
+    end
+
+    protected def perform(target : App, action : Action::ReloadConfig) : Bool
+      reload_now
+      true
+    end
+
     private def run_application : Int32
       flags = single_instance? ? C::GApplicationFlags::None : C::GApplicationFlags::NonUnique
       @application = C.adw_application_new(@id, flags)
@@ -165,6 +192,8 @@ module Apprt
       Signals.connect(@provider, "parsing-error", ->(section : Void*, error : Void*) { css_error(section, error) })
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
       @running.set(true)
+      Action.install(@application, :app) { |action| perform(self, action) }
+      apply_bindings
       load_css
       apply_appearance
       @dark_handler = Signals.notify(C.adw_style_manager_get_default, "dark", -> { color_scheme_changed })
@@ -195,14 +224,18 @@ module Apprt
       end
     end
 
-    # Destroys only the application windows: destroying every toplevel
-    # double-frees input method windows (fcitx).
     private def quit_now : Nil
       return if @application.null?
+      destroy_windows
+      C.g_application_quit(@application)
+    end
+
+    # Destroys only the application windows: destroying every toplevel
+    # double-frees input method windows (fcitx).
+    private def destroy_windows : Nil
       windows = [] of Void*
       Native.each(C.gtk_application_get_windows(@application)) { |window| windows << window }
       windows.each { |window| C.gtk_window_destroy(window) }
-      C.g_application_quit(@application)
     end
 
     private def reload_now : Nil

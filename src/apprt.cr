@@ -20,8 +20,12 @@ require "./apprt/glib/widget"
 require "./apprt/glib/signals"
 require "./apprt/types"
 require "./apprt/ui_thread"
+require "./apprt/action"
+require "./apprt/actions"
+require "./apprt/trigger"
 require "./apprt/systemd"
 require "./apprt/app"
+require "./apprt/binding"
 
 # Native application runtime: GTK 4 and libadwaita windows, tabs, splits and
 # surfaces driven by typed actions.

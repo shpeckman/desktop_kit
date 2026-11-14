@@ -39,20 +39,29 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   - `variant.cr` - `Variant` (public).
   - `widget.cr` - `Widget` (public): borrowed widget handle.
   - `signals.cr` - `Signals` (`:nodoc:`): signal connections.
-- `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance` (public).
+- `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
+  `Direction`, `Mods` (public).
 - `src/apprt/ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
   cross-thread queue.
 - `src/apprt/systemd.cr` - `Systemd` (public `notify`; `ready`, `reloading`,
   `stopping` protected for `App`).
-- `src/apprt/app.cr` - `App` (public): lifecycle, signals, CSS, appearance.
+- `src/apprt/action.cr` - the `Apprt.action` macro and `Action` (public);
+  the registry and GAction installation (`:nodoc:`).
+- `src/apprt/actions.cr` - the built-in action table, nested in `Action`.
+- `src/apprt/trigger.cr` - `Trigger` (public): key combinations.
+- `src/apprt/app.cr` - `App` (public): lifecycle, signals, CSS, appearance,
+  `perform` and the built-in app action overloads.
+- `src/apprt/binding.cr` - `Binding` (public); reopens `App` with
+  `bindings` and the accelerator sync.
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
 - `spec/pure/` - specs needing no display: generator (fixture
   `spec/data/Fixture-1.0.gir` + `.txt`), bindings (every generated `fun`
   resolves with `dlsym`, `GValue` size, a GType round trip), the glib layer
-  (`glib_spec.cr`, signals on Gio objects), `Variant` and `Systemd`
-  (`with_notify_socket` in `spec/spec_helper.cr`).
+  (`glib_spec.cr`, signals on Gio objects), `Variant`, `Systemd`
+  (`with_notify_socket` in `spec/spec_helper.cr`), actions (codecs, detailed
+  names, registry) and triggers.
 - `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
   `before_all`) runs a private `gtk4-broadwayd` (loopback port, socket in a
   temporary `XDG_RUNTIME_DIR`) and `dbus-daemon`, and points `GDK_BACKEND`,
@@ -60,6 +69,9 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
   session. `Spec.after_suite` stops both. Test apps hold the GApplication in
   `on_startup`: without windows or a hold it quits as soon as it is idle.
+  `harness.cr` also holds the shared `TestApp`, `AppIds` and `run_app`.
+- Types the `Variant` macros expand over (action payload enums) must not be
+  file-private in specs: the expansion cannot see them.
 
 ## GLib layer
 
@@ -141,6 +153,36 @@ Internal contracts of `src/apprt/glib/`:
   `READY=1` follows the first activation; reloads send `RELOADING=1` then
   `READY=1`; shutdown sends `STOPPING=1`.
 - Hooks are `protected` with `# :showdoc:` so the docs list them.
+
+## Actions
+
+- `Apprt.action` generates a struct below `Action` with `NAME`, `SCOPE`
+  (`:nodoc:`), the payload getters and constructor, and the `:nodoc:` codec:
+  `to_variant`, `.parameter_type`, `.from_variant` (nil when the variant does
+  not match, including unknown enum names) and `ipc?`. One payload field is
+  the GAction parameter itself; several make a tuple. Declaration errors
+  (name, scope, ipc outside `:app`, fields shadowing `Action` methods,
+  duplicates per scope) are compile errors.
+- `Action.registry` is built at compile time from `Action.all_subclasses`,
+  so it covers application actions too. `Action.install(map, scope, &perform)`
+  adds one `GSimpleAction` per registry entry of *scope* to an action map;
+  activation decodes the parameter and calls *perform*, warning when the
+  parameter does not decode or *perform* returns false. Steps 7 and later
+  install `win`, `tab` and `split` the same way on their widgets.
+- Dispatch is overload resolution: `App#perform(target, action)` is called
+  on `self`, so subclass overloads for their own action types win.
+  Other `Apprt` types must route actions through an `App` method; calling
+  `perform` on another object only sees the base overloads.
+- The built-in overloads for app actions live in `app.cr`; later components
+  reopen `App` with the overloads for their scope.
+- `Binding` triggers become `gtk_application_set_accels_for_action` entries
+  keyed by `Action#detailed_name`; GTK resolves non-`app` names from the
+  focus widget upward. The previous set is cleared first. Global bindings
+  are skipped here (portal, step 11).
+- `Trigger` normalizes the keyval to lower case and validates it with
+  `gtk_accelerator_valid` plus a name round trip (unnamed keyvals such as
+  emoji have no accelerator). Accelerator names and labels come from GTK;
+  `#to_s` writes the `.parse` grammar.
 
 ## Bindings
 
