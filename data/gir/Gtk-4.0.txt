@@ -223,3 +223,4 @@ gtk_image_set_from_icon_name
 gtk_label_set_label
 gtk_widget_set_opacity
 gtk_button_set_has_frame
+gtk_window_set_interactive_debugging

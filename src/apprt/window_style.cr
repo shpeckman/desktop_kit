@@ -79,7 +79,7 @@ module Apprt
 
     # Loads the runtime's own style sheet and that of `#window_style`.
     private def load_runtime_style : Nil
-      C.gtk_css_provider_load_from_string(@runtime_style, Surface::STYLE + @window_style.to_css)
+      C.gtk_css_provider_load_from_string(@runtime_style, Surface::STYLE + Window::STYLE + @window_style.to_css)
     end
   end
 end

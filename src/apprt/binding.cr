@@ -71,11 +71,49 @@ module Apprt
     end
   end
 
+  # The sequences of a set of bindings, and optionally its single
+  # triggers, matched one key at a time.
+  private class Keymap
+    EMPTY = new([] of Binding, singles: false)
+
+    @actions = {} of Array(Trigger) => Action
+    @prefixes = Set(Array(Trigger)).new
+
+    def initialize(bindings : Enumerable(Binding), *, singles : Bool)
+      bindings.each do |binding|
+        (1...binding.triggers.size).each { |size| @prefixes << binding.triggers[0, size] }
+      end
+      bindings.each do |binding|
+        next unless singles || binding.sequence?
+        if prefix?(binding.triggers)
+          Log.warn { "binding #{binding}: a sequence starts with it" }
+          next
+        end
+        @actions[binding.triggers] = binding.action unless @actions.has_key?(binding.triggers)
+      end
+    end
+
+    # Returns the action *keys* complete, `true` when a sequence starts
+    # with them, or nil.
+    def match(keys : Array(Trigger)) : Action | Bool | Nil
+      @actions[keys]? || (true if prefix?(keys))
+    end
+
+    def prefix?(keys : Array(Trigger)) : Bool
+      @prefixes.includes?(keys)
+    end
+
+    def empty? : Bool
+      @actions.empty?
+    end
+  end
+
   abstract class App
     @bindings = [] of Binding
     @accelerated = [] of String
-    @sequences = {} of Array(Trigger) => Action
-    @sequence_prefixes = Set(Array(Trigger)).new
+    @binding_keymap : Keymap = Keymap::EMPTY
+    @key_tables = {} of String => Array(Binding)
+    @key_table_maps = {} of String => Keymap
     @global_shortcuts : GlobalShortcuts?
 
     # Returns the key bindings.
@@ -98,6 +136,29 @@ module Apprt
       bindings
     end
 
+    # Returns the key tables by name.
+    def key_tables : Hash(String, Array(Binding))
+      @key_tables.transform_values(&.dup)
+    end
+
+    # Replaces the key tables: named sets of bindings that
+    # `Action::ActivateKeyTable` lays over a window's bindings until
+    # `Action::DeactivateKeyTable`.
+    #
+    # The innermost active table matches a key first, then the next one
+    # and finally the bindings; keys none of them match pass through.
+    # Raises `ArgumentError` for a global binding.
+    def key_tables=(tables : Hash(String, Array(Binding))) : Hash(String, Array(Binding))
+      tables.each do |name, bindings|
+        bindings.each do |binding|
+          raise ArgumentError.new("key table #{name}: binding #{binding} cannot be global") if binding.global?
+        end
+      end
+      @key_tables = tables.transform_values(&.dup)
+      UIThread.dispatch { apply_key_tables } if running?
+      tables
+    end
+
     # :showdoc:
     #
     # Called when the desktop does not bind the global *binding*; *message*
@@ -106,14 +167,29 @@ module Apprt
       Log.warn { "global binding #{binding.trigger}: #{message}" }
     end
 
-    # Whether a sequence starts with *keys* (`true`), or the action of the
-    # sequence *keys* completes; nil when no sequence matches.
-    protected def sequence_match(keys : Array(Trigger)) : Action | Bool | Nil
-      @sequences[keys]? || (true if @sequence_prefixes.includes?(keys))
+    # Matches *keys* against the active *tables*, innermost (last) first,
+    # then against the sequences: returns the completed action with the
+    # name of its table (nil for the bindings), `true` when a sequence
+    # starts with *keys*, or nil.
+    protected def key_match(tables : Array({String, Bool}), keys : Array(Trigger)) : {Action, String?} | Bool | Nil
+      tables.reverse_each do |(name, _)|
+        case match = @key_table_maps[name]?.try(&.match(keys))
+        when Action then return {match, name}
+        when true   then return true
+        end
+      end
+      case match = @binding_keymap.match(keys)
+      when Action then {match, nil}
+      else             match
+      end
     end
 
     protected def sequences? : Bool
-      !@sequences.empty?
+      !@binding_keymap.empty?
+    end
+
+    protected def key_table?(name : String) : Bool
+      @key_table_maps.has_key?(name)
     end
 
     # Performs *action* on the target of its scope in *window*: the window,
@@ -136,18 +212,12 @@ module Apprt
       return if @application.null?
       @global_shortcuts.try(&.bind(@bindings))
       @accelerated.each { |name| set_accels(name, [] of String) }
-      @sequences.clear
-      @sequence_prefixes.clear
-      @bindings.each do |binding|
-        next unless binding.sequence?
-        @sequences[binding.triggers] = binding.action unless @sequences.has_key?(binding.triggers)
-        (1...binding.triggers.size).each { |size| @sequence_prefixes << binding.triggers[0, size] }
-      end
+      @binding_keymap = Keymap.new(@bindings.reject(&.global?), singles: false)
       seen = Set(Trigger).new
       accels = {} of String => Array(String)
       @bindings.each do |binding|
         next if binding.global? || binding.sequence? || !seen.add?(binding.trigger)
-        if @sequence_prefixes.includes?(binding.triggers)
+        if @binding_keymap.prefix?(binding.triggers)
           Log.warn { "binding #{binding}: a sequence starts with it" }
           next
         end
@@ -155,6 +225,10 @@ module Apprt
       end
       accels.each { |name, list| set_accels(name, list) }
       @accelerated = accels.keys
+    end
+
+    private def apply_key_tables : Nil
+      @key_table_maps = @key_tables.transform_values { |bindings| Keymap.new(bindings, singles: true) }
     end
 
     private def start_global_shortcuts : Nil

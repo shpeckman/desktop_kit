@@ -307,6 +307,7 @@ module Apprt
       Action.install(@application, :app) { |action| perform(self, action) }
       start_global_shortcuts
       apply_bindings
+      apply_key_tables
       load_css
       apply_appearance
       @dark_handler = Signals.notify(C.adw_style_manager_get_default, "dark", -> { color_scheme_changed })

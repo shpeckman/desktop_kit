@@ -11,6 +11,16 @@ module Apprt
   class Window
     private record Item, label : String, action : Action
 
+    # The most key tables active at once.
+    private KEY_TABLE_LIMIT = 8
+
+    # :nodoc:
+    STYLE = <<-CSS
+      .key-state { margin: 12px; padding: 6px 12px; border-radius: 8px; font-feature-settings: "tnum"; }
+      window.apprt-window.opaque { background-color: @window_bg_color; }
+      window.apprt-window.opaque .surface { background-color: @view_bg_color; }
+      CSS
+
     # Sections of the window menu.
     private MENU = [
       [Item.new("New Window", Action::NewWindow.new), Item.new("New Tab", Action::NewTab.new)],
@@ -52,12 +62,15 @@ module Apprt
     @palette : CommandPalette?
     @sequence = [] of Trigger
     @sequence_keys = Pointer(Void).null
+    @key_tables = [] of {String, Bool}
+    @initial_size = {800, 600}
+    @opaque = false
     @tabs_in_header = false
     @subtitle : String?
 
     protected def initialize(@app : App)
       @widget = Widget.new(C.adw_application_window_new(@app))
-      C.gtk_window_set_default_size(@widget, 800, 600)
+      C.gtk_window_set_default_size(@widget, *@initial_size)
       @tab_view = Widget.new(C.adw_tab_view_new)
       @title_widget = Widget.new(C.adw_window_title_new(Window.default_title, ""))
       @overview = Widget.new(C.adw_tab_overview_new)
@@ -66,6 +79,7 @@ module Apprt
       @title_box = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 12))
       @tab_bar = Widget.new(C.adw_tab_bar_new)
       @toolbar = Widget.new(C.adw_toolbar_view_new)
+      @key_state = Widget.new(C.gtk_label_new(nil))
       @widget.add_css_class("apprt-window")
       layout
       apply_style(@app.window_style)
@@ -250,6 +264,11 @@ module Apprt
       C.gtk_window_present(@widget) unless @closed
     end
 
+    # Returns the names of the active key tables, the innermost last.
+    def key_tables : Array(String)
+      @key_tables.map(&.[0])
+    end
+
     # Closes the window, asking the user first when one of its surfaces has
     # `Surface#confirm_close?`.
     def close : Nil
@@ -397,6 +416,67 @@ module Apprt
       C.gtk_window_set_default_size(@widget, width, height)
     end
 
+    # Sets the size `#reset_size` returns to, and resizes to it.
+    protected def initial_size(width : Int32, height : Int32) : Nil
+      @initial_size = {width, height}
+      default_size(width, height)
+    end
+
+    # Resizes to the initial size, unless the window is maximized or
+    # fullscreen.
+    protected def reset_size : Bool
+      return false if C.gtk_window_is_maximized(@widget) != 0 || C.gtk_window_is_fullscreen(@widget) != 0
+      default_size(*@initial_size)
+      true
+    end
+
+    # Switches the background between the window style's opacity and
+    # opaque; false when the style is opaque already.
+    protected def toggle_opaque : Bool
+      return false unless @app.window_style.opacity < 1.0
+      @opaque = !@opaque
+      @opaque ? @widget.add_css_class("opaque") : @widget.remove_css_class("opaque")
+      true
+    end
+
+    protected def shown? : Bool
+      !@closed && @widget.visible?
+    end
+
+    protected def shown=(shown : Bool) : Bool
+      return shown if @closed
+      shown ? present : (@widget.visible = false)
+      shown
+    end
+
+    # Pushes the key table *name*, popped after its first binding when
+    # *once*. False for an unknown table, the innermost one, or a full
+    # stack.
+    protected def activate_key_table(name : String, once : Bool) : Bool
+      return false unless @app.key_table?(name)
+      return false if @key_tables.last?.try(&.[0]) == name
+      if @key_tables.size >= KEY_TABLE_LIMIT
+        Log.warn { "key table #{name}: #{KEY_TABLE_LIMIT} tables are active already" }
+        return false
+      end
+      @key_tables << {name, once}
+      sync_key_state
+      true
+    end
+
+    protected def deactivate_key_table : Bool
+      return false unless @key_tables.pop?
+      sync_key_state
+      true
+    end
+
+    protected def deactivate_all_key_tables : Bool
+      return false if @key_tables.empty?
+      @key_tables.clear
+      sync_key_state
+      true
+    end
+
     # Sets the smallest size; 0 leaves a dimension unlimited.
     protected def min_size(width : Int32, height : Int32) : Nil
       @widget.size_request(width > 0 ? width : -1, height > 0 ? height : -1)
@@ -458,7 +538,16 @@ module Apprt
       toolbar = @toolbar
       C.adw_toolbar_view_add_top_bar(toolbar, header)
       C.adw_toolbar_view_add_top_bar(toolbar, tab_bar)
-      C.adw_toast_overlay_set_child(@toasts, @tab_view)
+      overlay = C.gtk_overlay_new
+      C.gtk_overlay_set_child(overlay, @tab_view)
+      @key_state.add_css_class("osd")
+      @key_state.add_css_class("key-state")
+      @key_state.visible = false
+      C.gtk_widget_set_can_target(@key_state, 0)
+      C.gtk_widget_set_halign(@key_state, C::GtkAlign::End)
+      C.gtk_widget_set_valign(@key_state, C::GtkAlign::End)
+      C.gtk_overlay_add_overlay(overlay, @key_state)
+      C.adw_toast_overlay_set_child(@toasts, overlay)
       C.adw_toolbar_view_set_content(toolbar, @toasts)
 
       C.adw_tab_overview_set_view(@overview, @tab_view)
@@ -504,7 +593,7 @@ module Apprt
     # taken, one that completes it performs its action, and any other key
     # while one is pending ends it and is dropped.
     private def sequence_key(keyval : UInt32, state : UInt32) : Bool
-      return false if @sequence.empty? && !@app.sequences?
+      return false if @sequence.empty? && @key_tables.empty? && !@app.sequences?
       event = C.gtk_event_controller_get_current_event(@sequence_keys)
       return false if !event.null? && C.gdk_key_event_is_modifier(event) != 0
       mods = Mods.from_gdk(C::GdkModifierType.new(state))
@@ -512,19 +601,33 @@ module Apprt
       {mods, mods & ~consumed}.each do |held|
         trigger = Trigger.new?(keyval, held) || next
         keys = @sequence + [trigger]
-        case match = @app.sequence_match(keys)
-        when Action
+        case match = @app.key_match(@key_tables, keys)
+        when Tuple
+          action, table = match
           @sequence.clear
-          Log.warn { "binding #{keys.join('>')}: action #{match.detailed_name} not handled" } unless @app.perform_in(self, match)
+          @key_tables.pop if table && @key_tables.last? == {table, true}
+          sync_key_state
+          Log.warn { "binding #{keys.join('>')}: action #{action.detailed_name} not handled" } unless @app.perform_in(self, action)
           return true
         when true
           @sequence = keys
+          sync_key_state
           return true
         end
       end
       return false if @sequence.empty?
       @sequence.clear
+      sync_key_state
       true
+    end
+
+    # Shows the active key tables and the pending sequence in the corner
+    # overlay, or hides it when there are none.
+    private def sync_key_state : Nil
+      parts = key_tables
+      parts << @sequence.join(' ', &.label) unless @sequence.empty?
+      C.gtk_label_set_label(@key_state, parts.join(" › "))
+      @key_state.visible = !parts.empty?
     end
 
     private def connect_signals : Nil
@@ -670,7 +773,43 @@ module Apprt
     end
 
     protected def perform(target : Window, action : Action::InitialSize) : Bool
-      target.default_size(action.width.to_i32, action.height.to_i32)
+      target.initial_size(action.width.to_i32, action.height.to_i32)
+      true
+    end
+
+    protected def perform(target : Window, action : Action::ResetWindowSize) : Bool
+      target.reset_size
+    end
+
+    protected def perform(target : Window, action : Action::ToggleBackgroundOpacity) : Bool
+      target.toggle_opaque
+    end
+
+    protected def perform(target : Window, action : Action::ActivateKeyTable) : Bool
+      target.activate_key_table(action.table, once: false)
+    end
+
+    protected def perform(target : Window, action : Action::ActivateKeyTableOnce) : Bool
+      target.activate_key_table(action.table, once: true)
+    end
+
+    protected def perform(target : Window, action : Action::DeactivateKeyTable) : Bool
+      target.deactivate_key_table
+    end
+
+    protected def perform(target : Window, action : Action::DeactivateAllKeyTables) : Bool
+      target.deactivate_all_key_tables
+    end
+
+    protected def perform(target : App, action : Action::ToggleVisibility) : Bool
+      return false if @windows.empty?
+      shown = @windows.none?(&.shown?)
+      @windows.each { |window| window.shown = shown }
+      true
+    end
+
+    protected def perform(target : App, action : Action::ShowGtkInspector) : Bool
+      C.gtk_window_set_interactive_debugging(1)
       true
     end
 

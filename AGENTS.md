@@ -148,7 +148,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `window_spec.cr` covers windows, tabs, splits, titles and dialogs
   (`Window#confirm`/`#prompt` too); `command_palette_spec.cr` the palette;
   `sequence_spec.cr` key sequences, emitting `key-pressed` on the window's
-  `@sequence_keys`;
+  `@sequence_keys`; `key_table_spec.cr` key tables and the key state
+  overlay; `window_actions_spec.cr` visibility, window size, background
+  opacity, title copy and read-only;
   `window_style_spec.cr` pane headers, the active mark, tab icons, tabs
   in the header bar, header bar content and `on_window`;
   `canvas_spec.cr` the canvas, pointer, bell and clipboard;
@@ -284,23 +286,37 @@ Internal contracts of `src/apprt/glib/`:
   focus widget upward. The previous set is cleared first. Global bindings
   get no accelerator; `apply_bindings` hands them to `GlobalShortcuts`
   (see Global shortcuts).
-- Sequences get no accelerator either. `apply_bindings` fills
-  `@sequences` (full trigger list → action, first binding wins) and
-  `@sequence_prefixes` (every proper prefix); a single trigger that equals
-  a prefix is skipped with a warning. `Binding.parse` splits at a `>` that
-  follows a key and not a `+`.
+- Sequences get no accelerator either. A private `Keymap` maps full
+  trigger lists to actions (first binding wins) and keeps every proper
+  prefix; a single trigger that equals a prefix is skipped with a warning.
+  `apply_bindings` builds `@binding_keymap` from the sequences only
+  (singles stay accelerators); `apply_key_tables` builds one `Keymap` per
+  key table with singles too. The ivar is typed explicitly: inferred from
+  `Keymap::EMPTY` it widened to `App | Keymap` in subclasses.
+  `Binding.parse` splits at a `>` that follows a key and not a `+`.
+- Key tables port Ghostty's (`src/input/Binding.zig`, `Surface.zig`), but
+  the stack lives per `Window`, next to the pending sequence, rather than
+  per surface. `@key_tables` holds `{name, once}`, at most
+  `KEY_TABLE_LIMIT` (8). `App#key_match(tables, keys)` tries the tables
+  innermost first, then `@binding_keymap`, and returns `{action, table}`,
+  `true` for a prefix or nil; a match from a `once` table that is still
+  innermost pops it. Table keys pass the capture controller too, so they
+  win over accelerators. `@key_state`, an `osd` label in a `GtkOverlay`
+  around the tab view, shows the tables and the pending triggers joined
+  by ` › ` and hides when both are empty; `Window::STYLE` styles it.
 - Each `Window` adds a capture-phase `GtkEventControllerKey`
   (`@sequence_keys`) first, so it sees keys before the focus widget.
-  `sequence_key` returns false at once while nothing is pending and the
-  app has no sequences, skips modifier keys, and tries the trigger with
+  `sequence_key` returns false at once while nothing is pending, no key
+  table is active and the app has no sequences, skips modifier keys, and tries the trigger with
   the held mods, then without the consumed mods (`shift+>` arrives as
   `>` with Shift). A completed sequence clears `@sequence` and performs
   through `App#perform_in(window, action)`, which resolves the target by
   scope like global bindings do; a prefix extends `@sequence`; any other
   key while pending clears it and is consumed. There is no timeout.
-  Whether GTK's application accelerators run before the capture phase,
-  for a key that is both a sequence's second trigger and an accelerator,
-  is not covered: the specs emit `key-pressed` directly.
+  GTK prepends event controllers and runs them in list order, so the
+  window's controller, added after GTK's capture-phase
+  `gtk-application-shortcuts` controller, sees keys first; the specs
+  emit `key-pressed` directly and do not cover this.
 - `Trigger.new?` (protected) returns nil where `.new` raises.
 - `Trigger` normalizes the keyval to lower case and validates it with
   `gtk_accelerator_valid` plus a name round trip (unnamed keyvals such as
@@ -629,7 +645,7 @@ After Ghostty's split header bars (`surface.blp`) and
 `unfocused-split-opacity`:
 - `App#window_style=` stores and dispatches `apply_window_style`, which
   reloads the runtime provider (`@runtime_style`, application priority)
-  with `Surface::STYLE + WindowStyle#to_css` and calls `apply_style` on
+  with `Surface::STYLE + Window::STYLE + WindowStyle#to_css` and calls `apply_style` on
   each window and surface. New windows and surfaces apply it in their
   initializers. Startup loads the provider through `load_runtime_style`.
 - `WindowStyle#to_css` writes rules only for options that differ from
@@ -654,6 +670,18 @@ After Ghostty's split header bars (`surface.blp`) and
   the move. `pack_start`/`pack_end` add to `@header`.
 - `on_window` runs from `App#open_window`, so it covers `NewWindow`,
   tab drag-out and `MoveTabToNewWindow` too.
+- `ToggleBackgroundOpacity` toggles the `opaque` class on the window;
+  `Window::STYLE` (`:nodoc:`, loaded after `Surface::STYLE`) restores the
+  window and `.surface` backgrounds with one class more specificity than
+  `WindowStyle#to_css`. It returns false while the style's opacity is 1.
+- `ResetWindowSize` sets the default size to `@initial_size`, which
+  `InitialSize` records (800x600 until then). `ToggleVisibility` hides
+  every registered window with `gtk_widget_set_visible` (they stay
+  registered, tabs intact) and shows them with `present`.
+- Read-only is a flag and a badge only (`@read_only_badge`,
+  `changes-prevent-symbolic`, `.surface-read-only` in `Surface::STYLE`,
+  overlaid top right, `.read-only` on the host): apprt filters no input,
+  as Ghostty leaves selection working; content checks `read_only?`.
 
 ## Transient scopes
 

@@ -42,6 +42,7 @@ module Apprt
     # which the app loads at application priority.
     STYLE = <<-CSS
       .surface-header { padding: 2px 4px 2px 10px; }
+      .surface-read-only { margin: 8px; padding: 6px; border-radius: 6px; }
       .surface-drag-handle {
         background-color: alpha(@window_fg_color, 0.15);
         opacity: 0;
@@ -92,6 +93,7 @@ module Apprt
       @header = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 6))
       @header_icon = Widget.new(C.gtk_image_new_from_icon_name(nil))
       @header_title = Widget.new(C.gtk_label_new(Window.default_title))
+      @read_only_badge = Widget.new(C.gtk_image_new_from_icon_name("changes-prevent-symbolic"))
       layout
       apply_style(@app.window_style)
       install_drag_and_drop
@@ -121,6 +123,18 @@ module Apprt
       @header_icon.visible = !icon.nil?
       @tab.try(&.sync_title)
       icon
+    end
+
+    # Returns whether the surface is marked read-only.
+    getter? read_only = false
+
+    # Marks the surface read-only, which shows a lock over it, or writable.
+    # The content decides what read-only stops; it reads `#read_only?`.
+    def read_only=(read_only : Bool) : Bool
+      @read_only = read_only
+      @read_only_badge.visible = read_only
+      read_only ? @host.add_css_class("read-only") : @host.remove_css_class("read-only") unless @closed
+      read_only
     end
 
     # Sets the title the user chose; `nil` restores `#title`.
@@ -276,6 +290,13 @@ module Apprt
       @drop_indicator.add_css_class("surface-drop-indicator")
       C.gtk_widget_set_can_target(@drop_indicator, 0)
       C.gtk_overlay_add_overlay(overlay, @drop_indicator)
+      @read_only_badge.add_css_class("osd")
+      @read_only_badge.add_css_class("surface-read-only")
+      @read_only_badge.tooltip = "Read-only"
+      @read_only_badge.visible = false
+      C.gtk_widget_set_halign(@read_only_badge, C::GtkAlign::End)
+      C.gtk_widget_set_valign(@read_only_badge, C::GtkAlign::Start)
+      C.gtk_overlay_add_overlay(overlay, @read_only_badge)
       Widget.new(overlay).vexpand = true
       build_header
       box = C.gtk_box_new(C::GtkOrientation::Vertical, 0)
@@ -445,6 +466,17 @@ module Apprt
   end
 
   abstract class App
+    protected def perform(target : Surface, action : Action::CopyTitleToClipboard) : Bool
+      title = target.shown_title || return false
+      Clipboard.write(title)
+      true
+    end
+
+    protected def perform(target : Surface, action : Action::ToggleReadOnly) : Bool
+      target.read_only = !target.read_only?
+      true
+    end
+
     protected def perform(target : Surface, action : Action::NewSplit) : Bool
       target.split(action.direction)
       true

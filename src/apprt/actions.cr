@@ -22,6 +22,12 @@ module Apprt
     # Opens *url* with the default handler; *url* may also be a file path.
     Apprt.action OpenUrl, "open-url", payload: {url: String}
 
+    # Hides every window, or shows them all again when none is visible.
+    Apprt.action ToggleVisibility, "toggle-visibility"
+
+    # Opens the GTK inspector.
+    Apprt.action ShowGtkInspector, "show-gtk-inspector"
+
     # Closes the window.
     Apprt.action CloseWindow, "close-window", scope: :window
 
@@ -36,6 +42,27 @@ module Apprt
 
     # Opens the command palette of the window, or closes it when open.
     Apprt.action ToggleCommandPalette, "toggle-command-palette", scope: :window
+
+    # Lays the key table *table* of `App#key_tables` over the window's
+    # bindings. Does nothing when it is already the innermost table.
+    Apprt.action ActivateKeyTable, "activate-key-table", scope: :window, payload: {table: String}
+
+    # Lays the key table *table* over the window's bindings until one of
+    # its bindings is used.
+    Apprt.action ActivateKeyTableOnce, "activate-key-table-once", scope: :window, payload: {table: String}
+
+    # Removes the innermost active key table.
+    Apprt.action DeactivateKeyTable, "deactivate-key-table", scope: :window
+
+    # Removes every active key table.
+    Apprt.action DeactivateAllKeyTables, "deactivate-all-key-tables", scope: :window
+
+    # Switches the window background between the `WindowStyle#opacity`
+    # and opaque.
+    Apprt.action ToggleBackgroundOpacity, "toggle-background-opacity", scope: :window
+
+    # Gives the window its initial size again.
+    Apprt.action ResetWindowSize, "reset-window-size", scope: :window
 
     # Focuses the previous or next window.
     Apprt.action GotoWindow, "goto-window", scope: :window, payload: {direction: Direction} do
@@ -135,5 +162,11 @@ module Apprt
 
     # Shows or hides the mouse pointer over the surface.
     Apprt.action MouseVisibility, "mouse-visibility", scope: :split, payload: {visible: Bool}
+
+    # Copies the title of the focused surface to the clipboard.
+    Apprt.action CopyTitleToClipboard, "copy-title-to-clipboard", scope: :split
+
+    # Toggles `Surface#read_only?` of the focused surface.
+    Apprt.action ToggleReadOnly, "toggle-read-only", scope: :split
   end
 end

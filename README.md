@@ -19,7 +19,7 @@ and the GLib layer the runtime builds on.
 | `hello.cr`     | windows, tabs and splits of text entries, bindings, a global binding, notifications, reload |
 | `canvas.cr`    | an OpenGL canvas following pointer, buttons, scrolling and typed text |
 | `ipc.cr`       | opens a window in a running `hello.cr`                                |
-| `workspace.cr` | the card window style, pane icons, header bar content, the command palette with custom commands, key sequences |
+| `workspace.cr` | the card window style, pane icons, header bar content, the command palette with custom commands, key sequences, a key table |
 | `snake.cr`     | a game on OpenGL canvases in split cards, steered with physical keys |
 | `dialogs.cr`   | header bar buttons for confirm and prompt dialogs, toasts, notifications, opening a URL, drops |
 
@@ -157,6 +157,8 @@ elsewhere.
 | `Window#subtitle=`               | sets a second line under the window title; `nil` removes it       |
 | `Window#pack_start`, `#pack_end` | adds a widget, or a button performing an action, to the header bar |
 | `Surface#icon=`                  | sets a themed icon name for its pane header and, while active, its tab |
+| `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
+| `Window#key_tables`              | the names of its active key tables, innermost last                |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -430,10 +432,10 @@ Built-in actions, all nested in `Apprt::Action`:
 
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`                                                                                                                     |
-| `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)` |
+| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `ShowGtkInspector`                                                                              |
+| `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
-| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`                  |
+| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly` |
 
 Sizes are `UInt32` pixels. `SizeLimit` sets the smallest window size and
 treats 0 as no limit; GTK 4 windows have no largest size, so its maximum is
@@ -442,6 +444,13 @@ only while the window shows one surface and is neither maximized nor
 fullscreen. `SetWindowTheme` sets the appearance of the whole application.
 `GotoTab` counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and
 `LAST`; previous and next wrap around, as `MoveTab` does.
+`ResetWindowSize` returns a window that is neither maximized nor
+fullscreen to its `InitialSize`, 800x600 by default.
+`ToggleBackgroundOpacity` makes a window opaque and back while the
+`WindowStyle` opacity is below 1. `ToggleVisibility` hides every window
+when any is shown and shows them all otherwise. `ShowGtkInspector` opens
+GTK's interactive debugger. `CopyTitleToClipboard` copies the surface's
+shown title.
 `PresentSurface` presents the surface with that `Surface#id` and ignores
 an unknown one; `DesktopNotification` is `App#notify`. `OpenUrl` opens
 the URL with the desktop's default handler through the OpenURI portal, and
@@ -478,6 +487,30 @@ after `+`, as in `"ctrl+>"` or `"a>>"`. `Binding#triggers` lists the
 triggers, `#sequence?` tells whether there are several, `#label` joins
 their labels with spaces (`"Ctrl+A N"`) and `#to_s` gives back the text.
 Sequences cannot be global.
+
+`App#key_tables=` sets named key tables, modes that lay their own bindings
+over the window's while active:
+
+```crystal
+app.key_tables = {
+  "resize" => [
+    Apprt::Binding.new("h", Apprt::Action::ResizeSplit.new(:left, 20)),
+    Apprt::Binding.new("l", Apprt::Action::ResizeSplit.new(:right, 20)),
+    Apprt::Binding.new("esc", Apprt::Action::DeactivateKeyTable.new),
+  ],
+}
+app.bindings = [Apprt::Binding.new("ctrl+r", Apprt::Action::ActivateKeyTable.new("resize"))]
+```
+
+`ActivateKeyTable` pushes a table onto the window's stack, up to eight
+deep; an unknown table or the one already innermost is ignored.
+`ActivateKeyTableOnce` pops it again after its first binding performs.
+`DeactivateKeyTable` pops the innermost table and `DeactivateAllKeyTables`
+all of them. A pending sequence comes first, then the tables from the
+innermost out, then the bindings; keys no table binds pass through to the
+content. Tables take single keys and sequences but no global bindings,
+which raise `ArgumentError`. While a table or a sequence is active the
+window shows them in its bottom corner (`resize › Ctrl+A`).
 
 `global: true` marks a binding that works while the application is not
 focused. Global bindings go to the desktop's global shortcuts portal

@@ -2,14 +2,16 @@
 #
 # A workspace in the card style: pane headers with icons, tabs in the
 # header bar, a translucent blurred window, dimmed unfocused splits, the
-# command palette and tmux-like key sequences.
+# command palette, tmux-like key sequences and a key table.
 #
 #   crystal run examples/workspace.cr
 #
 # Shift+Ctrl+P or the search button opens the command palette, which also
 # toggles each part of the style. Ctrl+A starts a sequence: then C opens a
 # tab, R and D split right and down, Z zooms, X closes the split, N and P
-# move to the next and previous tab, and H, J, K and L move between splits.
+# move to the next and previous tab, H, J, K and L move between splits,
+# and E enters the resize table, where H, J, K and L resize the split
+# until Esc.
 require "../src/apprt"
 
 lib LibGtk
@@ -58,6 +60,15 @@ module Workspace
       self.commands = Apprt::Command.defaults + Look.values.map do |look|
         Apprt::Command.new("Toggle #{look.to_s.underscore.tr("_", " ").capitalize}", ToggleLook.new(look), "style look")
       end
+      self.key_tables = {
+        "resize" => [
+          Apprt::Binding.new("h", Apprt::Action::ResizeSplit.new(:left, 20)),
+          Apprt::Binding.new("l", Apprt::Action::ResizeSplit.new(:right, 20)),
+          Apprt::Binding.new("k", Apprt::Action::ResizeSplit.new(:up, 20)),
+          Apprt::Binding.new("j", Apprt::Action::ResizeSplit.new(:down, 20)),
+          Apprt::Binding.new("esc", Apprt::Action::DeactivateKeyTable.new),
+        ],
+      }
       self.bindings = [
         Apprt::Binding.new("ctrl+shift+p", Apprt::Action::ToggleCommandPalette.new),
         Apprt::Binding.new("ctrl+a>c", Apprt::Action::NewTab.new),
@@ -71,6 +82,7 @@ module Workspace
         Apprt::Binding.new("ctrl+a>l", Apprt::Action::GotoSplit.new(:right)),
         Apprt::Binding.new("ctrl+a>k", Apprt::Action::GotoSplit.new(:up)),
         Apprt::Binding.new("ctrl+a>j", Apprt::Action::GotoSplit.new(:down)),
+        Apprt::Binding.new("ctrl+a>e", Apprt::Action::ActivateKeyTable.new("resize")),
         Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
       ]
     end
