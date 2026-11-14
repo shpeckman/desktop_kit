@@ -52,6 +52,7 @@ module Apprt
       Signals.connect(focus, "enter", -> { focus_changed(true) })
       Signals.connect(focus, "leave", -> { focus_changed(false) })
       @host.add_controller(focus)
+      @notifications = Notifications.new(@app.to_unsafe, @id)
       @content.surface = self
     end
 
@@ -116,6 +117,22 @@ module Apprt
       @tab.try(&.activate(self))
     end
 
+    # Focuses the surface and raises its window.
+    def present : Nil
+      tab = @tab || return
+      tab.activate(self)
+      tab.window.try(&.present)
+    end
+
+    # Shows a desktop notification from the surface; clicking it presents
+    # the surface. Sending the same *title* and *body* again replaces it.
+    #
+    # One sent while the surface is focused is withdrawn after a few seconds;
+    # all are withdrawn once the surface gets the focus or closes.
+    def notify(title : String, body : String) : Nil
+      @notifications.send(title, body, @focused) unless @closed
+    end
+
     # Opens a new surface beside this one, in *direction*, focuses it and
     # returns it. Raises `RuntimeError` when the surface is closed.
     def split(direction : Direction) : Surface
@@ -156,6 +173,7 @@ module Apprt
     private def focus_changed(focused : Bool) : Nil
       @focused = focused
       return unless focused
+      @notifications.clear
       if @bell_ringing
         @bell_ringing = false
         @tab.try(&.sync_title)
@@ -172,6 +190,7 @@ module Apprt
       return if @closed
       @closed = true
       @tab = nil
+      @notifications.clear
       @app.unregister(self)
       C.g_object_unref(@host)
     end

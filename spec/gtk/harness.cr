@@ -48,6 +48,7 @@ module GtkHarness
       "GDK_BACKEND"              => "wayland",
       "GSK_RENDERER"             => "ngl",
       "GDK_DISABLE"              => "vulkan",
+      "GNOTIFICATION_BACKEND"    => "freedesktop",
       "ADW_DISABLE_PORTAL"       => "1",
       "GDK_DEBUG"                => "no-portals",
       "GTK_A11Y"                 => "none",

@@ -8,10 +8,9 @@ desktop notifications, global shortcuts, DBus IPC and systemd integration.
 Status: early. This release holds the application lifecycle, windows with
 tabs and splits of surfaces, an OpenGL drawing canvas with keyboard, input
 method and pointer input, the clipboard, actions and key bindings, and the
-GLib layer the runtime builds on. Desktop notifications and IPC follow. The
-built-in actions `PresentSurface`, `DesktopNotification` and `OpenUrl` are
-not carried out yet, and global bindings are not registered with the
-desktop yet.
+GLib layer the runtime builds on, and desktop notifications. IPC follows.
+The built-in action `OpenUrl` is not carried out yet, and global bindings
+are not registered with the desktop yet.
 
 ## Requirements
 
@@ -127,6 +126,7 @@ elsewhere.
 | `Tab#window`, `#close`           | the window showing the tab, closes it                             |
 | `Surface#split(direction)`       | opens a surface beside it, in an `Apprt::Direction`, and focuses it |
 | `Surface#focus`, `#close`        | focuses the surface and selects its tab, closes it                |
+| `Surface#present`                | focuses the surface and raises its window (`PresentSurface`)      |
 | `Surface#tab`, `#window`, `#id`  | where it is shown, its identifier, unique in the process          |
 | `Surface#focused?`               | whether it holds its window's keyboard focus                      |
 | `Surface#cursor=`                | sets the pointer by CSS name (`"text"`, `"pointer"`); `nil` resets |
@@ -228,6 +228,17 @@ clipboard; `.read(kind = :standard) { |text| }` yields its text later, or
 `Primary` (the selection, pasted by middle-click). Use them on the GTK
 thread only.
 
+### Notifications
+
+`Surface#notify(title, body)` shows a desktop notification; clicking it
+presents the surface. `App#notify(title, body)` shows one from the
+application, which clicking does not act on. An empty *title* shows the
+application name. Sending the same title and body again replaces the
+notification instead of adding one. A surface withdraws its notifications
+once it gets the focus or closes, and one sent while it is focused after a
+few seconds. Use them on the GTK thread only; GIO hands them to the
+desktop's notification service.
+
 ### Actions
 
 Everything the runtime does on request is an action: a typed value that
@@ -295,6 +306,8 @@ only while the window shows one surface and is neither maximized nor
 fullscreen. `SetWindowTheme` sets the appearance of the whole application.
 `GotoTab` counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and
 `LAST`; previous and next wrap around, as `MoveTab` does.
+`PresentSurface` presents the surface with that `Surface#id` and ignores
+an unknown one; `DesktopNotification` is `App#notify`.
 `direction` is an `Apprt::Direction` (`Left`, `Right`, `Up`, `Down`) unless
 the action lists its own values.
 

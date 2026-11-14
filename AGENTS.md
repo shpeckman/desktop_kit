@@ -41,7 +41,8 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   - `variant.cr` - `Variant` (public).
   - `widget.cr` - `Widget` (public): borrowed widget handle.
   - `signals.cr` - `Signals` (`:nodoc:`): signal connections.
-  - `idle.cr` - `Idle` (`:nodoc:`): one-shot idle callbacks, cancellable.
+  - `idle.cr` - `Idle` (`:nodoc:`): one-shot idle and timeout callbacks,
+    cancellable.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
   `Direction`, `Mods` (public).
 - `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
@@ -75,6 +76,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   overloads.
 - `src/apprt/window.cr` - `Window` (public): widget tree, menu, signals;
   reopens `App` with the window action overloads.
+- `src/apprt/notifications.cr` - `Notifications` (`:nodoc:`): a surface's
+  sent notifications; reopens `App` with `notify` and the
+  `DesktopNotification` and `PresentSurface` overloads.
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
@@ -83,7 +87,8 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   resolves with `dlsym`, `GValue` size, a GType round trip), the glib layer
   (`glib_spec.cr`, signals on Gio objects), `Variant`, `Systemd`
   (`with_notify_socket` in `spec/spec_helper.cr`), actions (codecs, detailed
-  names, registry), triggers and `SplitTree` (Ghostty's diagram cases).
+  names, registry), triggers, `SplitTree` (Ghostty's diagram cases) and
+  the `Notifications` bookkeeping.
 - `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
   `before_all`) runs a private headless `sway` (`WLR_BACKENDS=headless`,
   `WLR_RENDERER=pixman`, one 1280x800 output at scale 1, floating windows,
@@ -91,7 +96,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   points `GDK_BACKEND=wayland`, `WAYLAND_DISPLAY`,
   `DBUS_SESSION_BUS_ADDRESS`, `XDG_CONFIG_HOME` and
   `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
-  session. GTK renders with `GSK_RENDERER=ngl` and `GDK_DISABLE=vulkan`.
+  session. GTK renders with `GSK_RENDERER=ngl` and `GDK_DISABLE=vulkan`;
+  `GNOTIFICATION_BACKEND=freedesktop` sends notifications to the fake
+  server.
   A real compositor replaced broadway because `GtkGLArea` needs GL and a
   process can use only one GDK backend. `Spec.after_suite` stops both.
   Test apps hold the GApplication in `on_startup`: without windows or a
@@ -100,7 +107,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   default; `new_surface` records the contexts), `AppIds`, `run_app` and
   the step helpers `run_steps`, `settle`, `eventually` and `trigger`.
   `window_spec.cr` covers windows, tabs, splits, titles and dialogs;
-  `canvas_spec.cr` the canvas, pointer, bell and clipboard.
+  `canvas_spec.cr` the canvas, pointer, bell and clipboard;
+  `notifications_spec.cr` notifications against `FakeNotifications`
+  (`fake_notifications.cr`).
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -347,6 +356,33 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
 - Specs drive the controllers by emitting their signals
   (`g_signal_emit_by_name` on `canvas.@key_controller` and friends), so
   they need no input devices.
+
+## Notifications
+
+Internals of `notifications.cr`, ported from Ghostty's
+`src/apprt/gtk/desktop_notifications.zig` and
+`Surface.sendDesktopNotification`:
+- Each `Surface` owns a `Notifications`. A notification's GIO id is
+  `apprt-surface-<surface id>-<key>` in hex, the key being
+  `{title, body}.hash`, so the same text replaces the earlier one;
+  `App#notify` uses `apprt-<key>`. The default action is
+  `app.present-surface(uint64 id)`; `App#notify` sends id 0, which no
+  surface has.
+- At most `LIMIT` (64) are kept per surface; more withdraw the oldest. One
+  sent while focused is withdrawn after `#timeout` (`FOCUSED_TIMEOUT`, 3 s)
+  through `Idle.after`. `Surface#focus_changed(true)` and `#release` call
+  `#clear`. A null application pointer skips GIO, which the pure specs use.
+- The title falls back to `Window.default_title`; the icon is a themed icon
+  named after the application id.
+- `FakeNotifications.serve(app) { |fake| }` exports
+  `org.freedesktop.Notifications` on the app's own bus connection
+  (`RequestName` with `DO_NOT_QUEUE` must return 1), records `Notify` and
+  `CloseNotification` calls, and `#click(id)` emits `ActionInvoked`.
+- GIO's freedesktop backend crashes (recursive `g_object_unref` in
+  `g_fdo_notification_backend_dispose`) when the application goes away
+  while a `Notify` reply is pending. `serve` therefore settles before
+  closing the windows and again before stopping; that also keeps the
+  withdrawals of one example's quit out of the next example's fake.
 
 ## Bindings
 
