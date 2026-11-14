@@ -72,6 +72,8 @@ module Apprt
     fun adw_tab_page_set_title(self_ : Void*, title : UInt8*)
     fun adw_tab_page_set_tooltip(self_ : Void*, tooltip : UInt8*)
     fun adw_tab_page_set_needs_attention(self_ : Void*, needs_attention : Int32)
+    fun adw_tab_page_get_needs_attention(self_ : Void*) : Int32
+    fun adw_tab_page_get_selected(self_ : Void*) : Int32
     fun adw_tab_overview_new : Void*
     fun adw_tab_overview_set_view(self_ : Void*, view : Void*)
     fun adw_tab_overview_set_child(self_ : Void*, child : Void*)

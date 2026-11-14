@@ -23,6 +23,7 @@ gdk_surface_get_scale
 gdk_surface_get_scale_factor
 gdk_surface_beep
 gdk_cursor_new_from_name
+gdk_cursor_get_name
 
 # events
 gdk_event_get_modifier_state
@@ -32,6 +33,7 @@ gdk_key_event_get_keycode
 gdk_key_event_get_consumed_modifiers
 gdk_key_event_get_layout
 gdk_key_event_get_level
+gdk_key_event_is_modifier
 gdk_scroll_event_get_unit
 
 # keys
@@ -40,3 +42,7 @@ gdk_keyval_from_name
 gdk_keyval_to_unicode
 gdk_keyval_to_lower
 gdk_unicode_to_keyval
+
+# gl contexts
+gdk_gl_context_get_current
+gdk_gl_context_get_api

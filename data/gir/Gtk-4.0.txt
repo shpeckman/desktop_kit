@@ -29,6 +29,7 @@ gtk_widget_has_focus
 gtk_widget_is_focus
 gtk_widget_set_cursor
 gtk_widget_set_cursor_from_name
+gtk_widget_get_cursor
 gtk_widget_set_tooltip_text
 gtk_widget_set_name
 gtk_widget_add_css_class
@@ -62,6 +63,7 @@ gtk_window_is_fullscreen
 gtk_window_set_decorated
 gtk_window_get_decorated
 gtk_window_get_focus
+gtk_window_is_active
 gtk_window_set_application
 
 # application
@@ -108,6 +110,8 @@ gtk_gl_area_make_current
 gtk_gl_area_queue_render
 gtk_gl_area_attach_buffers
 gtk_gl_area_get_error
+gtk_gl_area_get_context
+gtk_gl_area_get_api
 gtk_gl_area_set_auto_render
 gtk_gl_area_set_required_version
 gtk_gl_area_set_allowed_apis

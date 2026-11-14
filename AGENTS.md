@@ -17,7 +17,8 @@ make format   # crystal tool format src spec tools
 make clean
 ```
 
-Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
+The GTK specs need `sway`, `dbus-daemon` and a GPU driver with EGL (Mesa)
+on the host. Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
 `CRYSTAL_CACHE_DIR=.dev/cache`.
 
 ## Layout
@@ -61,6 +62,11 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   title prompt alert dialogs.
 - `src/apprt/content.cr` - `Content`, `WidgetContent`, `SurfaceContext`
   (public).
+- `src/apprt/input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
+  `MouseMotionEvent`, `ScrollEvent` (public; initializers `:nodoc:`).
+- `src/apprt/canvas.cr` - `Canvas` (public): the `GtkGLArea` content, its
+  event controllers and input method context.
+- `src/apprt/clipboard.cr` - `Clipboard` (public): text clipboards.
 - `src/apprt/surface.cr` - `Surface` (public); reopens `App` with the split
   action overloads.
 - `src/apprt/split_view.cr` - `SplitView` (`:nodoc:`): renders a tab's
@@ -79,15 +85,22 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   (`with_notify_socket` in `spec/spec_helper.cr`), actions (codecs, detailed
   names, registry), triggers and `SplitTree` (Ghostty's diagram cases).
 - `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
-  `before_all`) runs a private `gtk4-broadwayd` (loopback port, socket in a
-  temporary `XDG_RUNTIME_DIR`) and `dbus-daemon`, and points `GDK_BACKEND`,
-  `BROADWAY_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `XDG_CONFIG_HOME` and
+  `before_all`) runs a private headless `sway` (`WLR_BACKENDS=headless`,
+  `WLR_RENDERER=pixman`, one 1280x800 output at scale 1, floating windows,
+  no Xwayland) and `dbus-daemon` in a temporary `XDG_RUNTIME_DIR`, and
+  points `GDK_BACKEND=wayland`, `WAYLAND_DISPLAY`,
+  `DBUS_SESSION_BUS_ADDRESS`, `XDG_CONFIG_HOME` and
   `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
-  session. `Spec.after_suite` stops both. Test apps hold the GApplication in
-  `on_startup`: without windows or a hold it quits as soon as it is idle.
-  `harness.cr` also holds the shared `TestApp` (its `new_surface` returns
-  a `GtkEntry` and records the contexts), `AppIds` and `run_app`.
-  `window_spec.cr` covers windows, tabs, splits, titles and dialogs.
+  session. GTK renders with `GSK_RENDERER=ngl` and `GDK_DISABLE=vulkan`.
+  A real compositor replaced broadway because `GtkGLArea` needs GL and a
+  process can use only one GDK backend. `Spec.after_suite` stops both.
+  Test apps hold the GApplication in `on_startup`: without windows or a
+  hold it quits as soon as it is idle. `harness.cr` also holds the shared
+  `TestApp` (`make_content` builds each surface's content, a `GtkEntry` by
+  default; `new_surface` records the contexts), `AppIds`, `run_app` and
+  the step helpers `run_steps`, `settle`, `eventually` and `trigger`.
+  `window_spec.cr` covers windows, tabs, splits, titles and dialogs;
+  `canvas_spec.cr` the canvas, pointer, bell and clipboard.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -284,10 +297,56 @@ Internals of `window.cr`, `tab.cr`, `surface.cr`, `split_view.cr` and
 - `Dialogs` runs `AdwAlertDialog` with `adw_alert_dialog_choose`; the
   callback closure lives in `Handles`. Close confirmation responses are
   `cancel`/`close`; title prompts `cancel`/`ok`.
-- Specs: broadway without a connected browser advances the frame clock
-  about once per second, so layout assertions poll with `eventually`.
-  Dialogs are answered by setting the close response to the wanted id and
-  calling `adw_dialog_force_close`.
+- Bell: `Surface#ring_bell` beeps through the native `GdkSurface`; when
+  the surface lacks the focus it sets `bell_ringing?` and calls
+  `Tab#bell`, which sets the page's `needs-attention` unless selected and
+  retitles the tab (`🔔 ` before `🔍 `). The surface's focus controller
+  clears the ring on `enter`; the window clears `needs-attention` when a
+  page is selected. `MouseVisibility` sets the content widget's cursor to
+  `"none"` and back to `Surface#cursor`.
+- Specs: layout and drawing wait for the frame clock, so layout assertions
+  poll with `eventually`. A rebuild replaces every `GtkPaned`, so specs
+  look panes up again after each split. Dialogs are answered by setting
+  the close response to the wanted id and calling
+  `adw_dialog_force_close`.
+
+## Canvas
+
+Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
+`src/apprt/gtk/class/surface.zig`:
+- The widget is a `GtkGLArea` (focusable, focus on click, expanding) with
+  `allowed-apis`, `required-version`, `has-depth-buffer` and
+  `has-stencil-buffer` from `.new`; `auto-render` stays on. Realize makes
+  the context current and sets the input method's client widget; a GL
+  error goes to `#error` and `Log.error "GL context: …"`. `#scale` is the
+  integer `gtk_widget_get_scale_factor`: the GL area's framebuffer uses it
+  even on fractional outputs (1.5 gives a scale of 2 and a framebuffer
+  twice the logical size).
+- Controllers: key (with the `GtkIMMulticontext`), focus, click gesture
+  (button 0, all buttons), motion and scroll (both axes). Ivars carry
+  `@im_`/`_controller`/`_gesture` names: subclasses share the instance
+  variable namespace, and a subclass `@keys` collided with ours.
+- Keys follow Ghostty's `keyEvent`: the key goes to
+  `gtk_im_context_filter_keypress` first. A commit that arrives inside
+  the filter while not composing becomes the key's `text`; a key the
+  input method filtered while composing (or ending a composition, or
+  without committed text) reaches `#on_key` with `composing?`. Otherwise
+  the text is `gdk_keyval_to_unicode` for a press (control characters
+  below 0x20 and DEL excluded). `unshifted` comes from
+  `gdk_display_map_keycode` at the event's layout, level 0. Modifier keys
+  adjust `mods` for themselves (`MODIFIER_KEYS`). When `#on_key` uses a key
+  during a composition the context is reset and `#on_preedit(nil)` sent.
+- `Mods.from_gdk`/`#to_gdk` (`:nodoc:`, `types.cr`) map GDK modifier
+  masks; the table is module-level `MODS_GDK` because an enum body cannot
+  hold a constant.
+- Pointer positions and precise scroll deltas are multiplied by `#scale`.
+  `precise?` is `gtk_event_controller_scroll_get_unit == SURFACE`.
+- `Clipboard.read` keeps the block in `Handles` until
+  `gdk_clipboard_read_text_finish`; a read error logs a warning and yields
+  `nil`.
+- Specs drive the controllers by emitting their signals
+  (`g_signal_emit_by_name` on `canvas.@key_controller` and friends), so
+  they need no input devices.
 
 ## Bindings
 

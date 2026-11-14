@@ -23,6 +23,20 @@ module Apprt
     # Whether closing the surface asks the user first.
     property? confirm_close : Bool = false
 
+    # Returns the CSS name of the pointer shown over the surface, such as
+    # `"text"`, or `nil` for the default pointer.
+    getter cursor : String?
+
+    # Whether the pointer shows over the surface.
+    getter? mouse_visible : Bool = true
+
+    # Whether the bell rang while the surface was not focused; it rings until
+    # the surface gets the focus.
+    getter? bell_ringing : Bool = false
+
+    # Whether the surface holds its window's keyboard focus.
+    getter? focused : Bool = false
+
     @tab : Tab?
     @closed = false
 
@@ -35,7 +49,8 @@ module Apprt
       @host.vexpand = true
       C.adw_bin_set_child(@host, @content.widget)
       focus = C.gtk_event_controller_focus_new
-      Signals.connect(focus, "enter", -> { @tab.try(&.focused(self)) })
+      Signals.connect(focus, "enter", -> { focus_changed(true) })
+      Signals.connect(focus, "leave", -> { focus_changed(false) })
       @host.add_controller(focus)
       @content.surface = self
     end
@@ -65,6 +80,34 @@ module Apprt
 
     def closed? : Bool
       @closed
+    end
+
+    # Sets the pointer shown over the surface by its CSS name, such as
+    # `"text"` or `"pointer"`; `nil` restores the default pointer.
+    def cursor=(name : String?) : String?
+      @cursor = name
+      sync_cursor
+      name
+    end
+
+    # Shows or hides the pointer over the surface.
+    def mouse_visible=(visible : Bool) : Bool
+      @mouse_visible = visible
+      sync_cursor
+      visible
+    end
+
+    # Rings the bell: beeps and, unless the surface is focused, marks it and
+    # its tab until it gets the focus.
+    def ring_bell : Nil
+      return if @closed
+      @host.native.try do |native|
+        surface = C.gtk_native_get_surface(native)
+        C.gdk_surface_beep(surface) unless surface.null?
+      end
+      return if @focused || @bell_ringing
+      @bell_ringing = true
+      @tab.try(&.bell)
     end
 
     # Focuses the surface: selects its tab and moves the keyboard focus to
@@ -110,6 +153,20 @@ module Apprt
       @content.widget.grab_focus if !@closed && @host.mapped?
     end
 
+    private def focus_changed(focused : Bool) : Nil
+      @focused = focused
+      return unless focused
+      if @bell_ringing
+        @bell_ringing = false
+        @tab.try(&.sync_title)
+      end
+      @tab.try(&.focused(self))
+    end
+
+    private def sync_cursor : Nil
+      @content.widget.cursor_name = @mouse_visible ? @cursor : "none" unless @closed
+    end
+
     # Forgets the surface once its tab dropped it.
     protected def release : Nil
       return if @closed
@@ -149,6 +206,16 @@ module Apprt
 
     protected def perform(target : Surface, action : Action::SetTitle) : Bool
       target.title = action.title
+      true
+    end
+
+    protected def perform(target : Surface, action : Action::RingBell) : Bool
+      target.ring_bell
+      true
+    end
+
+    protected def perform(target : Surface, action : Action::MouseVisibility) : Bool
+      target.mouse_visible = action.visible
       true
     end
 

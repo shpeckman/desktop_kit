@@ -2,10 +2,17 @@
 require "file_utils"
 require "../spec_helper"
 
-# Private display and session bus for the GTK specs: gtk4-broadwayd renders
-# headless, and a dbus-daemon of its own keeps GApplication off the user's
-# session bus.
+# Private display and session bus for the GTK specs: a headless sway is the
+# Wayland compositor, and a dbus-daemon of its own keeps GApplication off the
+# user's session bus.
 module GtkHarness
+  # Windows float at their own size instead of tiling.
+  private SWAY_CONFIG = <<-SWAY
+    xwayland disable
+    output HEADLESS-1 resolution 1280x800 scale 1
+    for_window [app_id=".*"] floating enable
+    SWAY
+
   @@dir : String?
   @@processes = [] of Process
 
@@ -14,22 +21,33 @@ module GtkHarness
     dir = File.tempname("apprt-spec")
     Dir.mkdir(dir, 0o700)
     @@dir = dir
-    port = TCPServer.open("127.0.0.1", 0, &.local_address.port)
-    @@processes << Process.new("gtk4-broadwayd", ["-p", port.to_s, "-a", "127.0.0.1", ":0"],
-      env: {"XDG_RUNTIME_DIR" => dir}, output: :close, error: :close)
+    File.write("#{dir}/sway.conf", SWAY_CONFIG)
+    sway_env = {
+      "XDG_RUNTIME_DIR"         => dir,
+      "WLR_BACKENDS"            => "headless",
+      "WLR_RENDERER"            => "pixman",
+      "WLR_LIBINPUT_NO_DEVICES" => "1",
+      "WAYLAND_DISPLAY"         => nil,
+      "DISPLAY"                 => nil,
+    }
+    @@processes << Process.new("sway", ["-c", "#{dir}/sway.conf"], env: sway_env, output: :close, error: :close)
     @@processes << Process.new("dbus-daemon", ["--session", "--nofork", "--address=unix:path=#{dir}/bus"],
       output: :close, error: :close)
-    sockets = {"#{dir}/broadway1.socket", "#{dir}/bus"}
+    display = nil.as(String?)
     1000.times do
-      break if sockets.all? { |socket| File.exists?(socket) }
+      display = Dir.children(dir).find { |name| name.starts_with?("wayland-") && !name.ends_with?(".lock") }
+      break if display && File.exists?("#{dir}/bus")
       sleep 10.milliseconds
     end
-    raise "GtkHarness: gtk4-broadwayd or dbus-daemon did not start" unless sockets.all? { |socket| File.exists?(socket) }
+    raise "GtkHarness: sway or dbus-daemon did not start" unless display && File.exists?("#{dir}/bus")
+    ENV.delete("DISPLAY")
     {
       "XDG_RUNTIME_DIR"          => dir,
+      "WAYLAND_DISPLAY"          => display,
       "DBUS_SESSION_BUS_ADDRESS" => "unix:path=#{dir}/bus",
-      "GDK_BACKEND"              => "broadway",
-      "BROADWAY_DISPLAY"         => ":0",
+      "GDK_BACKEND"              => "wayland",
+      "GSK_RENDERER"             => "ngl",
+      "GDK_DISABLE"              => "vulkan",
       "ADW_DISABLE_PORTAL"       => "1",
       "GDK_DEBUG"                => "no-portals",
       "GTK_A11Y"                 => "none",
@@ -69,6 +87,10 @@ class TestApp < Apprt::App
   property on_reloaded : TestApp -> = ->(app : TestApp) { }
   property on_scheme : TestApp -> = ->(app : TestApp) { }
   getter contexts = [] of Apprt::SurfaceContext
+  # Makes the content of new surfaces; a text entry by default.
+  property make_content : Apprt::SurfaceContext -> Apprt::Content = ->(context : Apprt::SurfaceContext) do
+    Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new)).as(Apprt::Content)
+  end
 
   def initialize(id : String = AppIds.next, *, single_instance : Bool = false)
     super(id, single_instance: single_instance)
@@ -80,10 +102,9 @@ class TestApp < Apprt::App
     Apprt::C.g_application_hold(to_unsafe)
   end
 
-  # Surfaces show a text entry.
   protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
     @contexts << context
-    Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new))
+    make_content.call(context)
   end
 
   protected def on_activate : Nil
@@ -119,4 +140,51 @@ def run_app(app : TestApp, timeout : Time::Span = 10.seconds) : Int32
     app.quit unless done.get
   end
   app.run.tap { done.set(true) }
+end
+
+# Runs *block* once *app* activates, then quits it; re-raises what *block*
+# raised.
+def run_steps(app : TestApp, &block : TestApp ->) : Nil
+  failure = nil.as(Exception?)
+  app.on_activated = ->(app : TestApp) do
+    begin
+      block.call(app)
+    rescue ex
+      failure = ex
+    ensure
+      app.quit
+    end
+  end
+  run_app(app).should eq 0
+  failure.try { |ex| raise ex }
+end
+
+# Runs the GTK main loop for *duration*, so that idle callbacks, layout and
+# dialog responses happen.
+def settle(duration : Time::Span = 200.milliseconds) : Nil
+  deadline = Time.instant + duration
+  while Time.instant < deadline
+    Apprt::C.g_main_context_iteration(Pointer(Void).null, 0)
+    sleep 1.millisecond
+  end
+end
+
+# Runs the GTK main loop until *condition* holds or *timeout* passes, and
+# returns whether it holds: layout and drawing wait for the frame clock.
+def eventually(timeout : Time::Span = 5.seconds, &condition : -> Bool) : Bool
+  deadline = Time.instant + timeout
+  until condition.call
+    return false if Time.instant >= deadline
+    Apprt::C.g_main_context_iteration(Pointer(Void).null, 0)
+    sleep 1.millisecond
+  end
+  true
+end
+
+# Triggers *action* from *window*, as its menu and shortcuts do.
+def trigger(window : Apprt::Window, action : Apprt::Action) : Nil
+  parameter = action.to_variant.try(&.to_unsafe) || Pointer(Void).null
+  name = "#{action.scope.prefix}.#{action.name}"
+  Apprt::C.gtk_widget_activate_action_variant(window.widget, name, parameter).should eq 1
+  settle
 end

@@ -21,6 +21,13 @@ module Apprt
     Down
   end
 
+  private MODS_GDK = {
+    Mods::Shift => C::GdkModifierType::ShiftMask,
+    Mods::Ctrl  => C::GdkModifierType::ControlMask,
+    Mods::Alt   => C::GdkModifierType::AltMask,
+    Mods::Super => C::GdkModifierType::SuperMask,
+  }
+
   # Keyboard modifiers.
   @[Flags]
   enum Mods : UInt8
@@ -28,5 +35,15 @@ module Apprt
     Ctrl
     Alt
     Super
+
+    # :nodoc:
+    def self.from_gdk(state : C::GdkModifierType) : self
+      MODS_GDK.reduce(None) { |mods, (mod, mask)| state.includes?(mask) ? mods | mod : mods }
+    end
+
+    # :nodoc:
+    def to_gdk : C::GdkModifierType
+      MODS_GDK.reduce(C::GdkModifierType::None) { |state, (mod, mask)| includes?(mod) ? state | mask : state }
+    end
   end
 end

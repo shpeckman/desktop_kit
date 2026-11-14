@@ -54,6 +54,7 @@ module Apprt
     fun gtk_widget_is_focus(widget : Void*) : Int32
     fun gtk_widget_set_cursor(widget : Void*, cursor : Void*)
     fun gtk_widget_set_cursor_from_name(widget : Void*, name : UInt8*)
+    fun gtk_widget_get_cursor(widget : Void*) : Void*
     fun gtk_widget_set_tooltip_text(widget : Void*, text : UInt8*)
     fun gtk_widget_set_name(widget : Void*, name : UInt8*)
     fun gtk_widget_add_css_class(widget : Void*, css_class : UInt8*)
@@ -85,6 +86,7 @@ module Apprt
     fun gtk_window_set_decorated(window : Void*, setting : Int32)
     fun gtk_window_get_decorated(window : Void*) : Int32
     fun gtk_window_get_focus(window : Void*) : Void*
+    fun gtk_window_is_active(window : Void*) : Int32
     fun gtk_window_set_application(window : Void*, application : Void*)
     fun gtk_application_set_accels_for_action(application : Void*, detailed_action_name : UInt8*, accels : UInt8**)
     fun gtk_application_get_accels_for_action(application : Void*, detailed_action_name : UInt8*) : UInt8**
@@ -125,6 +127,8 @@ module Apprt
     fun gtk_gl_area_queue_render(area : Void*)
     fun gtk_gl_area_attach_buffers(area : Void*)
     fun gtk_gl_area_get_error(area : Void*) : GError*
+    fun gtk_gl_area_get_context(area : Void*) : Void*
+    fun gtk_gl_area_get_api(area : Void*) : GdkGLAPI
     fun gtk_gl_area_set_auto_render(area : Void*, auto_render : Int32)
     fun gtk_gl_area_set_required_version(area : Void*, major : Int32, minor : Int32)
     fun gtk_gl_area_set_allowed_apis(area : Void*, apis : GdkGLAPI)

@@ -98,6 +98,7 @@ module Apprt
     fun gdk_surface_get_scale_factor(surface : Void*) : Int32
     fun gdk_surface_beep(surface : Void*)
     fun gdk_cursor_new_from_name(name : UInt8*, fallback : Void*) : Void*
+    fun gdk_cursor_get_name(cursor : Void*) : UInt8*
     fun gdk_event_get_modifier_state(event : Void*) : GdkModifierType
     fun gdk_event_get_event_type(event : Void*) : GdkEventType
     fun gdk_key_event_get_keyval(event : Void*) : UInt32
@@ -105,11 +106,14 @@ module Apprt
     fun gdk_key_event_get_consumed_modifiers(event : Void*) : GdkModifierType
     fun gdk_key_event_get_layout(event : Void*) : UInt32
     fun gdk_key_event_get_level(event : Void*) : UInt32
+    fun gdk_key_event_is_modifier(event : Void*) : Int32
     fun gdk_scroll_event_get_unit(event : Void*) : GdkScrollUnit
     fun gdk_keyval_name(keyval : UInt32) : UInt8*
     fun gdk_keyval_from_name(keyval_name : UInt8*) : UInt32
     fun gdk_keyval_to_unicode(keyval : UInt32) : UInt32
     fun gdk_keyval_to_lower(keyval : UInt32) : UInt32
     fun gdk_unicode_to_keyval(wc : UInt32) : UInt32
+    fun gdk_gl_context_get_current : Void*
+    fun gdk_gl_context_get_api(self_ : Void*) : GdkGLAPI
   end
 end

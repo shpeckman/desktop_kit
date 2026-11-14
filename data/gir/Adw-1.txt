@@ -52,6 +52,8 @@ adw_tab_page_get_title
 adw_tab_page_set_title
 adw_tab_page_set_tooltip
 adw_tab_page_set_needs_attention
+adw_tab_page_get_needs_attention
+adw_tab_page_get_selected
 adw_tab_overview_new
 adw_tab_overview_set_view
 adw_tab_overview_set_child

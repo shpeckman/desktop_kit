@@ -7,7 +7,7 @@ CRYSTAL = crystal
 
 all: spec
 
-# All specs. The GTK specs start a private gtk4-broadwayd and dbus-daemon.
+# All specs. The GTK specs start a private headless sway and dbus-daemon.
 spec:
 	$(CRYSTAL) spec --threads 2
 

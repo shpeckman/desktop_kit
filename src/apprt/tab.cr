@@ -7,6 +7,7 @@ module Apprt
   class Tab
     # Prefix of the title while a surface is zoomed.
     private ZOOM_MARK = "🔍 "
+    private BELL_MARK = "🔔 "
 
     # The title the user chose; shown instead of the surface titles while
     # set.
@@ -50,10 +51,13 @@ module Apprt
     end
 
     # Returns the title shown on the tab: `#title_override`, else the title
-    # of the active surface, else the application name.
+    # of the active surface, else the application name; marked while zoomed
+    # or while a bell rings.
     def title : String
       title = @title_override || @active.try(&.shown_title) || Window.default_title
-      zoomed? ? ZOOM_MARK + title : title
+      title = ZOOM_MARK + title if zoomed?
+      title = BELL_MARK + title if @view.tree.any? { |_, surface| surface.bell_ringing? }
+      title
     end
 
     # Sets the title the user chose; `nil` restores the surface titles.
@@ -195,6 +199,15 @@ module Apprt
       @view.focus = from
       sync_title
       true
+    end
+
+    # Marks the tab's page for attention unless it is selected.
+    protected def bell : Nil
+      if window = @window
+        page = page(window)
+        C.adw_tab_page_set_needs_attention(page, 1) unless page.null? || C.adw_tab_page_get_selected(page) != 0
+      end
+      sync_title
     end
 
     protected def sync_title : Nil

@@ -1,54 +1,6 @@
 # spec/gtk/window_spec.cr
 require "./harness"
 
-# Runs *block* once *app* activates, then quits it; re-raises what *block*
-# raised.
-private def run_steps(app : TestApp, &block : TestApp ->) : Nil
-  failure = nil.as(Exception?)
-  app.on_activated = ->(app : TestApp) do
-    begin
-      block.call(app)
-    rescue ex
-      failure = ex
-    ensure
-      app.quit
-    end
-  end
-  run_app(app).should eq 0
-  failure.try { |ex| raise ex }
-end
-
-# Runs the GTK main loop for *duration*, so that idle callbacks, layout and
-# dialog responses happen.
-private def settle(duration : Time::Span = 200.milliseconds) : Nil
-  deadline = Time.instant + duration
-  while Time.instant < deadline
-    Apprt::C.g_main_context_iteration(Pointer(Void).null, 0)
-    sleep 1.millisecond
-  end
-end
-
-# Runs the GTK main loop until *condition* holds or *timeout* passes, and
-# returns whether it holds. Broadway lays out about once a second while no
-# browser is connected.
-private def eventually(timeout : Time::Span = 5.seconds, &condition : -> Bool) : Bool
-  deadline = Time.instant + timeout
-  until condition.call
-    return false if Time.instant >= deadline
-    Apprt::C.g_main_context_iteration(Pointer(Void).null, 0)
-    sleep 1.millisecond
-  end
-  true
-end
-
-# Triggers *action* from *window*, as its menu and shortcuts do.
-private def trigger(window : Apprt::Window, action : Apprt::Action) : Nil
-  parameter = action.to_variant.try(&.to_unsafe) || Pointer(Void).null
-  name = "#{action.scope.prefix}.#{action.name}"
-  Apprt::C.gtk_widget_activate_action_variant(window.widget, name, parameter).should eq 1
-  settle
-end
-
 private def host(surface : Apprt::Surface) : Apprt::Widget
   surface.content.widget.parent.not_nil!
 end
@@ -430,6 +382,8 @@ describe Apprt::Tab do
       settle
       inner = host(second).parent.not_nil!
       paned?(inner).should be_true
+      outer = host(first).parent.not_nil!
+      outer.parent.should eq root
       inner.parent.should eq outer
       orientation(inner).should eq Apprt::C::GtkOrientation::Vertical
       start_child(inner).should eq host(second)

@@ -6,11 +6,11 @@ libadwaita windows, tabs, splits and surfaces driven by typed actions, with
 desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
 Status: early. This release holds the application lifecycle, windows with
-tabs and splits of surfaces, actions and key bindings, and the GLib layer
-the runtime builds on. Surfaces show any GTK widget; a drawing canvas,
-desktop notifications and IPC follow. The built-in actions `RingBell`,
-`MouseVisibility`, `PresentSurface`, `DesktopNotification` and `OpenUrl`
-are not carried out yet, and global bindings are not registered with the
+tabs and splits of surfaces, an OpenGL drawing canvas with keyboard, input
+method and pointer input, the clipboard, actions and key bindings, and the
+GLib layer the runtime builds on. Desktop notifications and IPC follow. The
+built-in actions `PresentSurface`, `DesktopNotification` and `OpenUrl` are
+not carried out yet, and global bindings are not registered with the
 desktop yet.
 
 ## Requirements
@@ -128,6 +128,10 @@ elsewhere.
 | `Surface#split(direction)`       | opens a surface beside it, in an `Apprt::Direction`, and focuses it |
 | `Surface#focus`, `#close`        | focuses the surface and selects its tab, closes it                |
 | `Surface#tab`, `#window`, `#id`  | where it is shown, its identifier, unique in the process          |
+| `Surface#focused?`               | whether it holds its window's keyboard focus                      |
+| `Surface#cursor=`                | sets the pointer by CSS name (`"text"`, `"pointer"`); `nil` resets |
+| `Surface#mouse_visible=`         | shows or hides the pointer over it (`MouseVisibility`)            |
+| `Surface#ring_bell`              | beeps and marks it until focused (`RingBell`)                     |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -143,9 +147,86 @@ the application. `App#quit` never asks.
 Titles: a surface has a `#title`, set by the application, and a
 `#title_override`, set by the user through `PromptTitle`. A tab shows its
 `#title_override`, else the title of its focused surface, else the
-application name, marked with 🔍 while zoomed. A window shows its
+application name, marked with 🔍 while zoomed and with 🔔 while one of its
+surfaces rings. A ringing surface keeps `Surface#bell_ringing?` until it
+gets the focus; its tab needs attention in the tab bar while not selected.
+Ringing a focused surface only beeps. A window shows its
 `#title_override`, else the title of its selected tab. Assigning `nil` to
 an override restores the default.
+
+### Canvas
+
+`Apprt::Canvas` is a `Content` that draws with OpenGL. Subclass it,
+implement `#on_render` and override the input hooks you need; each
+`#new_surface` call returns a new canvas.
+
+```crystal
+class Scene < Apprt::Canvas
+  def initialize
+    super(api: :gl, version: {3, 3})
+  end
+
+  protected def on_render : Nil
+    # draw into the bound framebuffer: width × height pixels
+  end
+
+  protected def on_key(event : Apprt::KeyEvent) : Bool
+    return false unless event.pressed?
+    puts event.text || event.keyval
+    queue_render
+    true
+  end
+end
+```
+
+`.new(*, api, version, depth_buffer, stencil_buffer)` sets what GTK asks
+for: `api` is `Canvas::API::GL`, `GLES` or both (the default), `version`
+the least `{major, minor}`. The GL context is current in `#on_realize`,
+`#on_render`, `#on_resize` and `#on_unrealize`; `#api` is the flavour
+GTK made, and `#error` the reason when it made none. Moving a canvas, such
+as into a split, unrealizes and realizes it again, so `#on_realize` must
+recreate GL objects. GTK draws on its own schedule: call `#queue_render`
+after a change.
+
+| Hook                               | Called                                                                 |
+|------------------------------------|------------------------------------------------------------------------|
+| `on_realize`, `on_unrealize`       | after the GL context is made, before it goes                           |
+| `on_render`                        | to draw a frame                                                        |
+| `on_resize(width, height)`         | when the framebuffer size changes                                      |
+| `on_key(event) : Bool`             | for a key press or release; true when used, else GTK passes the key on |
+| `on_preedit(text)`, `on_commit(text)` | input method composition text (`nil` ends it), finished text        |
+| `on_focus(focused)`                | when the canvas gains or loses the keyboard focus                      |
+| `on_mouse_button(event)`           | for a button press or release; a press focuses the canvas              |
+| `on_mouse_motion(event)`, `on_mouse_leave` | while the pointer moves over the canvas, when it leaves        |
+| `on_scroll(event)`                 | for a wheel step or a touchpad scroll                                  |
+
+Sizes and positions are framebuffer pixels: `#width`, `#height`, event
+coordinates and precise scroll deltas are logical units times `#scale`.
+Call `#ime_cursor(x, y, width, height)` with the text cursor's rectangle
+in framebuffer pixels so the input method places its popup there.
+
+`Apprt::KeyEvent` holds `pressed?`, `keyval` (a GDK keysym), `keycode`,
+`mods` (the modifiers held, counting a modifier key in its own press but
+not in its release), `consumed_mods` (the modifiers the layout used to
+make the key), `text` (what a press types, `nil` for a release or a
+non-text key), `unshifted` (the character of the key without modifiers),
+`modifier?` and `composing?` (the input method is composing). A key the
+input method uses for a composition reaches `#on_key` with
+`composing? = true`; text it finishes comes through `#on_commit`, or as
+the event's `text` when one key finishes it. Using a key while composing
+ends the composition. `Apprt::MouseButtonEvent` holds `pressed?`,
+`button` (`Left`, `Middle`, `Right`, `Back`, `Forward`), `x`, `y` and
+`mods`; `Apprt::MouseMotionEvent` holds `x`, `y` and `mods`;
+`Apprt::ScrollEvent` holds `dx`, `dy`, `precise?` (pixel deltas from a
+touchpad rather than wheel steps) and `mods`.
+
+### Clipboard
+
+`Apprt::Clipboard.write(text, kind = :standard)` puts text on a
+clipboard; `.read(kind = :standard) { |text| }` yields its text later, or
+`nil` when it holds none. `kind` is `Standard` (copy and paste) or
+`Primary` (the selection, pasted by middle-click). Use them on the GTK
+thread only.
 
 ### Actions
 

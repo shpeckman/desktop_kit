@@ -14,10 +14,10 @@ module Apprt
     getter mods : Mods
 
     private MODIFIERS = {
-      Mods::Shift => {C::GdkModifierType::ShiftMask, "shift", "SHIFT"},
-      Mods::Ctrl  => {C::GdkModifierType::ControlMask, "ctrl", "CTRL"},
-      Mods::Alt   => {C::GdkModifierType::AltMask, "alt", "ALT"},
-      Mods::Super => {C::GdkModifierType::SuperMask, "super", "LOGO"},
+      Mods::Shift => {"shift", "SHIFT"},
+      Mods::Ctrl  => {"ctrl", "CTRL"},
+      Mods::Alt   => {"alt", "ALT"},
+      Mods::Super => {"super", "LOGO"},
     }
 
     private MODIFIER_NAMES = {
@@ -100,7 +100,7 @@ module Apprt
     # Returns the shortcut in the XDG shortcuts format, such as `"CTRL+t"`.
     def to_xdg : String
       String.build do |io|
-        each_mod { |_, _, xdg| io << xdg << '+' }
+        each_mod { |_, xdg| io << xdg << '+' }
         io << key_name
       end
     end
@@ -112,7 +112,7 @@ module Apprt
 
     # Writes the trigger in the format `.parse` reads, such as `"ctrl+t"`.
     def to_s(io : IO) : Nil
-      each_mod { |_, name, _| io << name << '+' }
+      each_mod { |name, _| io << name << '+' }
       io << key_name
     end
 
@@ -141,16 +141,14 @@ module Apprt
       keyval unless keyval == 0 || keyval == VOID_SYMBOL
     end
 
-    private def each_mod(& : C::GdkModifierType, String, String ->) : Nil
-      MODIFIERS.each do |mod, (gdk, name, xdg)|
-        yield gdk, name, xdg if @mods.includes?(mod)
+    private def each_mod(& : String, String ->) : Nil
+      MODIFIERS.each do |mod, (name, xdg)|
+        yield name, xdg if @mods.includes?(mod)
       end
     end
 
     private def gdk_mods : C::GdkModifierType
-      result = C::GdkModifierType::None
-      each_mod { |gdk, _, _| result |= gdk }
-      result
+      @mods.to_gdk
     end
 
     private def key_name : String

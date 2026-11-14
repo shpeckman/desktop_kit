@@ -184,6 +184,13 @@ module Apprt
       true
     end
 
+    # The selected page no longer needs attention.
+    private def selected_changed : Nil
+      page = C.adw_tab_view_get_selected_page(@tab_view)
+      C.adw_tab_page_set_needs_attention(page, 0) unless page.null?
+      sync_title
+    end
+
     protected def sync_title : Nil
       return if @closed
       title = self.title
@@ -323,7 +330,7 @@ module Apprt
     private def connect_signals : Nil
       Signals.connect(@tab_view, "page-attached", ->(page : Void*, _position : Int32) { attached(page) })
       Signals.notify(@tab_view, "n-pages", -> { pages_changed })
-      Signals.notify(@tab_view, "selected-page", -> { sync_title })
+      Signals.notify(@tab_view, "selected-page", -> { selected_changed })
       Signals.connect(@tab_view, "close-page", ->(page : Void*) : Bool { close_page(page); true })
       Signals.connect(@tab_view, "create-window", -> : Void* { create_window })
       Signals.connect(@overview, "create-tab", -> : Void* { new_tab.page(self) })
