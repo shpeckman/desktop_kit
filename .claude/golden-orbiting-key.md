@@ -129,13 +129,13 @@ examples/{hello,canvas,ipc}.cr
    - `struct SplitTree(V)` keeps nodes in an array, root at index 0, as
      `record Node(V), view : V?, layout, ratio : Float32, left, right`. The tree is immutable.
    - Operations: `locate`, `each`, `zoom`, `goto` (previous/next/wrapped/spatial), `deepest`, `split`, `remove`,
-     `equalize`, `resize`, `resize_in_place`, `spatial`, and `to_diagram` for specs.
+     `equalize`, `resize`, `with_ratio`, `spatial`, and `to_diagram` for specs.
 8. **SplitView** (`split_view.cr`)
    - A tree change schedules one idle rebuild.
    - The rebuild unparents the leaf hosts and builds nested `GtkPaned` widgets (shrink off).
    - Zoom shows only the zoomed leaf.
    - Paned positions: the ratio is applied on `notify::max-position`, and `notify::position` writes back with
-     `resize_in_place`.
+     `with_ratio`.
    - Focus is restored on idle.
 9. **Window and Tab** (`window.cr`, `tab.cr`), following `gtk/class/window.zig` and `gtk/ui/1.4/window.blp`
    - Widget tree: AdwApplicationWindow > AdwTabOverview > AdwToolbarView > AdwHeaderBar (AdwWindowTitle, new-tab

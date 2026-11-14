@@ -6,8 +6,8 @@ libadwaita windows, tabs, splits and surfaces driven by typed actions, with
 desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
 Status: early. This release holds the application lifecycle, actions and
-key bindings, and the GLib layer the runtime builds on; the window and
-surface API follows. Of the built-in actions only `quit`,
+key bindings, the split layout model, and the GLib layer the runtime builds
+on; the window and surface API follows. Of the built-in actions only `quit`,
 `close-all-windows` and `reload-config` are carried out so far, and global
 bindings are not registered with the desktop yet.
 

@@ -41,6 +41,8 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   - `signals.cr` - `Signals` (`:nodoc:`): signal connections.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
   `Direction`, `Mods` (public).
+- `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
+  model the split view renders.
 - `src/apprt/ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
   cross-thread queue.
 - `src/apprt/systemd.cr` - `Systemd` (public `notify`; `ready`, `reloading`,
@@ -61,7 +63,7 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   resolves with `dlsym`, `GValue` size, a GType round trip), the glib layer
   (`glib_spec.cr`, signals on Gio objects), `Variant`, `Systemd`
   (`with_notify_socket` in `spec/spec_helper.cr`), actions (codecs, detailed
-  names, registry) and triggers.
+  names, registry), triggers and `SplitTree` (Ghostty's diagram cases).
 - `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
   `before_all`) runs a private `gtk4-broadwayd` (loopback port, socket in a
   temporary `XDG_RUNTIME_DIR`) and `dbus-daemon`, and points `GDK_BACKEND`,
@@ -183,6 +185,40 @@ Internal contracts of `src/apprt/glib/`:
   `gtk_accelerator_valid` plus a name round trip (unnamed keyvals such as
   emoji have no accelerator). Accelerator names and labels come from GTK;
   `#to_s` writes the `.parse` grammar.
+
+## Split tree
+
+`SplitTree(V)` (`:nodoc:`) ports Ghostty's `src/datastruct/split_tree.zig`.
+The split view (step 8) and the split actions build on it; users never see
+it.
+
+- Nodes live in one `Array(V | Split)`, root at `ROOT` (0). `Split` holds
+  `layout` (`Horizontal` side by side, `Vertical` stacked), `ratio` (share
+  of the left/top child, `Float64` where Ghostty uses `f16`) and the child
+  handles. A handle is an `Int32` index valid for one tree only.
+- Immutable: every operation returns a new tree, and trees share node
+  arrays, which are never mutated after construction. `with_ratio` replaces
+  Ghostty's in-place `resizeInPlace` (for paned position write-back).
+- `split(at, direction, insert, ratio)` appends *insert*'s nodes (offset)
+  and moves the old node at *at* to the end; `at` becomes the split, with
+  the inserted tree first for `left`/`up`. Handles of existing nodes stay
+  valid, except that the view at *at* moves. Zoom resets.
+- `remove(at)` rebuilds depth-first from the root: the sibling takes the
+  parent's place, so handles change; re-`locate` views afterwards. The zoom
+  follows its node, or clears when that node is removed.
+- `goto(from, Goto)` walks leaf order with Ghostty's backtracking search
+  (`adjacent`); `goto(from, Direction)` picks the nearest leaf whose slot
+  lies fully on that side (Euclidean distance between slot origins, ties to
+  the lowest handle), retrying with the target shifted past the opposite
+  edge to wrap.
+- `spatial` lays the tree out on the unit square, each leaf weighing 1x1
+  before ratios. `resize(from, layout, delta)` moves the nearest
+  *layout* split above *from* by *delta* of the whole tree
+  (`ratio + delta / parent extent`, clamped to `0..1`). `equalize` sets
+  each ratio by the leaf count along its axis.
+- `to_s` matches Ghostty's text format. `to_diagram` draws ASCII boxes for
+  specs; it rounds box edges (Ghostty floors sizes) so neighbours always
+  meet, which only changes diagrams where `f16` ratios differ.
 
 ## Bindings
 
