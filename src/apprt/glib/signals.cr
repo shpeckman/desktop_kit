@@ -13,7 +13,7 @@ module Apprt
   # Arguments: `Bool`, `String`, `String?`, `Int32`, `UInt32`, `Int64`,
   # `UInt64`, `Float32`, `Float64`, `Void*`, enums (from a C int), `Widget`,
   # `Widget?` and `Wrapper` subclasses (borrowed, so `from_raw`), nilable or
-  # not. Results: `Nil`, `Bool` and `Int32`.
+  # not. Results: `Nil`, `Bool`, `Int32` and `Void*`.
   module Signals
     # Connects *handler* to *signal* of *instance* (a `Widget`, a `Wrapper` or a
     # `Void*`) and returns the handler id.
@@ -52,7 +52,7 @@ module Apprt
           end
         end
         result = handler.return_type.is_a?(Nop) ? Nil : handler.return_type.resolve
-        raise "Signals.connect: unsupported result type #{result}" unless [Nil, Bool, Int32].includes?(result)
+        raise "Signals.connect: unsupported result type #{result}" unless [Nil, Bool, Int32, Pointer(Void)].includes?(result)
         where = signal.is_a?(StringLiteral) ? "#{signal.id} handler" : "signal handler"
       %}
       %handler = ->({{ handler.args.splat }}) : {{ result }} { {{ handler.body }} }
@@ -61,14 +61,14 @@ module Apprt
           %value = ::Apprt::Handles.get(__data, Proc({% for type in types %}{{ type }}, {% end %}{{ result }})).call({{ values.splat }})
           {% if result == Bool %}
             %value ? 1 : 0
-          {% elsif result == Int32 %}
+          {% elsif result == Int32 || result == Pointer(Void) %}
             %value
           {% else %}
             nil
           {% end %}
         rescue %ex
           ::Apprt::Log.error(exception: %ex) { {{ where }} }
-          {% if result == Nil %} nil {% else %} 0 {% end %}
+          {% if result == Nil %} nil {% elsif result == Pointer(Void) %} Pointer(Void).null {% else %} 0 {% end %}
         end
       }
       ::Apprt::Signals.connect_raw({{ instance }}, {{ signal }}, %trampoline.pointer, ::Apprt::Handles.retain(%handler))

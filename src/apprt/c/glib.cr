@@ -104,5 +104,6 @@ module Apprt
     fun g_variant_builder_add_value(builder : Void*, value : Void*)
     fun g_variant_builder_end(builder : Void*) : Void*
     fun g_variant_builder_unref(builder : Void*)
+    fun g_get_application_name : UInt8*
   end
 end

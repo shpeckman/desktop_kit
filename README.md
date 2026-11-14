@@ -5,11 +5,13 @@ Native application runtime for Crystal programs on Linux, ported from
 libadwaita windows, tabs, splits and surfaces driven by typed actions, with
 desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
-Status: early. This release holds the application lifecycle, actions and
-key bindings, the split layout model, and the GLib layer the runtime builds
-on; the window and surface API follows. Of the built-in actions only `quit`,
-`close-all-windows` and `reload-config` are carried out so far, and global
-bindings are not registered with the desktop yet.
+Status: early. This release holds the application lifecycle, windows with
+tabs and splits of surfaces, actions and key bindings, and the GLib layer
+the runtime builds on. Surfaces show any GTK widget; a drawing canvas,
+desktop notifications and IPC follow. The built-in actions `RingBell`,
+`MouseVisibility`, `PresentSurface`, `DesktopNotification` and `OpenUrl`
+are not carried out yet, and global bindings are not registered with the
+desktop yet.
 
 ## Requirements
 
@@ -37,16 +39,22 @@ require "apprt"
 
 ### Applications
 
-Subclass `Apprt::App`, override the hooks it needs and call `#run`:
+Subclass `Apprt::App`, return the content of new surfaces from
+`#new_surface`, override the hooks it needs and call `#run`:
 
 ```crystal
 class Hello < Apprt::App
+  protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+    # A widget from the application's own GTK bindings.
+    Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new("Hello")))
+  end
+
   protected def on_startup
     self.css = "window { background: #202020; }"
   end
 
   protected def on_activate
-    # open the first window here
+    new_window
   end
 
   protected def on_color_scheme(scheme : Apprt::ColorScheme)
@@ -74,7 +82,7 @@ Hooks, all called on the GTK thread:
 | `on_reload`                | on `#reload` and SIGUSR2                            |
 | `on_shutdown`              | when quitting, while the windows still exist        |
 
-Everything else is callable from any thread:
+These methods are callable from any thread:
 
 - `#post { ... }` runs the block on the GTK thread at the next main loop
   iteration, in posting order. Blocks posted before `#run` run once the
@@ -89,12 +97,65 @@ Everything else is callable from any thread:
 While `#run` runs, SIGINT and SIGTERM quit the application and SIGUSR2
 reloads it; the signals return to their default action afterwards.
 
+### Windows, tabs and surfaces
+
+A window holds tabs; a tab holds one or more surfaces laid out in splits.
+A surface shows a `Apprt::Content`, which `#new_surface` creates: return
+an `Apprt::WidgetContent` to show a widget, or a subclass of `Content`.
+Each call must return a new content; `Content#surface` is the surface
+showing it. The `Apprt::SurfaceContext` tells where the surface opens:
+`kind` is `Window`, `Tab` or `Split`, and `parent` is the surface it opens
+from, if any.
+
+The window, tab and surface methods run on the GTK thread only: in hooks,
+in `perform`, or in `#post` blocks. `App#new_window` raises `RuntimeError`
+elsewhere.
+
+| Method                           | Does                                                              |
+|----------------------------------|-------------------------------------------------------------------|
+| `App#new_window(parent = nil)`   | opens and presents a window with one tab and returns it           |
+| `App#windows`                    | the open windows, oldest first                                    |
+| `App#active_window`              | the window focused last                                           |
+| `App#active_surface`             | the focused surface of `#active_window`                           |
+| `App#surface(id)`                | the open surface with `Surface#id`                                |
+| `Window#new_tab`                 | opens a tab after the selected one and selects it                 |
+| `Window#tabs`, `#active_tab`     | the tabs in tab bar order, the selected tab                       |
+| `Window#active_surface`          | the focused surface of the selected tab                           |
+| `Window#present`, `#close`       | brings the window to the front, closes it                         |
+| `Tab#surfaces`                   | the surfaces from left or top to right or bottom                  |
+| `Tab#active_surface`, `#zoomed?` | the focused surface, whether one surface fills the tab            |
+| `Tab#window`, `#close`           | the window showing the tab, closes it                             |
+| `Surface#split(direction)`       | opens a surface beside it, in an `Apprt::Direction`, and focuses it |
+| `Surface#focus`, `#close`        | focuses the surface and selects its tab, closes it                |
+| `Surface#tab`, `#window`, `#id`  | where it is shown, its identifier, unique in the process          |
+
+A window has a header bar with a new tab button, a tab overview button and
+a menu with the window, tab, split and title actions; the tab bar shows
+while there is more than one tab. Closing the last surface of a tab closes
+the tab, and closing the last tab closes the window. Once closed,
+`#closed?` is true, `Window#new_tab` and `Surface#split` raise
+`RuntimeError`, and the objects leave the registries.
+
+Closing asks the user first when a surface it closes has
+`Surface#confirm_close = true`: a split, a tab, a window, all windows or
+the application. `App#quit` never asks.
+
+Titles: a surface has a `#title`, set by the application, and a
+`#title_override`, set by the user through `PromptTitle`. A tab shows its
+`#title_override`, else the title of its focused surface, else the
+application name, marked with 🔍 while zoomed. A window shows its
+`#title_override`, else the title of its selected tab. Assigning `nil` to
+an override restores the default.
+
 ### Actions
 
 Everything the runtime does on request is an action: a typed value that
 menus, buttons, key bindings and other processes trigger through GTK's
 action system. `Apprt::App#perform` carries actions out, with one overload
-per action type.
+per action type. Its *target* is the `Apprt::App` for `app` actions, the
+`Apprt::Window` for `window` actions, the `Apprt::Tab` for `tab` actions
+and the `Apprt::Surface` for `split` actions; a window triggers its tab and
+split actions on its selected tab and that tab's focused surface.
 
 Declare an action with `Apprt.action`; the payload becomes the struct's
 constructor arguments and getters:
@@ -144,10 +205,15 @@ Built-in actions, all nested in `Apprt::Action`:
 | `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`                                                                                                                     |
 | `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
-| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`                  |
+| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`                  |
 
-Sizes are `UInt32` pixels; `SizeLimit` treats 0 as no limit. `GotoTab`
-counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and `LAST`.
+Sizes are `UInt32` pixels. `SizeLimit` sets the smallest window size and
+treats 0 as no limit; GTK 4 windows have no largest size, so its maximum is
+ignored. `ResizeWindow` sizes the window so that its surface gets the size,
+only while the window shows one surface and is neither maximized nor
+fullscreen. `SetWindowTheme` sets the appearance of the whole application.
+`GotoTab` counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and
+`LAST`; previous and next wrap around, as `MoveTab` does.
 `direction` is an `Apprt::Direction` (`Left`, `Right`, `Up`, `Down`) unless
 the action lists its own values.
 

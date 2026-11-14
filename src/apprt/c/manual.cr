@@ -13,7 +13,9 @@ module Apprt
       data : UInt64[2]
     end
 
-    # GLib and GTK constants (GIR <constant>s, which the generator skips).
+    # GLib and GTK constants (GIR <constant>s, which the generator skips);
+    # TYPE_INT is G_TYPE_INT, G_TYPE_MAKE_FUNDAMENTAL(6).
+    TYPE_INT                            =  24_u64
     PRIORITY_DEFAULT                    =       0
     PRIORITY_DEFAULT_IDLE               =     200
     SOURCE_REMOVE                       =       0

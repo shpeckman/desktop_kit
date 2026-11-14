@@ -47,12 +47,17 @@ module Apprt
     # Sets the window size it opens with.
     Apprt.action InitialSize, "initial-size", scope: :window, payload: {width: UInt32, height: UInt32}
 
-    # Limits the window size; 0 leaves a bound unlimited.
+    # Sets the smallest window size; 0 leaves a dimension unlimited. GTK 4
+    # windows have no largest size, so *max_width* and *max_height* are
+    # ignored.
     Apprt.action SizeLimit, "size-limit", scope: :window, payload: {min_width: UInt32, min_height: UInt32, max_width: UInt32, max_height: UInt32}
 
+    # Resizes the window so that its surface gets *width* by *height* pixels.
+    # Does nothing while the window is maximized or fullscreen, or shows more
+    # than one surface.
     Apprt.action ResizeWindow, "resize-window", scope: :window, payload: {width: UInt32, height: UInt32}
 
-    # Overrides the application appearance for the window.
+    # Sets the appearance of the application, which applies to every window.
     Apprt.action SetWindowTheme, "set-window-theme", scope: :window, payload: {appearance: Appearance}
 
     # Opens a new tab in the window.
@@ -105,6 +110,10 @@ module Apprt
 
     # Toggles the focused split filling the tab.
     Apprt.action ToggleSplitZoom, "toggle-split-zoom", scope: :split
+
+    # Closes the focused surface, asking first when it has
+    # `Surface#confirm_close?`.
+    Apprt.action CloseSurface, "close-surface", scope: :split
 
     # Sets the title of the focused surface.
     Apprt.action SetTitle, "set-title", scope: :split, payload: {title: String}

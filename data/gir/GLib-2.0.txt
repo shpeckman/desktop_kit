@@ -73,3 +73,6 @@ g_variant_builder_new
 g_variant_builder_add_value
 g_variant_builder_end
 g_variant_builder_unref
+
+# utilities
+g_get_application_name

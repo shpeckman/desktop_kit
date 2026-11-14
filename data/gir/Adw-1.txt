@@ -11,6 +11,7 @@ adw_style_manager_set_color_scheme
 # windows and bars
 adw_application_window_new
 adw_application_window_set_content
+adw_application_window_get_visible_dialog
 adw_toolbar_view_new
 adw_toolbar_view_set_content
 adw_toolbar_view_add_top_bar
@@ -30,7 +31,9 @@ adw_bin_get_child
 adw_tab_bar_new
 adw_tab_bar_set_view
 adw_tab_bar_set_autohide
+AdwTabView
 adw_tab_view_new
+adw_tab_view_insert
 adw_tab_view_append
 adw_tab_view_get_n_pages
 adw_tab_view_get_nth_page
@@ -66,6 +69,8 @@ adw_toast_set_timeout
 # dialogs
 adw_dialog_present
 adw_dialog_close
+adw_dialog_force_close
+adw_dialog_set_focus
 adw_alert_dialog_new
 adw_alert_dialog_add_response
 adw_alert_dialog_set_response_appearance
@@ -74,3 +79,5 @@ adw_alert_dialog_set_close_response
 adw_alert_dialog_set_extra_child
 adw_alert_dialog_choose
 adw_alert_dialog_choose_finish
+adw_alert_dialog_get_heading
+adw_alert_dialog_get_extra_child

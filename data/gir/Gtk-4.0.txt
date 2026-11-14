@@ -9,8 +9,10 @@ gtk_widget_get_root
 gtk_widget_get_native
 gtk_widget_get_display
 gtk_widget_get_ancestor
+gtk_widget_is_ancestor
 gtk_widget_get_width
 gtk_widget_get_height
+gtk_widget_measure
 gtk_widget_get_scale_factor
 gtk_widget_get_realized
 gtk_widget_get_mapped
@@ -83,12 +85,14 @@ gtk_paned_set_resize_end_child
 gtk_paned_set_shrink_start_child
 gtk_paned_set_shrink_end_child
 gtk_paned_set_wide_handle
+gtk_orientable_get_orientation
 gtk_box_new
 gtk_box_append
 gtk_box_remove
 gtk_label_new
 gtk_label_set_text
 gtk_entry_new
+gtk_entry_set_activates_default
 gtk_editable_get_text
 gtk_editable_set_text
 gtk_button_new_from_icon_name

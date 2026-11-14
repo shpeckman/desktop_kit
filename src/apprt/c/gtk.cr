@@ -34,8 +34,10 @@ module Apprt
     fun gtk_widget_get_native(widget : Void*) : Void*
     fun gtk_widget_get_display(widget : Void*) : Void*
     fun gtk_widget_get_ancestor(widget : Void*, widget_type : GType) : Void*
+    fun gtk_widget_is_ancestor(widget : Void*, ancestor : Void*) : Int32
     fun gtk_widget_get_width(widget : Void*) : Int32
     fun gtk_widget_get_height(widget : Void*) : Int32
+    fun gtk_widget_measure(widget : Void*, orientation : GtkOrientation, for_size : Int32, minimum : Int32*, natural : Int32*, minimum_baseline : Int32*, natural_baseline : Int32*)
     fun gtk_widget_get_scale_factor(widget : Void*) : Int32
     fun gtk_widget_get_realized(widget : Void*) : Int32
     fun gtk_widget_get_mapped(widget : Void*) : Int32
@@ -102,12 +104,14 @@ module Apprt
     fun gtk_paned_set_shrink_start_child(paned : Void*, resize : Int32)
     fun gtk_paned_set_shrink_end_child(paned : Void*, resize : Int32)
     fun gtk_paned_set_wide_handle(paned : Void*, wide : Int32)
+    fun gtk_orientable_get_orientation(orientable : Void*) : GtkOrientation
     fun gtk_box_new(orientation : GtkOrientation, spacing : Int32) : Void*
     fun gtk_box_append(box : Void*, child : Void*)
     fun gtk_box_remove(box : Void*, child : Void*)
     fun gtk_label_new(str : UInt8*) : Void*
     fun gtk_label_set_text(self_ : Void*, str : UInt8*)
     fun gtk_entry_new : Void*
+    fun gtk_entry_set_activates_default(entry : Void*, setting : Int32)
     fun gtk_editable_get_text(editable : Void*) : UInt8*
     fun gtk_editable_set_text(editable : Void*, text : UInt8*)
     fun gtk_button_new_from_icon_name(icon_name : UInt8*) : Void*

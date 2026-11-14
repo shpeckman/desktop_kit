@@ -33,6 +33,7 @@ module Apprt
     fun adw_style_manager_set_color_scheme(self_ : Void*, color_scheme : AdwColorScheme)
     fun adw_application_window_new(app : Void*) : Void*
     fun adw_application_window_set_content(self_ : Void*, content : Void*)
+    fun adw_application_window_get_visible_dialog(self_ : Void*) : Void*
     fun adw_toolbar_view_new : Void*
     fun adw_toolbar_view_set_content(self_ : Void*, content : Void*)
     fun adw_toolbar_view_add_top_bar(self_ : Void*, widget : Void*)
@@ -50,7 +51,9 @@ module Apprt
     fun adw_tab_bar_new : Void*
     fun adw_tab_bar_set_view(self_ : Void*, view : Void*)
     fun adw_tab_bar_set_autohide(self_ : Void*, autohide : Int32)
+    fun adw_tab_view_get_type : GType
     fun adw_tab_view_new : Void*
+    fun adw_tab_view_insert(self_ : Void*, child : Void*, position : Int32) : Void*
     fun adw_tab_view_append(self_ : Void*, child : Void*) : Void*
     fun adw_tab_view_get_n_pages(self_ : Void*) : Int32
     fun adw_tab_view_get_nth_page(self_ : Void*, position : Int32) : Void*
@@ -82,6 +85,8 @@ module Apprt
     fun adw_toast_set_timeout(self_ : Void*, timeout : UInt32)
     fun adw_dialog_present(self_ : Void*, parent : Void*)
     fun adw_dialog_close(self_ : Void*) : Int32
+    fun adw_dialog_force_close(self_ : Void*)
+    fun adw_dialog_set_focus(self_ : Void*, focus : Void*)
     fun adw_alert_dialog_new(heading : UInt8*, body : UInt8*) : Void*
     fun adw_alert_dialog_add_response(self_ : Void*, id : UInt8*, label : UInt8*)
     fun adw_alert_dialog_set_response_appearance(self_ : Void*, response : UInt8*, appearance : AdwResponseAppearance)
@@ -90,5 +95,7 @@ module Apprt
     fun adw_alert_dialog_set_extra_child(self_ : Void*, child : Void*)
     fun adw_alert_dialog_choose(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
     fun adw_alert_dialog_choose_finish(self_ : Void*, result : Void*) : UInt8*
+    fun adw_alert_dialog_get_heading(self_ : Void*) : UInt8*
+    fun adw_alert_dialog_get_extra_child(self_ : Void*) : Void*
   end
 end

@@ -28,7 +28,8 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   - `glib.cr gobject.cr gio.cr gdk.cr gtk.cr adw.cr` - generated, never edit.
   - `manual.cr` - what the generator cannot emit: `GValue` (holds a union)
     and GIR constants (`PRIORITY_DEFAULT`, `PRIORITY_DEFAULT_IDLE`,
-    `SOURCE_REMOVE`, `STYLE_PROVIDER_PRIORITY_APPLICATION`, `..._USER`).
+    `SOURCE_REMOVE`, `STYLE_PROVIDER_PRIORITY_APPLICATION`, `..._USER`,
+    `TYPE_INT`).
 - `src/apprt/glib/` - the GLib/GObject layer every component builds on.
   - `error.cr` - `GLibError` (public).
   - `native.cr` - `Native` (`:nodoc:`): C string, strv and GList helpers.
@@ -39,6 +40,7 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   - `variant.cr` - `Variant` (public).
   - `widget.cr` - `Widget` (public): borrowed widget handle.
   - `signals.cr` - `Signals` (`:nodoc:`): signal connections.
+  - `idle.cr` - `Idle` (`:nodoc:`): one-shot idle callbacks, cancellable.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
   `Direction`, `Mods` (public).
 - `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
@@ -55,6 +57,18 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   `perform` and the built-in app action overloads.
 - `src/apprt/binding.cr` - `Binding` (public); reopens `App` with
   `bindings` and the accelerator sync.
+- `src/apprt/dialogs.cr` - `Dialogs` (`:nodoc:`): the close confirmation and
+  title prompt alert dialogs.
+- `src/apprt/content.cr` - `Content`, `WidgetContent`, `SurfaceContext`
+  (public).
+- `src/apprt/surface.cr` - `Surface` (public); reopens `App` with the split
+  action overloads.
+- `src/apprt/split_view.cr` - `SplitView` (`:nodoc:`): renders a tab's
+  `SplitTree(Surface)` as nested `GtkPaned`.
+- `src/apprt/tab.cr` - `Tab` (public); reopens `App` with the tab action
+  overloads.
+- `src/apprt/window.cr` - `Window` (public): widget tree, menu, signals;
+  reopens `App` with the window action overloads.
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
@@ -71,7 +85,9 @@ Run one Crystal compile at a time, with `--threads 2`. When sandboxed, set
   `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
   session. `Spec.after_suite` stops both. Test apps hold the GApplication in
   `on_startup`: without windows or a hold it quits as soon as it is idle.
-  `harness.cr` also holds the shared `TestApp`, `AppIds` and `run_app`.
+  `harness.cr` also holds the shared `TestApp` (its `new_surface` returns
+  a `GtkEntry` and records the contexts), `AppIds` and `run_app`.
+  `window_spec.cr` covers windows, tabs, splits, titles and dialogs.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -189,8 +205,7 @@ Internal contracts of `src/apprt/glib/`:
 ## Split tree
 
 `SplitTree(V)` (`:nodoc:`) ports Ghostty's `src/datastruct/split_tree.zig`.
-The split view (step 8) and the split actions build on it; users never see
-it.
+`SplitView` and the split actions build on it; users never see it.
 
 - Nodes live in one `Array(V | Split)`, root at `ROOT` (0). `Split` holds
   `layout` (`Horizontal` side by side, `Vertical` stacked), `ratio` (share
@@ -219,6 +234,60 @@ it.
 - `to_s` matches Ghostty's text format. `to_diagram` draws ASCII boxes for
   specs; it rounds box edges (Ghostty floors sizes) so neighbours always
   meet, which only changes diagrams where `f16` ratios differ.
+
+## Windows
+
+Internals of `window.cr`, `tab.cr`, `surface.cr`, `split_view.cr` and
+`dialogs.cr`, ported from Ghostty's `src/apprt/gtk/class/`:
+- GTK owns the widgets; `Window`, `Tab` and `Surface` hold borrowed
+  `Widget`s. `App` keeps the registries: `@windows` (open order),
+  `@tabs` keyed by the tab's root `AdwBin` pointer (`tab_for` maps an
+  `AdwTabPage` child back to its `Tab`) and `@surfaces` by id. Objects
+  unregister when closed; shutdown clears all three.
+- A window performs through `App#dispatch` (protected), not `perform`:
+  `perform` overloads defined in a user subclass belong to the top-level
+  namespace, so `@app.perform` from `Window` fails with "protected method
+  'perform' called for Hello". `dispatch` calls `perform` with implicit
+  `self`, which reaches every overload.
+- Window actions live in the window's `win` action map; the `tab` and
+  `split` action groups are inserted on the window and target its selected
+  tab and that tab's focused surface, so accelerators and the menu resolve
+  from any focused widget.
+- Widget tree: `AdwApplicationWindow` > `AdwTabOverview` > `AdwToolbarView`
+  (top: `AdwHeaderBar` with `AdwWindowTitle`, `AdwTabBar` with autohide;
+  content: `AdwTabView`). The tab view's `notify::n-pages` closes the window
+  on an idle once no page is left and the overview is closed;
+  `close-page` asks for confirmation and finishes with
+  `adw_tab_view_close_page_finish`; `create-window` returns the new
+  window's tab view.
+- Each surface wraps its content widget in a host `AdwBin` (css class
+  `surface`) that it holds with `g_object_ref_sink`, so the host survives
+  rebuilds while unparented; `release` drops the reference. A focus
+  controller on the host reports focus to its tab, which tracks the active
+  surface.
+- `SplitView`: assigning `tree` schedules one idle rebuild. The rebuild
+  moves keyboard focus off its widgets (`gtk_root_set_focus(nil)`: a
+  `GtkPaned` that loses its focused child warns "Error finding last focus
+  widget"), detaches every divider's children (old panes outlive
+  `adw_bin_set_child(nil)`, and GTK rejects a child that still has a
+  parent), builds nested `GtkPaned` (resize on, shrink off) for the zoomed
+  node or the root, and refocuses the tracked surface once mapped.
+- Each `GtkPaned` has a private `Divider`. Changes of `min-position`,
+  `max-position` and `position` schedule an idle settle: while
+  `max-position` is `Int32::MAX` the paned is unallocated; when the limits
+  change the stored ratio is applied (`size` = `max-position` + the end
+  child's minimum, `gtk_widget_measure`); otherwise a moved position is
+  written back with `SplitTree#with_ratio` (no rebuild) when it changes the
+  ratio by at least 0.001. `ratio` is nil while a rebuild is pending.
+- Tab resize turns `ResizeSplit`'s pixels into a tree fraction: amount
+  divided by the root's width or height, negative toward left and up.
+- `Dialogs` runs `AdwAlertDialog` with `adw_alert_dialog_choose`; the
+  callback closure lives in `Handles`. Close confirmation responses are
+  `cancel`/`close`; title prompts `cancel`/`ok`.
+- Specs: broadway without a connected browser advances the frame clock
+  about once per second, so layout assertions poll with `eventually`.
+  Dialogs are answered by setting the close response to the wanted id and
+  calling `adw_dialog_force_close`.
 
 ## Bindings
 

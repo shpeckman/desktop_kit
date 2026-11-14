@@ -1,22 +1,27 @@
 # src/apprt/app.cr
 module Apprt
-  # Base of an application: subclass it, override the hooks it needs and call
-  # `#run`.
+  # Base of an application: subclass it, return the content of new surfaces
+  # from `#new_surface`, override the hooks it needs and call `#run`.
   #
   # ```
   # class Hello < Apprt::App
+  #   protected def new_surface(context)
+  #     # A widget from the application's own GTK bindings.
+  #     Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new("Hello")))
+  #   end
+  #
   #   protected def on_activate
-  #     puts "running"
-  #     quit
+  #     new_window
   #   end
   # end
   #
   # exit Hello.new("org.example.Hello").run
   # ```
   #
-  # `#run` drives GTK on a thread of its own. The hooks run on that thread; the
-  # other methods are callable from any thread. One application runs at a
-  # time.
+  # `#run` drives GTK on a thread of its own. The hooks and actions run on
+  # that thread. `#quit`, `#reload`, `#post`, `#css=` and `#appearance=` are
+  # callable from any thread; the window and surface methods only from the
+  # GTK thread. One application runs at a time.
   abstract class App
     # The application id, a reverse-DNS name such as `"org.example.Hello"`.
     getter id : String
@@ -38,6 +43,9 @@ module Apprt
     @dark_handler = 0_u64
     @running = Atomic(Bool).new(false)
     @ready = false
+    @windows = [] of Window
+    @tabs = {} of Void* => Tab
+    @surfaces = {} of UInt64 => Surface
 
     # Creates the application with *id*; raises `ArgumentError` when *id* is not
     # a valid application id.
@@ -106,11 +114,51 @@ module Apprt
       appearance
     end
 
+    # Opens a window with one tab, from *parent* when given, presents it and
+    # returns it. Raises `RuntimeError` off the GTK thread.
+    def new_window(parent : Surface? = nil) : Window
+      UIThread.assert!
+      window = open_window
+      window.open_tab(:window, parent)
+      window.present
+      window
+    end
+
+    # Returns the open windows, oldest first.
+    def windows : Array(Window)
+      @windows.dup
+    end
+
+    # Returns the window the user last focused, or `nil` when no window is
+    # open.
+    def active_window : Window?
+      return if @application.null?
+      active = C.gtk_application_get_active_window(@application)
+      @windows.find { |window| window.widget.to_unsafe == active } || @windows.last?
+    end
+
+    # Returns the active surface of `#active_window`.
+    def active_surface : Surface?
+      active_window.try(&.active_surface)
+    end
+
+    # Returns the open surface with *id*.
+    def surface(id : UInt64) : Surface?
+      @surfaces[id]?
+    end
+
     # :nodoc:
     # The GApplication, null unless `#run` is in progress.
     def to_unsafe : Void*
       @application
     end
+
+    # :showdoc:
+    #
+    # Returns the content of a new surface; *context* tells where it opens.
+    #
+    # Each call must return a new `Content`.
+    protected abstract def new_surface(context : SurfaceContext) : Content
 
     # :showdoc:
     #
@@ -146,8 +194,11 @@ module Apprt
 
     # :showdoc:
     #
-    # Carries out *action* on *target*, the application or the surface the
-    # action was triggered from, and returns whether it was handled.
+    # Carries out *action* on *target* and returns whether it was handled.
+    #
+    # *target* is the application for application actions, the `Window` for
+    # window actions, the `Tab` for tab actions and the `Surface` for split
+    # actions.
     #
     # Each action type has its own overload; define one for each action the
     # application declares, or redefine a built-in one. The overload with an
@@ -157,13 +208,60 @@ module Apprt
     end
 
     protected def perform(target : App, action : Action::Quit) : Bool
-      quit_now
+      confirm_close(:app) { quit_now }
+      true
+    end
+
+    protected def perform(target : App, action : Action::NewWindow) : Bool
+      new_window(active_surface)
       true
     end
 
     protected def perform(target : App, action : Action::CloseAllWindows) : Bool
-      destroy_windows
+      confirm_close(:windows) { destroy_windows }
       true
+    end
+
+    # Calls `#perform`, so that the overloads of subclasses apply.
+    protected def dispatch(target, action : Action) : Bool
+      perform(target, action)
+    end
+
+    protected def open_window : Window
+      window = Window.new(self)
+      @windows << window
+      window
+    end
+
+    protected def create_surface(kind : SurfaceContext::Kind, parent : Surface?) : Surface
+      surface = Surface.new(self, new_surface(SurfaceContext.new(kind, parent)))
+      @surfaces[surface.id] = surface
+      surface
+    end
+
+    protected def register(tab : Tab) : Nil
+      @tabs[tab.root.to_unsafe] = tab
+    end
+
+    protected def unregister(window : Window) : Nil
+      @windows.delete(window)
+    end
+
+    protected def unregister(tab : Tab) : Nil
+      @tabs.delete(tab.root.to_unsafe)
+    end
+
+    protected def unregister(surface : Surface) : Nil
+      @surfaces.delete(surface.id)
+    end
+
+    # Returns the tab whose page shows *child*.
+    protected def tab_for(child : Void*) : Tab?
+      @tabs[child]?
+    end
+
+    protected def tabs : Array(Tab)
+      @tabs.values
     end
 
     protected def perform(target : App, action : Action::ReloadConfig) : Bool
@@ -215,6 +313,9 @@ module Apprt
       Systemd.stopping
       on_shutdown
     ensure
+      @windows.clear
+      @tabs.clear
+      @surfaces.clear
       Signals.disconnect(C.adw_style_manager_get_default, @dark_handler) unless @dark_handler == 0
       @dark_handler = 0_u64
       unless @provider.null?
@@ -230,9 +331,21 @@ module Apprt
       C.g_application_quit(@application)
     end
 
+    # Runs *block* once the user confirms closing *kind*, or right away when
+    # no surface asks for a confirmation.
+    private def confirm_close(kind : Dialogs::Close, &block : ->) : Nil
+      window = active_window
+      if window && @surfaces.each_value.any?(&.confirm_close?)
+        Dialogs.confirm_close(window.widget, kind) { |confirmed| block.call if confirmed }
+      else
+        block.call
+      end
+    end
+
     # Destroys only the application windows: destroying every toplevel
     # double-frees input method windows (fcitx).
     private def destroy_windows : Nil
+      @windows.dup.each(&.destroy)
       windows = [] of Void*
       Native.each(C.gtk_application_get_windows(@application)) { |window| windows << window }
       windows.each { |window| C.gtk_window_destroy(window) }

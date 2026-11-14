@@ -68,6 +68,7 @@ class TestApp < Apprt::App
   property on_activated : TestApp -> = ->(app : TestApp) { app.quit }
   property on_reloaded : TestApp -> = ->(app : TestApp) { }
   property on_scheme : TestApp -> = ->(app : TestApp) { }
+  getter contexts = [] of Apprt::SurfaceContext
 
   def initialize(id : String = AppIds.next, *, single_instance : Bool = false)
     super(id, single_instance: single_instance)
@@ -77,6 +78,12 @@ class TestApp < Apprt::App
   protected def on_startup : Nil
     record "startup"
     Apprt::C.g_application_hold(to_unsafe)
+  end
+
+  # Surfaces show a text entry.
+  protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+    @contexts << context
+    Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new))
   end
 
   protected def on_activate : Nil
