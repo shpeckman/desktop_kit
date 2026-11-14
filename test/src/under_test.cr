@@ -1,16 +1,19 @@
 # src/under_test.cr
 #
 # The apprt app the live tests run: one window of labels with key
-# sequences, a key table and a progress binding, and with --global the
-# global Ctrl+Alt+Shift+F9, which opens a tab. It reports through
-# LIVETEST_FIFO, and on standard error:
+# sequences, a key table, progress, tab, split and header bindings, and
+# with --global the global Ctrl+Alt+Shift+F9, which opens a tab. It
+# reports through LIVETEST_FIFO, and on standard error:
 #
 #   window                     its window is open
-#   tab                        the global binding opened a tab
+#   tab                        a tab opened
 #   unbound TRIGGER: REASON    the desktop refused the global binding
 #   NAME tables=T,...          the binding reporting NAME fired; T are the
 #                              key tables active when it ran
 #   progress PERCENT           the surface shows PERCENT, or none when -1
+#   surfaces K,...             the tab's surfaces from the left or top, by
+#                              the kind each was opened as
+#   header tabs                the tab bar moved into the header bar
 #
 #   apprt-under-test --class ID  runs under the harness with window class ID
 #   apprt-under-test --global    also binds the global shortcut
@@ -42,6 +45,12 @@ module Apprt::Test
   # Shows *percent* as the surface's progress; -1 clears it.
   Apprt.action ShowProgress, "show-progress", scope: :split, payload: {percent: Int32}
 
+  # Reports the tab's surfaces in order.
+  Apprt.action ReportSurfaces, "report-surfaces", scope: :tab
+
+  # Moves the tab bar into the header bar.
+  Apprt.action HeaderTabs, "header-tabs", scope: :app
+
   # The window bindings under test. `ctrl+t` is a plain window shortcut
   # that `ctrl+a>ctrl+t` must win over while the sequence is pending.
   BINDINGS = {
@@ -52,6 +61,10 @@ module Apprt::Test
     "ctrl+a>o"       => Action::ActivateKeyTableOnce.new("mode"),
     "ctrl+a>p"       => ShowProgress.new(40),
     "ctrl+a>shift+p" => ShowProgress.new(-1),
+    "ctrl+a>t"       => Action::NewTab.new,
+    "ctrl+a>s"       => Action::NewSplit.new(:right),
+    "ctrl+a>l"       => ReportSurfaces.new,
+    "ctrl+a>h"       => HeaderTabs.new,
   }
 
   # The key table `mode`.
@@ -62,6 +75,9 @@ module Apprt::Test
 
   class UnderTest < Apprt::App
     getter? failed = false
+
+    # The kind each surface's content was opened as.
+    @kinds = {} of Apprt::Content => String
 
     # Runs with *window_class* as the Wayland app id of its window when
     # given; *global* binds the global shortcut; *setup* waits for the
@@ -115,7 +131,9 @@ module Apprt::Test
         end
       end
       text = @setup ? "Confirm the shortcut in the desktop's dialog, then press #{TRIGGER.label}." : context.kind.to_s
-      Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
+      content = Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
+      @kinds[content] = context.kind.to_s.downcase
+      content
     end
 
     protected def on_binding_failed(binding : Apprt::Binding, message : String) : Nil
@@ -132,6 +150,17 @@ module Apprt::Test
     protected def perform(target : Apprt::Surface, action : ShowProgress) : Bool
       target.progress = action.percent < 0 ? nil : Apprt::Progress.new(action.percent / 100)
       report "progress #{action.percent}"
+      true
+    end
+
+    protected def perform(target : Apprt::Tab, action : ReportSurfaces) : Bool
+      report "surfaces #{target.surfaces.join(',') { |surface| @kinds[surface.content]? }}"
+      true
+    end
+
+    protected def perform(target : Apprt::App, action : HeaderTabs) : Bool
+      self.window_style = Apprt::WindowStyle.new(tabs_in_header: true)
+      report "header tabs"
       true
     end
 

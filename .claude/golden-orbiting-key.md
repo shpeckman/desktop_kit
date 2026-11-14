@@ -248,8 +248,10 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
 
 ## Roadmap
 
-1. Live tests on KDE (`test/`, cases written; the user runs them): taskbar progress, key sequences and
-   key tables with a real keyboard, tabs-in-header look, drag and drop with a real pointer.
+1. Live tests on KDE (`test/`; the user runs them). Passing on KDE: the global shortcut, key sequences
+   and key tables with a real keyboard, progress (the user saw 40 % on the taskbar entry). Added and
+   passing in sway, still to run on KDE: `header-tabs` (tabs-in-header look), `drag-drop` (a surface
+   dragged by its handle with a real pointer).
 2. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME); builds on
    `App#quit_delay = nil`.
 3. Generic search overlay; hover text and resize readout overlays.
@@ -283,4 +285,5 @@ Open:
   with Crystal `Process`.
 - The GlobalShortcuts portal outside Flatpak needs a desktop file or host registry; desktop support varies
   (GNOME 48+, KDE).
-- Taskbar progress likely shows only for an app id with an installed desktop file (unverified).
+- Taskbar progress shows on KDE for an app id with an installed desktop file (live test); without one,
+  untested.

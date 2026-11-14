@@ -72,3 +72,46 @@ progress:
     - key ctrl+a shift+p
     - expect progress -1
     - close
+
+# Tabs in the header bar: two tabs, then the tab bar moves into the header
+# bar. The shot shows the header bar's look with both tabs.
+header-tabs:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a t
+    - expect tab
+    - key ctrl+a h
+    - expect header tabs
+    - settle
+    - shoot header tolerance=2
+    - close
+
+# Drag and drop with a real pointer: the window's surface is dragged by its
+# drag handle onto the right edge of its split, which moves it there. The
+# first moves stay on the handle: GTK starts the drag only once the
+# pointer passes its threshold while still over the handle.
+drag-drop:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a s
+    - key ctrl+a l
+    - expect surfaces window,split
+    - move 200 50
+    - settle
+    - down
+    - move 205 50
+    - move 210 50
+    - move 215 50
+    - move 220 50
+    - sleep 200
+    - move 400 200
+    - move 700 300
+    - move 780 300
+    - sleep 300
+    - up
+    - settle
+    - key ctrl+a l
+    - expect surfaces split,window
+    - close

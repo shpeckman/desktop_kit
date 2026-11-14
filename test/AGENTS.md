@@ -64,10 +64,18 @@ time, with `--threads 2` (`CRFLAGS`).
 - Only `--global` (or `--setup`) binds the global shortcut: binding it in
   a nested sway would reach the real desktop's portal through the shared
   session bus.
-- `Report` (window) and `ShowProgress` (split) are the app's own actions.
+- `Report` (window), `ShowProgress` (split), `ReportSurfaces` (tab) and
+  `HeaderTabs` (app) are the app's own actions. `ReportSurfaces` names
+  each surface by the `SurfaceContext::Kind` it opened as, so a drop's
+  new order shows.
   `Report` lines carry the active key tables, so `expect` proves which
   binding ran and in which table. The labels are not focusable, so the
   window's first button holds the focus (its ring shows in the shots).
+- GTK starts a drag only when the pointer passes its threshold while
+  still over the drag handle; a first move that leaves the handle (as
+  livetest's `drag` step does) starts nothing. `drag-drop` therefore
+  presses with `down`, moves a few pixels along the handle, waits for the
+  drag to start and then moves to the drop point.
 - `expect` skips other lines until the expected one, so a case cannot
   check that a binding did not fire; it checks that the wanted one did
   (Ctrl+A Ctrl+T reports `capture` only if the sequence took the key).

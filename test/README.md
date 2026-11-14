@@ -2,10 +2,11 @@
 
 Live tests of apprt through
 [livetest](https://github.com/shpeckman/livetest), with real keyboard
-input. On the KDE Plasma desktop they cover what a private test
+input and a real pointer. On the KDE Plasma desktop they cover what a private test
 compositor cannot: global key bindings bound by the desktop's global
 shortcuts portal and fired by kglobalaccel, and the taskbar's progress.
-Key sequences, key tables and the progress bar also run in a nested sway,
+Key sequences, key tables, the progress bar, tabs in the header bar and
+dragging a surface also run in a nested sway,
 which leaves your keyboard and pointer alone.
 
 ## Requirements
@@ -53,6 +54,11 @@ means every case passed.
   Shift+P clears it. Shoots the bar. In mode `kde` the taskbar entry
   shows the progress too, once `make setup` installed the desktop file;
   look at it while the case runs, the shot covers the window only.
+- `header-tabs` - Ctrl+A T opens a second tab and Ctrl+A H moves the tab
+  bar into the header bar. Shoots the header bar with both tabs.
+- `drag-drop` - Ctrl+A S splits the window's surface; the pointer drags
+  that surface's drag handle onto the right edge of the split, and
+  Ctrl+A L reports the surfaces swapped.
 
 ## The app under test
 
@@ -67,6 +73,10 @@ Its window shows a label and has these bindings:
 | Ctrl+A E / Ctrl+A O         | key table `mode`, until Escape / for once |
 | X (in `mode`)               | reports `table`                           |
 | Ctrl+A P / Ctrl+A Shift+P   | progress 40 % / no progress               |
+| Ctrl+A T                    | `NewTab`                                  |
+| Ctrl+A S                    | `NewSplit` to the right                   |
+| Ctrl+A L                    | reports the tab's surfaces                |
+| Ctrl+A H                    | moves the tab bar into the header bar     |
 | Ctrl+Alt+Shift+F9 (global)  | `NewTab`, with `--global` or `--setup`    |
 
 It writes to `LIVETEST_FIFO` and to standard error:
@@ -74,10 +84,13 @@ It writes to `LIVETEST_FIFO` and to standard error:
 | Line                      | When                                         |
 |---------------------------|----------------------------------------------|
 | `window`                  | its window is open                           |
-| `tab`                     | the global binding opened a tab              |
+| `tab`                     | a tab opened                                 |
 | `unbound TRIGGER: REASON` | the desktop refused the global binding       |
 | `NAME tables=T,...`       | a binding reported NAME; T the active tables |
 | `progress PERCENT`        | the progress changed; -1 is none             |
+| `surfaces K,...`          | the tab's surfaces, left to right, by the    |
+|                           | kind they opened as (`window`, `tab`, `split`) |
+| `header tabs`             | the tab bar moved into the header bar        |
 
 `--class ID` sets the window class (Wayland app id) the harness finds the
 window by; `--global` binds the global shortcut (cases with
