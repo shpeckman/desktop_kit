@@ -14,11 +14,14 @@ and the GLib layer the runtime builds on.
 `examples/` holds runnable programs; `make examples` builds them into
 `bin/`:
 
-| Example     | Shows                                                                 |
-|-------------|-----------------------------------------------------------------------|
-| `hello.cr`  | windows, tabs and splits of text entries, bindings, a global binding, notifications, reload |
-| `canvas.cr` | an OpenGL canvas following pointer, buttons, scrolling and typed text |
-| `ipc.cr`    | opens a window in a running `hello.cr`                                |
+| Example        | Shows                                                                 |
+|----------------|-----------------------------------------------------------------------|
+| `hello.cr`     | windows, tabs and splits of text entries, bindings, a global binding, notifications, reload |
+| `canvas.cr`    | an OpenGL canvas following pointer, buttons, scrolling and typed text |
+| `ipc.cr`       | opens a window in a running `hello.cr`                                |
+| `workspace.cr` | the card window style, pane icons, header bar content, the command palette with custom commands, key sequences |
+| `snake.cr`     | a game on OpenGL canvases in split cards, steered with physical keys |
+| `dialogs.cr`   | header bar buttons for confirm and prompt dialogs, toasts, notifications, opening a URL, drops |
 
 ## Requirements
 
@@ -88,6 +91,7 @@ Hooks, all called on the GTK thread:
 | `on_color_scheme(scheme)`  | after `on_startup`, then whenever light/dark changes |
 | `on_reload`                | on `#reload` and SIGUSR2                            |
 | `on_binding_failed(binding, message)` | when the desktop does not bind a global binding |
+| `on_window(window)`        | with each new window, before it is shown            |
 | `on_shutdown`              | when quitting, while the windows still exist        |
 
 These methods are callable from any thread:
@@ -101,6 +105,7 @@ These methods are callable from any thread:
   content. Both do nothing unless `#running?`.
 - `#css=` sets the application style sheet, applied above the theme;
   parse errors are logged as warnings.
+- `#window_style=` sets the look of all windows (see Window style).
 - `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
   the default), `Light` or `Dark`.
 
@@ -149,6 +154,9 @@ elsewhere.
 | `Window#urgent=`, `#active?`     | asks for the user's attention while inactive, whether it is active |
 | `Window#confirm(heading, body)`  | asks a yes/no question in a dialog and yields the answer          |
 | `Window#prompt(heading, body)`   | asks for a line of text in a dialog and yields it                 |
+| `Window#subtitle=`               | sets a second line under the window title; `nil` removes it       |
+| `Window#pack_start`, `#pack_end` | adds a widget, or a button performing an action, to the header bar |
+| `Surface#icon=`                  | sets a themed icon name for its pane header and, while active, its tab |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -156,6 +164,42 @@ while there is more than one tab. Closing the last surface of a tab closes
 the tab, and closing the last tab closes the window. Once closed,
 `#closed?` is true, `Window#new_tab` and `Surface#split` raise
 `RuntimeError`, and the objects leave the registries.
+
+#### Window style
+
+`App#window_style=` takes an `Apprt::WindowStyle`; every option is off by
+default, which gives GTK's plain look:
+
+| Option              | Effect                                                         |
+|---------------------|----------------------------------------------------------------|
+| `pane_headers`      | a header over each surface: its icon, its title and buttons to split right, split down, zoom and close it |
+| `cards`             | surfaces as rounded cards with gaps between them               |
+| `tabs_in_header`    | the tab bar in the header bar, beside the window title, always shown |
+| `opacity`           | opacity of the window background, 0 to 1; pair it with `Window#background_blur=` |
+| `unfocused_opacity` | opacity of the surfaces of a split other than the tab's active one, 0 to 1 |
+
+The style applies to open windows at once. `on_window` adds header bar
+content to each new window:
+
+```crystal
+class Hello < Apprt::App
+  protected def on_startup : Nil
+    self.window_style = Apprt::WindowStyle.new(
+      pane_headers: true, cards: true, tabs_in_header: true,
+      opacity: 0.85, unfocused_opacity: 0.7)
+  end
+
+  protected def on_window(window : Apprt::Window) : Nil
+    window.subtitle = System.hostname
+    window.pack_end(Apprt::Action::ToggleCommandPalette.new, "system-search-symbolic", "Commands")
+    window.background_blur = true
+  end
+end
+```
+
+The surface widget carries the CSS class `surface`, plus `active` on each
+tab's active surface; the pane header is `.surface-header`. Windows carry
+`apprt-window`. `App#css=` can restyle them.
 
 Closing asks the user first when a surface it closes has
 `Surface#confirm_close = true`: a split, a tab, a window, all windows or

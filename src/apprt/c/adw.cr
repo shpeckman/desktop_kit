@@ -104,5 +104,9 @@ module Apprt
     fun adw_dialog_set_title(self_ : Void*, title : UInt8*)
     fun adw_dialog_set_content_width(self_ : Void*, content_width : Int32)
     fun adw_dialog_set_content_height(self_ : Void*, content_height : Int32)
+    fun adw_tab_page_set_icon(self_ : Void*, icon : Void*)
+    fun adw_toolbar_view_remove(self_ : Void*, widget : Void*)
+    fun adw_header_bar_set_show_title(self_ : Void*, show_title : Int32)
+    fun adw_tab_bar_set_expand_tabs(self_ : Void*, expand_tabs : Int32)
   end
 end

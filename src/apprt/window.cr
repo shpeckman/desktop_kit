@@ -52,6 +52,8 @@ module Apprt
     @palette : CommandPalette?
     @sequence = [] of Trigger
     @sequence_keys = Pointer(Void).null
+    @tabs_in_header = false
+    @subtitle : String?
 
     protected def initialize(@app : App)
       @widget = Widget.new(C.adw_application_window_new(@app))
@@ -60,9 +62,67 @@ module Apprt
       @title_widget = Widget.new(C.adw_window_title_new(Window.default_title, ""))
       @overview = Widget.new(C.adw_tab_overview_new)
       @toasts = Widget.new(C.adw_toast_overlay_new)
+      @header = Widget.new(C.adw_header_bar_new)
+      @title_box = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 12))
+      @tab_bar = Widget.new(C.adw_tab_bar_new)
+      @toolbar = Widget.new(C.adw_toolbar_view_new)
+      @widget.add_css_class("apprt-window")
       layout
+      apply_style(@app.window_style)
       install_actions
       connect_signals
+    end
+
+    # Returns the second line of the window title.
+    getter subtitle : String?
+
+    # Sets the second line of the window title in the header bar; `nil`
+    # removes it.
+    def subtitle=(subtitle : String?) : String?
+      @subtitle = subtitle
+      C.adw_window_title_set_subtitle(@title_widget, subtitle || "")
+      subtitle
+    end
+
+    # Adds *widget* to the start of the header bar, after the earlier ones.
+    def pack_start(widget : Widget) : Nil
+      C.adw_header_bar_pack_start(@header, widget)
+    end
+
+    # Adds a button with the themed icon *icon* that performs *action* to the
+    # start of the header bar.
+    def pack_start(action : Action, icon : String, tooltip : String) : Nil
+      C.adw_header_bar_pack_start(@header, button(icon, tooltip, action))
+    end
+
+    # Adds *widget* to the end of the header bar, before the earlier ones.
+    def pack_end(widget : Widget) : Nil
+      C.adw_header_bar_pack_end(@header, widget)
+    end
+
+    # Adds a button with the themed icon *icon* that performs *action* to the
+    # end of the header bar.
+    def pack_end(action : Action, icon : String, tooltip : String) : Nil
+      C.adw_header_bar_pack_end(@header, button(icon, tooltip, action))
+    end
+
+    # Moves the tab bar between the header bar and the row below it.
+    protected def apply_style(style : WindowStyle) : Nil
+      inside = style.tabs_in_header?
+      return if inside == @tabs_in_header
+      @tabs_in_header = inside
+      C.g_object_ref(@tab_bar)
+      if inside
+        C.adw_toolbar_view_remove(@toolbar, @tab_bar)
+        C.gtk_box_append(@title_box, @tab_bar)
+      else
+        C.gtk_box_remove(@title_box, @tab_bar)
+        C.adw_toolbar_view_add_top_bar(@toolbar, @tab_bar)
+      end
+      C.g_object_unref(@tab_bar)
+      @tab_bar.hexpand = inside
+      @title_box.hexpand = inside
+      C.adw_tab_bar_set_autohide(@tab_bar, inside ? 0 : 1)
     end
 
     # Returns the title the application name falls back to.
@@ -378,8 +438,9 @@ module Apprt
     end
 
     private def layout : Nil
-      header = C.adw_header_bar_new
-      C.adw_header_bar_set_title_widget(header, @title_widget)
+      header = @header
+      C.gtk_box_append(@title_box, @title_widget)
+      C.adw_header_bar_set_title_widget(header, @title_box)
       C.adw_header_bar_pack_start(header, button("tab-new-symbolic", "New Tab", Action::NewTab.new))
       menu = C.gtk_menu_button_new
       C.gtk_menu_button_set_icon_name(menu, "open-menu-symbolic")
@@ -390,11 +451,11 @@ module Apprt
       C.adw_header_bar_pack_end(header, menu)
       C.adw_header_bar_pack_end(header, button("view-grid-symbolic", "View Open Tabs", Action::ToggleTabOverview.new))
 
-      tab_bar = C.adw_tab_bar_new
+      tab_bar = @tab_bar
       C.adw_tab_bar_set_view(tab_bar, @tab_view)
       C.adw_tab_bar_set_autohide(tab_bar, 1)
 
-      toolbar = C.adw_toolbar_view_new
+      toolbar = @toolbar
       C.adw_toolbar_view_add_top_bar(toolbar, header)
       C.adw_toolbar_view_add_top_bar(toolbar, tab_bar)
       C.adw_toast_overlay_set_child(@toasts, @tab_view)

@@ -38,9 +38,10 @@ module Apprt
     getter? focused : Bool = false
 
     # :nodoc:
-    # The style of the drag handle and the drop indicator, which the app
-    # loads at application priority.
+    # The style of the pane header, the drag handle and the drop indicator,
+    # which the app loads at application priority.
     STYLE = <<-CSS
+      .surface-header { padding: 2px 4px 2px 10px; }
       .surface-drag-handle {
         background-color: alpha(@window_fg_color, 0.15);
         opacity: 0;
@@ -68,6 +69,15 @@ module Apprt
     @tab : Tab?
     @closed = false
     @surface_drop_target = Pointer(Void).null
+    @icon : String?
+
+    # Icons, tooltips and actions of the buttons in the pane header.
+    private HEADER_BUTTONS = [
+      {"view-dual-symbolic", "Split Right", Action::NewSplit.new(:right)},
+      {"view-paged-symbolic", "Split Down", Action::NewSplit.new(:down)},
+      {"view-fullscreen-symbolic", "Zoom Split", Action::ToggleSplitZoom.new},
+      {"window-close-symbolic", "Close Split", Action::CloseSurface.new},
+    ]
     @data_drop_target = Pointer(Void).null
 
     protected def initialize(@app : App, @content : Content)
@@ -79,7 +89,11 @@ module Apprt
       @host.vexpand = true
       @handle = Widget.new(C.gtk_center_box_new)
       @drop_indicator = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 0))
+      @header = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 6))
+      @header_icon = Widget.new(C.gtk_image_new_from_icon_name(nil))
+      @header_title = Widget.new(C.gtk_label_new(Window.default_title))
       layout
+      apply_style(@app.window_style)
       install_drag_and_drop
       focus = C.gtk_event_controller_focus_new
       Signals.connect(focus, "enter", -> { focus_changed(true) })
@@ -91,14 +105,28 @@ module Apprt
 
     def title=(title : String) : String
       @title = title
-      @tab.try(&.sync_title)
+      sync_title
       title
+    end
+
+    # Returns the name of the themed icon shown in the pane header and on
+    # the tab while the surface is active.
+    getter icon : String?
+
+    # Sets the icon by its themed icon name, such as `"utilities-terminal"`;
+    # `nil` removes it.
+    def icon=(icon : String?) : String?
+      @icon = icon
+      C.gtk_image_set_from_icon_name(@header_icon, icon)
+      @header_icon.visible = !icon.nil?
+      @tab.try(&.sync_title)
+      icon
     end
 
     # Sets the title the user chose; `nil` restores `#title`.
     def title_override=(title : String?) : String?
       @title_override = title
-      @tab.try(&.sync_title)
+      sync_title
       title
     end
 
@@ -201,6 +229,17 @@ module Apprt
     end
 
     # Shows the drag handle while the surface shares its tab.
+    # Shows or hides the pane header.
+    protected def apply_style(style : WindowStyle) : Nil
+      @header.visible = style.pane_headers?
+    end
+
+    # Marks the surface as its tab's active one, for styling.
+    protected def active=(active : Bool) : Bool
+      active ? @host.add_css_class("active") : @host.remove_css_class("active")
+      active
+    end
+
     protected def draggable=(draggable : Bool) : Bool
       @handle.visible = draggable
       draggable
@@ -236,7 +275,43 @@ module Apprt
       @drop_indicator.add_css_class("surface-drop-indicator")
       C.gtk_widget_set_can_target(@drop_indicator, 0)
       C.gtk_overlay_add_overlay(overlay, @drop_indicator)
-      C.adw_bin_set_child(@host, overlay)
+      Widget.new(overlay).vexpand = true
+      build_header
+      box = C.gtk_box_new(C::GtkOrientation::Vertical, 0)
+      C.gtk_box_append(box, @header)
+      C.gtk_box_append(box, overlay)
+      C.adw_bin_set_child(@host, box)
+      C.gtk_widget_set_overflow(@host, C::GtkOverflow::Hidden)
+    end
+
+    private def build_header : Nil
+      @header.add_css_class("surface-header")
+      @header_icon.visible = false
+      C.gtk_box_append(@header, @header_icon)
+      C.gtk_label_set_xalign(@header_title, 0)
+      C.gtk_label_set_ellipsize(@header_title, C::PANGO_ELLIPSIZE_END)
+      @header_title.hexpand = true
+      C.gtk_box_append(@header, @header_title)
+      HEADER_BUTTONS.each do |icon, tooltip, action|
+        button = Widget.new(C.gtk_button_new_from_icon_name(icon))
+        C.gtk_button_set_has_frame(button, 0)
+        button.focusable = false
+        button.tooltip = tooltip
+        Signals.connect(button, "clicked", -> { header_action(action) })
+        C.gtk_box_append(@header, button)
+      end
+      click = C.gtk_gesture_click_new
+      Signals.connect(click, "pressed", ->(_count : Int32, _x : Float64, _y : Float64) { grab_focus })
+      @header.add_controller(click)
+    end
+
+    private def header_action(action : Action) : Nil
+      Log.warn { "pane header: action #{action.detailed_name} not handled" } unless @app.dispatch(self, action)
+    end
+
+    private def sync_title : Nil
+      C.gtk_label_set_label(@header_title, shown_title || Window.default_title)
+      @tab.try(&.sync_title)
     end
 
     # Lets the drag handle carry the surface id onto other surfaces, and

@@ -1,9 +1,9 @@
 # spec/gtk/window_spec.cr
 require "./harness"
 
-# Returns the surface's host: the content sits in an overlay inside it.
+# Returns the surface's host, the widget a split holds.
 private def host(surface : Apprt::Surface) : Apprt::Widget
-  surface.content.widget.parent.try(&.parent).not_nil!
+  surface.@host
 end
 
 private def paned?(widget : Apprt::Widget?) : Bool

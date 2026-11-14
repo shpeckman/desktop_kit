@@ -190,6 +190,13 @@ module Apprt
 
     # :showdoc:
     #
+    # Called with each new window before it is shown, to add widgets or
+    # buttons to its header bar.
+    protected def on_window(window : Window) : Nil
+    end
+
+    # :showdoc:
+    #
     # Called when the application quits, while its windows still exist.
     protected def on_shutdown : Nil
     end
@@ -232,6 +239,7 @@ module Apprt
     protected def open_window : Window
       window = Window.new(self)
       @windows << window
+      on_window(window)
       window
     end
 
@@ -293,7 +301,7 @@ module Apprt
       Signals.connect(@provider, "parsing-error", ->(section : Void*, error : Void*) { css_error(section, error) })
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
       @runtime_style = C.gtk_css_provider_new
-      C.gtk_css_provider_load_from_string(@runtime_style, Surface::STYLE)
+      load_runtime_style
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_APPLICATION)
       @running.set(true)
       Action.install(@application, :app) { |action| perform(self, action) }

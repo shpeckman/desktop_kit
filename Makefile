@@ -29,6 +29,9 @@ examples:
 	$(CRYSTAL) build --threads 2 examples/hello.cr -o bin/hello
 	$(CRYSTAL) build --threads 2 examples/canvas.cr -o bin/canvas
 	$(CRYSTAL) build --threads 2 examples/ipc.cr -o bin/ipc
+	$(CRYSTAL) build --threads 2 examples/workspace.cr -o bin/workspace
+	$(CRYSTAL) build --threads 2 examples/snake.cr -o bin/snake
+	$(CRYSTAL) build --threads 2 examples/dialogs.cr -o bin/dialogs
 
 # API documentation into docs/.
 docs:

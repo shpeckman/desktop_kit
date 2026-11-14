@@ -94,6 +94,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt/command_palette.cr` - `Command` (public), `CommandPalette`
   (`:nodoc:`); reopens `App` with `commands` and the
   `ToggleCommandPalette` overload.
+- `src/apprt/window_style.cr` - `WindowStyle` (public; `to_css`
+  `:nodoc:`); reopens `App` with `window_style` and the runtime style
+  sheet.
 - `src/apprt/notifications.cr` - `Notifications` (`:nodoc:`): a surface's
   sent notifications; reopens `App` with `notify` and the
   `DesktopNotification` and `PresentSurface` overloads.
@@ -104,9 +107,12 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   global bindings' portal session.
 - `src/apprt/open_uri.cr` - `OpenURI` (`:nodoc:`): `OpenUrl` through the
   OpenURI portal or `xdg-open`.
-- `examples/` - `hello.cr`, `canvas.cr`, `ipc.cr` (`make examples`). They
-  declare their own `lib LibGtk` / `lib LibGL` funs rather than use the
-  `:nodoc:` `Apprt::C`.
+- `examples/` - `hello.cr`, `canvas.cr`, `ipc.cr`, `workspace.cr`,
+  `snake.cr`, `dialogs.cr` (`make examples`). They declare their own
+  `lib LibGtk` / `lib LibGL` funs rather than use the `:nodoc:` `Apprt::C`.
+  Content that names its surface (`workspace.cr`, `snake.cr`) does so in
+  a block posted from `new_surface`: `Content#surface` is set only once
+  `new_surface` has returned.
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
@@ -143,6 +149,8 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   (`Window#confirm`/`#prompt` too); `command_palette_spec.cr` the palette;
   `sequence_spec.cr` key sequences, emitting `key-pressed` on the window's
   `@sequence_keys`;
+  `window_style_spec.cr` pane headers, the active mark, tab icons, tabs
+  in the header bar, header bar content and `on_window`;
   `canvas_spec.cr` the canvas, pointer, bell and clipboard;
   `notifications_spec.cr` notifications against `FakeNotifications`
   (`fake_notifications.cr`); `ipc_spec.cr` IPC round trips;
@@ -257,7 +265,10 @@ Internal contracts of `src/apprt/glib/`:
   (name, scope, ipc outside `:app`, fields shadowing `Action` methods,
   duplicates per scope) are compile errors.
 - `Action.registry` is built at compile time from `Action.all_subclasses`,
-  so it covers application actions too. `Action.install(map, scope, &perform)`
+  so it covers application actions too. It names each type with a leading
+  `::`: the code expands inside `Action`, where an application module named
+  like an `Apprt` type (`Dialogs`, `Window`) would resolve to the runtime's.
+  `Action.install(map, scope, &perform)`
   adds one `GSimpleAction` per registry entry of *scope* to an action map;
   activation decodes the parameter and calls *perform*, warning when the
   parameter does not decode or *perform* returns false. Steps 7 and later
@@ -611,6 +622,38 @@ Wayland only (no X11):
   `notify::is-active` clears it; `Surface#ring_bell` on an unfocused
   surface sets it. Headless sway has no keyboard, so windows never become
   active in the specs.
+
+## Window style
+
+After Ghostty's split header bars (`surface.blp`) and
+`unfocused-split-opacity`:
+- `App#window_style=` stores and dispatches `apply_window_style`, which
+  reloads the runtime provider (`@runtime_style`, application priority)
+  with `Surface::STYLE + WindowStyle#to_css` and calls `apply_style` on
+  each window and surface. New windows and surfaces apply it in their
+  initializers. Startup loads the provider through `load_runtime_style`.
+- `WindowStyle#to_css` writes rules only for options that differ from
+  the default, scoped to `window.apprt-window` (the class every `Window`
+  carries): `opacity` turns the window, header bar and tab bar
+  backgrounds translucent; `cards` gives `.surface` margins, a radius and
+  a border and clears the paned separator; `unfocused_opacity` dims
+  `.surface:not(.active)`.
+- Surface host: `AdwBin` (`.surface`, overflow hidden so the radius clips
+  the content) > vertical box > header (`.surface-header`: icon, ellipsized
+  title, four flat unfocusable buttons from `HEADER_BUTTONS`) and the
+  content overlay. Header visibility follows `pane_headers`. A click on
+  the header focuses the surface; buttons dispatch their action on the
+  surface through `App#dispatch`. Surface titles update the header label.
+- `Tab` sets its active surface through a private `active=` that moves
+  the `active` CSS class; `sync_title` also sets the page icon
+  (`g_themed_icon_new(Surface#icon)`, or none).
+- `Window` keeps `@header`, `@title_box` (the header title widget: window
+  title, then the tab bar when inside), `@tab_bar` and `@toolbar`.
+  `apply_style` moves the tab bar between `@title_box` (expanding,
+  autohide off) and the toolbar's top bars, holding a reference across
+  the move. `pack_start`/`pack_end` add to `@header`.
+- `on_window` runs from `App#open_window`, so it covers `NewWindow`,
+  tab drag-out and `MoveTabToNewWindow` too.
 
 ## Transient scopes
 

@@ -89,3 +89,8 @@ adw_dialog_set_child
 adw_dialog_set_title
 adw_dialog_set_content_width
 adw_dialog_set_content_height
+# window style
+adw_tab_page_set_icon
+adw_toolbar_view_remove
+adw_header_bar_set_show_title
+adw_tab_bar_set_expand_tabs

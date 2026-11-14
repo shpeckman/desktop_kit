@@ -21,7 +21,7 @@ module Apprt
 
     protected def initialize(@app : App, surface : Surface)
       surface.tab = self
-      @active = surface
+      self.active = surface
       @view.focus = surface
       @view.tree = SplitTree(Surface).new(surface)
       @app.register(self)
@@ -146,7 +146,7 @@ module Apprt
       @view.release_widgets if release_widgets
       unless tree.split?
         @view.tree = SplitTree(Surface).new
-        @active = nil
+        self.active = nil
         return close_now
       end
       successor = tree.goto(handle, :previous) || tree.goto(handle, :next) if @active == surface
@@ -167,7 +167,7 @@ module Apprt
       if (zoomed = tree.zoomed) && zoomed != handle
         @view.tree = tree.zoom(nil)
       end
-      @active = surface
+      self.active = surface
       @view.focus = surface
       @window.try(&.select(self))
       surface.grab_focus unless @view.pending?
@@ -177,7 +177,7 @@ module Apprt
     # Records the focus moving into *surface*.
     protected def focused(surface : Surface) : Nil
       return if @destroyed || @active == surface
-      @active = surface
+      self.active = surface
       @view.focus = surface
       sync_title
     end
@@ -226,7 +226,7 @@ module Apprt
       return false unless tree.split?
       handle = tree.locate(from) || return false
       @view.tree = tree.zoom(tree.zoomed ? nil : handle)
-      @active = from
+      self.active = from
       @view.focus = from
       sync_title
       true
@@ -245,8 +245,21 @@ module Apprt
       return if @destroyed
       window = @window || return
       page = page(window)
-      C.adw_tab_page_set_title(page, title) unless page.null?
+      unless page.null?
+        C.adw_tab_page_set_title(page, title)
+        icon = @active.try(&.icon).try { |name| C.g_themed_icon_new(name) } || Pointer(Void).null
+        C.adw_tab_page_set_icon(page, icon)
+        C.g_object_unref(icon) unless icon.null?
+      end
       window.sync_title
+    end
+
+    # Moves the active mark from the previous active surface to *surface*.
+    private def active=(surface : Surface?) : Surface?
+      @active.try(&.active = false)
+      @active = surface
+      surface.try(&.active = true)
+      surface
     end
 
     # Forgets the tab and its surfaces once its page is gone; GTK disposes
@@ -256,7 +269,7 @@ module Apprt
       @destroyed = true
       @view.destroy
       @view.tree.each { |_, surface| surface.release }
-      @active = nil
+      self.active = nil
       @app.unregister(self)
     end
 

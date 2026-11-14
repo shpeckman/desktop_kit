@@ -51,6 +51,11 @@ module Apprt
       External  = 3
     end
 
+    enum GtkOverflow : Int32
+      Visible = 0
+      Hidden  = 1
+    end
+
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
     fun gtk_widget_unparent(widget : Void*)
@@ -239,5 +244,10 @@ module Apprt
     fun gtk_widget_set_margin_end(widget : Void*, margin : Int32)
     fun gtk_widget_set_margin_top(widget : Void*, margin : Int32)
     fun gtk_widget_set_margin_bottom(widget : Void*, margin : Int32)
+    fun gtk_widget_set_overflow(widget : Void*, overflow : GtkOverflow)
+    fun gtk_image_set_from_icon_name(image : Void*, icon_name : UInt8*)
+    fun gtk_label_set_label(self_ : Void*, str : UInt8*)
+    fun gtk_widget_set_opacity(widget : Void*, opacity : Float64)
+    fun gtk_button_set_has_frame(button : Void*, has_frame : Int32)
   end
 end

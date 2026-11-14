@@ -24,8 +24,12 @@ module Apprt
     SOURCE_REMOVE                       =       0
     STYLE_PROVIDER_PRIORITY_APPLICATION = 600_u32
     STYLE_PROVIDER_PRIORITY_USER        = 800_u32
+    PANGO_ELLIPSIZE_END                 =       3
 
     # The GIR marks GdkFileList's get-type function as introspectable="0".
     fun gdk_file_list_get_type : GType
+
+    # Takes a PangoEllipsizeMode; Pango has no allowlist.
+    fun gtk_label_set_ellipsize(label : Void*, mode : Int32)
   end
 end

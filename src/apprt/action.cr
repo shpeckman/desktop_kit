@@ -163,7 +163,7 @@ module Apprt
           {% end %}
           [
             {% for type in Action.all_subclasses.reject(&.abstract?) %}
-              Info.new({{ type }}::NAME, {{ type }}::SCOPE, {{ type }}.parameter_type, ->(variant : Variant?) { {{ type }}.from_variant(variant).as(Action?) }),
+              Info.new(::{{ type }}::NAME, ::{{ type }}::SCOPE, ::{{ type }}.parameter_type, ->(variant : Variant?) { ::{{ type }}.from_variant(variant).as(Action?) }),
             {% end %}
           ] of Info
         {% end %}
