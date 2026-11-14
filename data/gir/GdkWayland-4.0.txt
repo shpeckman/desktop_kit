@@ -1,0 +1,9 @@
+# data/gir/GdkWayland-4.0.txt
+# GdkWayland symbols of Apprt::C (src/apprt/c/gdkwayland.cr); see tools/gir/generator.cr.
+
+GdkWaylandDisplay
+gdk_wayland_display_get_wl_display
+gdk_wayland_display_get_wl_compositor
+
+GdkWaylandSurface
+gdk_wayland_surface_get_wl_surface

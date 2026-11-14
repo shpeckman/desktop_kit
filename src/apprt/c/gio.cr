@@ -145,5 +145,7 @@ module Apprt
     fun g_dbus_method_invocation_return_value(invocation : Void*, parameters : Void*)
     fun g_dbus_method_invocation_return_dbus_error(invocation : Void*, error_name : UInt8*, error_message : UInt8*)
     fun g_dbus_method_invocation_get_sender(invocation : Void*) : UInt8*
+    fun g_file_get_type : GType
+    fun g_file_get_path(file : Void*) : UInt8*
   end
 end

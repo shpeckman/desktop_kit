@@ -7,7 +7,7 @@
 # usage (from the repository root):
 #   crystal run tools/gen_gir.cr
 #     apprt's own bindings: data/gir/<Namespace-Version>.txt →
-#     src/apprt/c/<namespace>.cr for GLib, GObject, Gio, Gdk, Gtk and Adw;
+#     src/apprt/c/<namespace>.cr for GLib, GObject, Gio, Gdk, GdkWayland, Gtk and Adw;
 #     `make gen`
 #   crystal run tools/gen_gir.cr -- [-g DIR] [-a DIR] [-o DIR] [-m MODULE] KEY...
 #     the namespaces KEY ("Gtk-4.0") with allowlists from -a, GIR files from
@@ -19,7 +19,7 @@ require "option_parser"
 require "./gir/generator"
 
 # Namespaces of apprt's bindings, in require order.
-NAMESPACES = %w(GLib-2.0 GObject-2.0 Gio-2.0 Gdk-4.0 Gtk-4.0 Adw-1)
+NAMESPACES = %w(GLib-2.0 GObject-2.0 Gio-2.0 Gdk-4.0 GdkWayland-4.0 Gtk-4.0 Adw-1)
 
 def gir_dir : String
   if dir = ENV["GIR_DIR"]?

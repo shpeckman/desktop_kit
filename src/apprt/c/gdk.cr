@@ -66,6 +66,35 @@ module Apprt
       Gles = 2
     end
 
+    @[Flags]
+    enum GdkDragAction : UInt32
+      Copy = 1
+      Move = 2
+      Link = 4
+      Ask  = 8
+    end
+
+    @[Flags]
+    enum GdkToplevelState : UInt32
+      Minimized       =     1
+      Maximized       =     2
+      Sticky          =     4
+      Fullscreen      =     8
+      Above           =    16
+      Below           =    32
+      Focused         =    64
+      Tiled           =   128
+      TopTiled        =   256
+      TopResizable    =   512
+      RightTiled      =  1024
+      RightResizable  =  2048
+      BottomTiled     =  4096
+      BottomResizable =  8192
+      LeftTiled       = 16384
+      LeftResizable   = 32768
+      Suspended       = 65536
+    end
+
     struct GdkRectangle
       x : Int32
       y : Int32
@@ -116,5 +145,11 @@ module Apprt
     fun gdk_unicode_to_keyval(wc : UInt32) : UInt32
     fun gdk_gl_context_get_current : Void*
     fun gdk_gl_context_get_api(self_ : Void*) : GdkGLAPI
+    fun gdk_file_list_get_files(file_list : Void*) : GSList*
+    fun gdk_content_provider_new_for_value(value : Void*) : Void*
+    fun gdk_paintable_snapshot(paintable : Void*, snapshot : Void*, width : Float64, height : Float64)
+    fun gdk_toplevel_get_state(toplevel : Void*) : GdkToplevelState
+    fun gdk_surface_get_width(surface : Void*) : Int32
+    fun gdk_surface_get_height(surface : Void*) : Int32
   end
 end

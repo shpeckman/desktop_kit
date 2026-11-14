@@ -27,11 +27,16 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt.cr` - entry; requires everything, defines `Apprt::Log`
   (`:nodoc:`, source `"apprt"`).
 - `src/apprt/c/` - `Apprt::C` (`:nodoc:`), the C bindings.
-  - `glib.cr gobject.cr gio.cr gdk.cr gtk.cr adw.cr` - generated, never edit.
+  - `glib.cr gobject.cr gio.cr gdk.cr gdkwayland.cr gtk.cr adw.cr` -
+    generated, never edit.
   - `manual.cr` - what the generator cannot emit: `GValue` (holds a union)
     and GIR constants (`PRIORITY_DEFAULT`, `PRIORITY_DEFAULT_IDLE`,
     `SOURCE_REMOVE`, `STYLE_PROVIDER_PRIORITY_APPLICATION`, `..._USER`,
-    `TYPE_INT`).
+    `TYPE_INT`, `TYPE_UINT64`, `TYPE_STRING`) and `gdk_file_list_get_type`
+    (introspectable="0" in the GIR).
+  - `wayland.cr` - `Apprt::Wl` (`:nodoc:`), hand-written libwayland-client
+    functions (proxies, queues, `wl_proxy_marshal_array_flags`,
+    dispatchers).
 - `src/apprt/glib/` - the GLib/GObject layer every component builds on.
   - `error.cr` - `GLibError` (public).
   - `native.cr` - `Native` (`:nodoc:`): C string, strv and GList helpers.
@@ -45,13 +50,17 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   - `idle.cr` - `Idle` (`:nodoc:`): one-shot idle and timeout callbacks,
     cancellable.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
-  `Direction`, `Mods` (public).
+  `Decoration`, `Direction`, `Mods` (public).
 - `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
   model the split view renders.
 - `src/apprt/ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
   cross-thread queue.
-- `src/apprt/systemd.cr` - `Systemd` (public `notify`; `ready`, `reloading`,
-  `stopping` protected for `App`).
+- `src/apprt/systemd.cr` - `Systemd` (public `notify` and `start_scope`;
+  `ready`, `reloading`, `stopping` and `cgroup` protected).
+- `src/apprt/wayland.cr` - `Wayland` (`:nodoc:`): protocol tables,
+  `Proxy` and the per-display `Globals`.
+- `src/apprt/winproto.cr` - `Winproto` (`:nodoc:`): a window's server
+  decoration, blur and activation objects.
 - `src/apprt/action.cr` - the `Apprt.action` macro and `Action` (public);
   the registry and GAction installation (`:nodoc:`).
 - `src/apprt/actions.cr` - the built-in action table, nested in `Action`.
@@ -62,15 +71,15 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `bindings` and the accelerator sync.
 - `src/apprt/dialogs.cr` - `Dialogs` (`:nodoc:`): the close confirmation and
   title prompt alert dialogs.
-- `src/apprt/content.cr` - `Content`, `WidgetContent`, `SurfaceContext`
-  (public).
+- `src/apprt/content.cr` - `Content` (with the `on_drop` hooks),
+  `WidgetContent`, `SurfaceContext` (public).
 - `src/apprt/input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
   `MouseMotionEvent`, `ScrollEvent` (public; initializers `:nodoc:`).
 - `src/apprt/canvas.cr` - `Canvas` (public): the `GtkGLArea` content, its
   event controllers and input method context.
 - `src/apprt/clipboard.cr` - `Clipboard` (public): text clipboards.
-- `src/apprt/surface.cr` - `Surface` (public); reopens `App` with the split
-  action overloads.
+- `src/apprt/surface.cr` - `Surface` (public): host, drag handle, drop
+  targets; reopens `App` with the split action overloads.
 - `src/apprt/split_view.cr` - `SplitView` (`:nodoc:`): renders a tab's
   `SplitTree(Surface)` as nested `GtkPaned`.
 - `src/apprt/tab.cr` - `Tab` (public); reopens `App` with the tab action
@@ -127,7 +136,12 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   (`fake_notifications.cr`); `ipc_spec.cr` IPC round trips;
   `global_shortcuts_spec.cr` global bindings against `FakePortal`
   (`fake_portal.cr`); `reload_spec.cr` content reload; `open_url_spec.cr`
-  `OpenUrl` against `FakePortal` and a fake `xdg-open` first on `PATH`.
+  `OpenUrl` against `FakePortal` and a fake `xdg-open` first on `PATH`;
+  `decoration_spec.cr` decorations, blur, urgency and toasts;
+  `drop_spec.cr` data drops and surface moves (emitting the drop targets'
+  signals); `scope_spec.cr` `Systemd.start_scope` against the private bus,
+  which has no systemd. `spec/pure/winproto_spec.cr` covers the blur
+  region slices.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -485,6 +499,84 @@ Ported from Ghostty's `src/apprt/gtk/portal/OpenURI.zig`, `openUrl` in
 - `Portal::Request#call` ignores the reply's request path: since
   xdg-desktop-portal 0.9 it is always the predicted one, which Ghostty
   re-subscribes to only for older portals.
+
+## Toasts
+
+`Window#toast` adds an `AdwToast` (timeout in whole seconds, rounded up)
+to the `AdwToastOverlay` that wraps the tab view as the toolbar view's
+content, as in Ghostty's `class/window.zig`.
+
+## Drag and drop
+
+Ported from Ghostty's `class/surface.zig` and `moveSplit` in
+`class/split_tree.zig`:
+- The surface host holds a `GtkOverlay`: the content, a drag handle
+  (`GtkCenterBox`, css `surface-drag-handle`, cursor `grab`, top aligned,
+  visible only while the tab is split) and a drop indicator box (css
+  `surface-drop-indicator`, `can-target` off). `Surface::STYLE`
+  (`:nodoc:`) is loaded by `App` into a provider at
+  `STYLE_PROVIDER_PRIORITY_APPLICATION` (`@runtime_style`; `@style`
+  collided with a spec subclass ivar).
+- The handle's `GtkDragSource` (move) carries the surface id as a `uint64`
+  `GValue`; the drag icon is a `GtkWidgetPaintable` of the host scaled to
+  0.2.
+- Two drop targets on the host: `uint64` (move) rejects the surface's own
+  id on `notify::value`, marks the nearest side on `motion` (`drop-left`
+  …, ties left, right, up, down; `Surface.drop_side`, 0.5 for an
+  unallocated widget) and calls `Tab#insert`; the data target takes
+  `GdkFileList`, `GFile` and `G_TYPE_STRING` and calls `Content#drop`
+  (protected, implicit-receiver call of `on_drop`, like `reload`).
+- `Tab#insert(surface, target, direction)` splits *target* with *surface*;
+  within one tab it removes the old handle afterwards, from another tab it
+  first `detach`es the surface there (`release_widgets: true` unparents
+  the source view's widgets at once, so GTK accepts the host in the new
+  parent). `detach` of the last surface closes the source tab without
+  releasing the moved surface. `Tab#remove` is `detach` + `release`.
+
+## Window protocol extras
+
+Ported from Ghostty's `winproto/wayland.zig` and `winproto/wayland/`;
+Wayland only (no X11):
+- No generated protocol code: `Wayland::PROTOCOL` describes the used
+  interfaces (`wl_registry`, `wl_compositor`, `wl_region`,
+  `xdg_activation_v1`/`_token_v1`, `ext_background_effect_manager_v1`/
+  `surface_v1`, `org_kde_kwin_server_decoration_manager`/`_decoration`)
+  and builds `Wl::Interface` tables once. Requests go through
+  `wl_proxy_marshal_array_flags`; events through
+  `wl_proxy_add_dispatcher`, whose first callback argument is the
+  dispatcher data (the listener handle in `Handles`).
+- `Wayland.globals(display)` binds the extension globals once per
+  `GdkWaylandDisplay` on a private queue (two roundtrips: globals, then
+  their initial events such as `capabilities` and `default_mode`), then
+  moves the proxies to the default queue that GTK dispatches.
+- `Winproto.attach` on `realize` creates the decoration object and, below
+  GTK 4.23.3 (`GTK_BACKGROUND_EFFECT`; later GTK binds the effect itself),
+  the background effect; `unrealize` releases them. Decoration modes
+  follow Ghostty: `Auto` → `default_mode` or client; `Server` is
+  client-side when the KDE manager is missing; `None` undecorated.
+  `Window#decoration=` sets `gtk_window_set_decorated` and requests the
+  mode. `ToggleWindowDecorations` toggles `None` and the previous choice.
+- Blur: region = surface size minus GTK's shadow
+  (`gtk_native_get_surface_transform`, +1 px with CSD), rounded corners
+  of `CORNER_RADIUS` 15 unless fullscreen, maximized or tiled, as rows
+  of one pixel (`Winproto.slices`). Resynced on the GdkSurface's `layout`
+  and `notify::state`; only sent when the slices change.
+- Urgency: `Window#urgent=` is ignored while active; it creates an
+  activation token for the surface and activates it on `done`.
+  `notify::is-active` clears it; `Surface#ring_bell` on an unfocused
+  surface sets it. Headless sway has no keyboard, so windows never become
+  active in the specs.
+
+## Transient scopes
+
+`Systemd.start_scope` ports Ghostty's `os/cgroup.zig` and
+`apprt/gtk/cgroup.zig`: `StartTransientUnit(name, "fail", props, [])` on
+`org.freedesktop.systemd1` over its own session bus connection
+(`g_bus_get_sync`, so it works outside a running `App`) with `PIDs`,
+optional `MemoryHigh`, `TasksMax` and `ManagedOOMMemoryPressure=kill`,
+then polls `/proc/<pid>/cgroup` every 25 ms until the unified path ends
+in the unit name. Ghostty's `pre_exec` wait in the child is left out:
+Crystal's `Process` has no hook between fork and exec.
 
 ## Live tests
 

@@ -47,3 +47,15 @@ gdk_unicode_to_keyval
 # gl contexts
 gdk_gl_context_get_current
 gdk_gl_context_get_api
+
+# drag and drop
+GdkDragAction
+gdk_file_list_get_files
+gdk_content_provider_new_for_value
+gdk_paintable_snapshot
+
+# window protocol
+GdkToplevelState
+gdk_toplevel_get_state
+gdk_surface_get_width
+gdk_surface_get_height

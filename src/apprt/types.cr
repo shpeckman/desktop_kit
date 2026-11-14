@@ -13,6 +13,18 @@ module Apprt
     Dark
   end
 
+  # Window decorations: the desktop's choice, drawn by the application
+  # (client), drawn by the compositor (server) or none.
+  #
+  # Server decorations need a compositor with KDE's server decoration
+  # protocol; elsewhere `Server` falls back to `Client`.
+  enum Decoration
+    Auto
+    Client
+    Server
+    None
+  end
+
   # Direction on screen, relative to a split or a window.
   enum Direction
     Left

@@ -23,8 +23,8 @@ and the GLib layer the runtime builds on.
 ## Requirements
 
 - Crystal ≥ 1.23
-- GTK ≥ 4.18 and libadwaita ≥ 1.7 (development packages, found with
-  `pkg-config`)
+- GTK ≥ 4.18, libadwaita ≥ 1.7 and wayland-client (development packages,
+  found with `pkg-config`)
 
 ## Installation
 
@@ -143,6 +143,10 @@ elsewhere.
 | `Surface#cursor=`                | sets the pointer by CSS name (`"text"`, `"pointer"`); `nil` resets |
 | `Surface#mouse_visible=`         | shows or hides the pointer over it (`MouseVisibility`)            |
 | `Surface#ring_bell`              | beeps and marks it until focused (`RingBell`)                     |
+| `Window#toast(message, timeout)` | shows a message at the bottom of the window, 3 seconds by default |
+| `Window#decoration=`             | `Apprt::Decoration`: `Auto`, `Client`, `Server` or `None`         |
+| `Window#background_blur=`        | blurs what lies behind the window's transparent parts             |
+| `Window#urgent=`, `#active?`     | asks for the user's attention while inactive, whether it is active |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -164,6 +168,35 @@ gets the focus; its tab needs attention in the tab bar while not selected.
 Ringing a focused surface only beeps. A window shows its
 `#title_override`, else the title of its selected tab. Assigning `nil` to
 an override restores the default.
+
+Window extras work on Wayland and do nothing elsewhere. `Decoration::Auto`
+uses the compositor's preference where it tells one (KDE's server
+decoration protocol), else client-side decorations; `Server` falls back to
+`Client` without that protocol, and `None` hides them.
+`ToggleWindowDecorations` switches between `None` and the previous choice.
+Blur needs a compositor with `ext-background-effect-v1`; the region follows
+the window's rounded corners. Urgency uses `xdg-activation-v1`: a ringing
+bell in an inactive window makes it urgent, and activating the window
+clears it.
+
+Drag and drop: hovering a split shows a handle at its top; dragging it onto
+another surface, in any tab or window, moves it there, beside the edge
+nearest to the pointer. Files and text dropped on a surface go to
+`Content#on_drop`:
+
+```crystal
+class Editor < Apprt::WidgetContent
+  protected def on_drop(files : Array(Path)) : Bool
+    files.each { |file| open_file(file) }
+    true
+  end
+
+  protected def on_drop(text : String) : Bool
+    insert(text)
+    true
+  end
+end
+```
 
 ### Canvas
 
@@ -401,6 +434,20 @@ reports `READY=1` after its first activation, `RELOADING=1` around each
 reload and `STOPPING=1` when it quits. `Apprt::Systemd.notify(state)` sends
 other states, such as `"STATUS=Indexing"`, and returns `false` outside
 systemd.
+
+`Apprt::Systemd.start_scope` moves a child process into its own transient
+scope of the user's service manager, so that systemd accounts, limits and
+kills it apart from the application:
+
+```crystal
+process = Process.new("make")
+unit = "app-#{app.id}-transient-#{process.pid}.scope"
+Apprt::Systemd.start_scope(process.pid, unit, memory_high: 4_u64 << 30, tasks_max: 512_u64, oom_kill: true)
+```
+
+It returns once the process is in the scope, or `false` after *timeout*
+(250 ms), and raises `Apprt::GLibError` when the session bus or the service
+manager refuses.
 
 ### Variants
 

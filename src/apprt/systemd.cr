@@ -31,6 +31,53 @@ module Apprt
       send(state, pointerof(address).as(LibC::Sockaddr*), length)
     end
 
+    # Moves process *pid* into a new transient scope unit named *unit* of
+    # the user's service manager, such as
+    # `"app-com.example.App-transient-1234.scope"`, so that systemd accounts
+    # and limits its resources apart from the application's.
+    #
+    # *memory_high* sets the scope's `MemoryHigh` in bytes and *tasks_max*
+    # its `TasksMax`; *oom_kill* lets systemd-oomd kill the scope under
+    # memory pressure. Blocks up to *timeout* until the process is in the
+    # scope and returns whether it is. Raises `GLibError` when the session
+    # bus or the service manager fails, such as for a unit name in use.
+    def self.start_scope(pid : Int, unit : String, *, memory_high : UInt64? = nil, tasks_max : UInt64? = nil,
+                         oom_kill : Bool = false, timeout : Time::Span = 250.milliseconds) : Bool
+      properties = [{"PIDs", Variant.new([pid.to_u32])}]
+      memory_high.try { |bytes| properties << {"MemoryHigh", Variant.new(bytes)} }
+      tasks_max.try { |tasks| properties << {"TasksMax", Variant.new(tasks)} }
+      properties << {"ManagedOOMMemoryPressure", Variant.new("kill")} if oom_kill
+      message = Variant.new({unit, "fail", properties, [] of {String, Array({String, Variant})}})
+      bus = GLibError.check! { |error| C.g_bus_get_sync(C::GBusType::Session, Pointer(Void).null, error) }
+      begin
+        reply = GLibError.check! do |error|
+          C.g_dbus_connection_call_sync(bus, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+            "org.freedesktop.systemd1.Manager", "StartTransientUnit", message, Pointer(Void).null,
+            C::GDBusCallFlags::None, -1, Pointer(Void).null, error)
+        end
+        C.g_variant_unref(reply)
+      ensure
+        C.g_object_unref(bus)
+      end
+      deadline = Time.instant + timeout
+      loop do
+        return true if cgroup(pid).try(&.ends_with?("/#{unit}"))
+        return false if Time.instant >= deadline
+        sleep SCOPE_POLL
+      end
+    end
+
+    # Interval of the checks whether a process joined its scope.
+    private SCOPE_POLL = 25.milliseconds
+
+    # Returns the unified cgroup path of process *pid*, or nil when it is
+    # gone.
+    protected def self.cgroup(pid : Int) : String?
+      line = File.open("/proc/#{pid}/cgroup", &.gets)
+      line.try(&.split(':', 3)[2]?)
+    rescue File::Error
+    end
+
     protected def self.ready : Bool
       notify("READY=1")
     end

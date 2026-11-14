@@ -27,6 +27,16 @@ module Apprt
       BothAxes   = 3
     end
 
+    enum GtkAlign : Int32
+      Fill           = 0
+      Start          = 1
+      End            = 2
+      Center         = 3
+      BaselineFill   = 4
+      Baseline       = 4
+      BaselineCenter = 5
+    end
+
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
     fun gtk_widget_unparent(widget : Void*)
@@ -169,5 +179,30 @@ module Apprt
     fun gtk_accelerator_parse(accelerator : UInt8*, accelerator_key : UInt32*, accelerator_mods : GdkModifierType*) : Int32
     fun gtk_accelerator_valid(keyval : UInt32, modifiers : GdkModifierType) : Int32
     fun gtk_accelerator_get_label(accelerator_key : UInt32, accelerator_mods : GdkModifierType) : UInt8*
+    fun gtk_drop_target_new(type_ : GType, actions : GdkDragAction) : Void*
+    fun gtk_drop_target_set_gtypes(self_ : Void*, types : GType*, n_types : LibC::SizeT)
+    fun gtk_drop_target_get_value(self_ : Void*) : Void*
+    fun gtk_drop_target_reject(self_ : Void*)
+    fun gtk_drag_source_new : Void*
+    fun gtk_drag_source_set_actions(source : Void*, actions : GdkDragAction)
+    fun gtk_drag_source_set_content(source : Void*, content : Void*)
+    fun gtk_drag_source_set_icon(source : Void*, paintable : Void*, hot_x : Int32, hot_y : Int32)
+    fun gtk_widget_paintable_new(widget : Void*) : Void*
+    fun gtk_snapshot_new : Void*
+    fun gtk_snapshot_scale(snapshot : Void*, factor_x : Float32, factor_y : Float32)
+    fun gtk_snapshot_free_to_paintable(snapshot : Void*, size : Void*) : Void*
+    fun gtk_overlay_new : Void*
+    fun gtk_overlay_set_child(overlay : Void*, child : Void*)
+    fun gtk_overlay_add_overlay(overlay : Void*, widget : Void*)
+    fun gtk_center_box_new : Void*
+    fun gtk_center_box_set_center_widget(self_ : Void*, child : Void*)
+    fun gtk_image_new_from_icon_name(icon_name : UInt8*) : Void*
+    fun gtk_widget_set_halign(widget : Void*, align : GtkAlign)
+    fun gtk_widget_set_valign(widget : Void*, align : GtkAlign)
+    fun gtk_widget_set_can_target(widget : Void*, can_target : Int32)
+    fun gtk_native_get_surface_transform(self_ : Void*, x : Float64*, y : Float64*)
+    fun gtk_get_major_version : UInt32
+    fun gtk_get_minor_version : UInt32
+    fun gtk_get_micro_version : UInt32
   end
 end

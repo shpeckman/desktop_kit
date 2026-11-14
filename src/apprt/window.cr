@@ -37,8 +37,18 @@ module Apprt
 
     protected getter tab_view : Widget
 
+    # Returns how the window is decorated.
+    getter decoration = Decoration::Auto
+
+    getter? background_blur = false
+
+    # Returns whether the window asks for the user's attention.
+    getter? urgent = false
+
     @closed = false
     @destroy_pending = false
+    @restored_decoration = Decoration::Auto
+    @winproto : Winproto?
 
     protected def initialize(@app : App)
       @widget = Widget.new(C.adw_application_window_new(@app))
@@ -46,6 +56,7 @@ module Apprt
       @tab_view = Widget.new(C.adw_tab_view_new)
       @title_widget = Widget.new(C.adw_window_title_new(Window.default_title, ""))
       @overview = Widget.new(C.adw_tab_overview_new)
+      @toasts = Widget.new(C.adw_toast_overlay_new)
       layout
       install_actions
       connect_signals
@@ -67,6 +78,47 @@ module Apprt
       @title_override = title
       sync_title
       title
+    end
+
+    # Sets how the window is decorated.
+    def decoration=(decoration : Decoration) : Decoration
+      @decoration = decoration
+      sync_decoration
+      decoration
+    end
+
+    # Sets whether the compositor blurs what shows through the translucent
+    # parts of the window. Needs a compositor with the
+    # `ext-background-effect-v1` Wayland protocol; elsewhere it has no
+    # effect.
+    def background_blur=(blur : Bool) : Bool
+      @background_blur = blur
+      sync_blur
+      blur
+    end
+
+    # Sets whether the window asks for the user's attention; ignored while
+    # the window is active, and cleared when it becomes active.
+    def urgent=(urgent : Bool) : Bool
+      urgent = false if active?
+      return urgent if urgent == @urgent
+      @urgent = urgent
+      @winproto.try(&.urgent=(urgent))
+      urgent
+    end
+
+    # Returns whether the window has the keyboard focus of the desktop.
+    def active? : Bool
+      C.gtk_window_is_active(@widget) != 0
+    end
+
+    # Shows *message* in a toast at the bottom of the window for *timeout*,
+    # rounded up to whole seconds.
+    def toast(message : String, timeout : Time::Span = 3.seconds) : Nil
+      return if @closed
+      toast = C.adw_toast_new(message)
+      C.adw_toast_set_timeout(toast, timeout.total_seconds.ceil.to_u32)
+      C.adw_toast_overlay_add_toast(@toasts, toast)
     end
 
     # Returns the tabs in their order on the tab bar.
@@ -214,8 +266,14 @@ module Apprt
       end
     end
 
+    # Hides the decorations, or restores the ones they replaced.
     protected def toggle_decorations : Nil
-      C.gtk_window_set_decorated(@widget, C.gtk_window_get_decorated(@widget) != 0 ? 0 : 1)
+      if @decoration.none?
+        self.decoration = @restored_decoration
+      else
+        @restored_decoration = @decoration
+        self.decoration = :none
+      end
     end
 
     protected def toggle_overview : Nil
@@ -286,7 +344,8 @@ module Apprt
       toolbar = C.adw_toolbar_view_new
       C.adw_toolbar_view_add_top_bar(toolbar, header)
       C.adw_toolbar_view_add_top_bar(toolbar, tab_bar)
-      C.adw_toolbar_view_set_content(toolbar, @tab_view)
+      C.adw_toast_overlay_set_child(@toasts, @tab_view)
+      C.adw_toolbar_view_set_content(toolbar, @toasts)
 
       C.adw_tab_overview_set_view(@overview, @tab_view)
       C.adw_tab_overview_set_child(@overview, toolbar)
@@ -337,6 +396,39 @@ module Apprt
       Signals.notify(@overview, "open", -> { pages_changed })
       Signals.connect(@widget, "close-request", -> : Bool { close; true })
       Signals.connect(@widget, "destroy", -> { destroyed })
+      Signals.connect(@widget, "realize", -> { realized })
+      Signals.connect(@widget, "unrealize", -> { unrealized })
+      Signals.notify(@widget, "is-active", -> { self.urgent = false if active? })
+    end
+
+    # Attaches the Wayland extras to the new surface and applies the
+    # decoration, blur and urgency to it.
+    private def realized : Nil
+      if winproto = Winproto.attach(@widget)
+        @winproto = winproto
+        surface = C.gtk_native_get_surface(@widget)
+        Signals.connect(surface, "layout", ->(_width : Int32, _height : Int32) { sync_blur })
+        Signals.notify(surface, "state", -> { sync_blur })
+        winproto.urgent = true if @urgent
+      end
+      sync_decoration
+    end
+
+    private def unrealized : Nil
+      @winproto.try(&.release)
+      @winproto = nil
+    end
+
+    private def sync_decoration : Nil
+      winproto = @winproto
+      csd = winproto ? winproto.client_side?(@decoration) : !@decoration.none?
+      C.gtk_window_set_decorated(@widget, csd ? 1 : 0)
+      winproto.try(&.sync_decoration(@decoration))
+      sync_blur
+    end
+
+    private def sync_blur : Nil
+      @winproto.try(&.sync_blur(@background_blur, C.gtk_window_get_decorated(@widget) != 0))
     end
 
     private def attached(page : Void*) : Nil

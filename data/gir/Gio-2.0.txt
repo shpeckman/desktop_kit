@@ -81,3 +81,7 @@ g_dbus_node_info_unref
 g_dbus_method_invocation_return_value
 g_dbus_method_invocation_return_dbus_error
 g_dbus_method_invocation_get_sender
+
+# dropped files
+GFile
+g_file_get_path

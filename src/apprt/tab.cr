@@ -113,13 +113,44 @@ module Apprt
 
     # Drops *surface*; dropping the last one closes the tab without asking.
     protected def remove(surface : Surface) : Nil
-      return if @destroyed
+      return if @destroyed || !@view.tree.locate(surface)
+      detach(surface)
+      surface.release
+    end
+
+    # Moves *surface*, from this or another tab, next to *target* on its
+    # *direction* side and focuses it.
+    protected def insert(surface : Surface, target : Surface, direction : Direction) : Nil
+      return if @destroyed || surface == target
+      source = surface.tab || return
+      at = @view.tree.locate(target) || return
+      if source == self
+        old = @view.tree.locate(surface) || return
+        @view.tree = @view.tree.split(at, direction, surface).remove(old)
+      else
+        source.detach(surface, release_widgets: true)
+        surface.tab = self
+        # Detaching closes no surface of this tab, so *at* stays valid.
+        @view.tree = @view.tree.split(at, direction, surface)
+      end
+      activate(surface)
+    end
+
+    # Takes *surface* out of the tree without releasing it; taking the last
+    # one closes the tab without asking. *release_widgets* unparents the
+    # widgets at once, for a surface that joins another tab.
+    protected def detach(surface : Surface, release_widgets : Bool = false) : Nil
       tree = @view.tree
       handle = tree.locate(surface) || return
-      return close_now unless tree.split?
+      surface.tab = nil
+      @view.release_widgets if release_widgets
+      unless tree.split?
+        @view.tree = SplitTree(Surface).new
+        @active = nil
+        return close_now
+      end
       successor = tree.goto(handle, :previous) || tree.goto(handle, :next) if @active == surface
       @view.tree = tree.remove(handle)
-      surface.release
       if successor
         activate(tree.view(successor))
       else

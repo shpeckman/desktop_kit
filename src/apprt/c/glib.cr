@@ -44,6 +44,11 @@ module Apprt
       prev : GList*
     end
 
+    struct GSList
+      data : Void*
+      next_ : GSList*
+    end
+
     fun g_error_free(error : GError*)
     fun g_error_new_literal(domain : UInt32, code : Int32, message : UInt8*) : GError*
     fun g_quark_from_string(string : UInt8*) : UInt32
@@ -52,6 +57,7 @@ module Apprt
     fun g_strdup(str : UInt8*) : UInt8*
     fun g_strfreev(str_array : UInt8**)
     fun g_strv_length(str_array : UInt8**) : UInt32
+    fun g_slist_free(list : GSList*)
     fun g_list_free(list : GList*)
     fun g_list_length(list : GList*) : UInt32
     fun g_idle_add_full(priority : Int32, function : GSourceFunc, data : Void*, notify : GDestroyNotify) : UInt32

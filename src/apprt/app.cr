@@ -40,6 +40,7 @@ module Apprt
 
     @application = Pointer(Void).null
     @provider = Pointer(Void).null
+    @runtime_style = Pointer(Void).null
     @dark_handler = 0_u64
     @running = Atomic(Bool).new(false)
     @ready = false
@@ -291,6 +292,9 @@ module Apprt
       @provider = C.gtk_css_provider_new
       Signals.connect(@provider, "parsing-error", ->(section : Void*, error : Void*) { css_error(section, error) })
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
+      @runtime_style = C.gtk_css_provider_new
+      C.gtk_css_provider_load_from_string(@runtime_style, Surface::STYLE)
+      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_APPLICATION)
       @running.set(true)
       Action.install(@application, :app) { |action| perform(self, action) }
       start_global_shortcuts
@@ -328,6 +332,11 @@ module Apprt
         C.gtk_style_context_remove_provider_for_display(C.gdk_display_get_default, @provider)
         C.g_object_unref(@provider)
         @provider = Pointer(Void).null
+      end
+      unless @runtime_style.null?
+        C.gtk_style_context_remove_provider_for_display(C.gdk_display_get_default, @runtime_style)
+        C.g_object_unref(@runtime_style)
+        @runtime_style = Pointer(Void).null
       end
     end
 

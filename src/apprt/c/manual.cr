@@ -14,12 +14,18 @@ module Apprt
     end
 
     # GLib and GTK constants (GIR <constant>s, which the generator skips);
-    # TYPE_INT is G_TYPE_INT, G_TYPE_MAKE_FUNDAMENTAL(6).
+    # TYPE_INT, TYPE_UINT64 and TYPE_STRING are G_TYPE_MAKE_FUNDAMENTAL(6),
+    # (11) and (16).
     TYPE_INT                            =  24_u64
+    TYPE_UINT64                         =  44_u64
+    TYPE_STRING                         =  64_u64
     PRIORITY_DEFAULT                    =       0
     PRIORITY_DEFAULT_IDLE               =     200
     SOURCE_REMOVE                       =       0
     STYLE_PROVIDER_PRIORITY_APPLICATION = 600_u32
     STYLE_PROVIDER_PRIORITY_USER        = 800_u32
+
+    # The GIR marks GdkFileList's get-type function as introspectable="0".
+    fun gdk_file_list_get_type : GType
   end
 end

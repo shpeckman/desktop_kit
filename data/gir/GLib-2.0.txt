@@ -16,6 +16,8 @@ g_strv_length
 
 # lists
 GList
+GSList
+g_slist_free
 g_list_free
 g_list_length
 

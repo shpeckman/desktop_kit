@@ -59,8 +59,10 @@ module Apprt
     fun g_value_get_object(value : Void*) : Void*
     fun g_value_get_variant(value : Void*) : Void*
     fun g_type_name(type_ : GType) : UInt8*
-    fun g_type_from_name(name : UInt8*) : GType
     fun g_type_is_a(type_ : GType, is_a_type : GType) : Int32
     fun g_type_check_instance_is_a(instance : Void*, iface_type : GType) : Int32
+    fun g_value_get_boxed(value : Void*) : Void*
+    fun g_value_get_uint64(value : Void*) : UInt64
+    fun g_value_set_uint64(value : Void*, v_uint64 : UInt64)
   end
 end

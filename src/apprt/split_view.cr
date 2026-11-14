@@ -66,6 +66,17 @@ module Apprt
       @dividers.clear
     end
 
+    # Takes every widget out of the view now and rebuilds it on an idle, so
+    # a surface can move to another view first.
+    def release_widgets : Nil
+      return if @destroyed
+      release_focus
+      @dividers.each(&.detach)
+      @dividers.clear
+      C.adw_bin_set_child(@root, nil)
+      @rebuild = Idle.add { rebuild } if @rebuild == 0
+    end
+
     private def rebuild : Nil
       @rebuild = 0_u32
       return if @destroyed
@@ -74,6 +85,7 @@ module Apprt
       @dividers.clear
       C.adw_bin_set_child(@root, nil)
       C.adw_bin_set_child(@root, build(@tree.zoomed || SplitTree::ROOT)) unless @tree.empty?
+      @tree.each { |_, surface| surface.draggable = @tree.split? }
       @focus.try(&.grab_focus)
     end
 

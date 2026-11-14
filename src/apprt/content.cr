@@ -26,6 +26,28 @@ module Apprt
     protected def reload : Nil
       on_reload
     end
+
+    # :showdoc:
+    #
+    # Called when the user drops *files* on the surface; returns whether the
+    # content took them. Content takes no drops by default.
+    protected def on_drop(files : Array(Path)) : Bool
+      false
+    end
+
+    # :showdoc:
+    #
+    # Called when the user drops *text* on the surface; returns whether the
+    # content took it.
+    protected def on_drop(text : String) : Bool
+      false
+    end
+
+    # Calls `#on_drop` with an implicit receiver, which reaches overrides
+    # defined outside `Apprt`.
+    protected def drop(data : Array(Path) | String) : Bool
+      on_drop(data)
+    end
   end
 
   # Content showing a GTK widget.

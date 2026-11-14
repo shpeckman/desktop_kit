@@ -1,8 +1,9 @@
 # spec/gtk/window_spec.cr
 require "./harness"
 
+# Returns the surface's host: the content sits in an overlay inside it.
 private def host(surface : Apprt::Surface) : Apprt::Widget
-  surface.content.widget.parent.not_nil!
+  surface.content.widget.parent.try(&.parent).not_nil!
 end
 
 private def paned?(widget : Apprt::Widget?) : Bool
@@ -24,7 +25,7 @@ end
 # Returns whether the pane holding *surface* has its position from the split
 # ratio.
 private def divided?(surface : Apprt::Surface) : Bool
-  paned = surface.content.widget.parent.try(&.parent)
+  paned = host(surface).parent
   return false unless paned?(paned)
   value = Apprt::C::GValue.new
   Apprt::C.g_value_init(pointerof(value), 20_u64) # G_TYPE_BOOLEAN
@@ -518,7 +519,7 @@ describe Apprt::Tab do
       tab.zoomed?.should be_true
       tab.title.should eq "🔍 shell"
       host(second).parent.should eq root
-      first.content.widget.parent.try(&.parent).should be_nil
+      host(first).parent.should be_nil
       trigger(window, Apprt::Action::ToggleSplitZoom.new)
       tab.zoomed?.should be_false
       tab.title.should eq "shell"
