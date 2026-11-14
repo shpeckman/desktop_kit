@@ -83,3 +83,9 @@ adw_alert_dialog_choose
 adw_alert_dialog_choose_finish
 adw_alert_dialog_get_heading
 adw_alert_dialog_get_extra_child
+# command palette
+adw_dialog_new
+adw_dialog_set_child
+adw_dialog_set_title
+adw_dialog_set_content_width
+adw_dialog_set_content_height

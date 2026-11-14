@@ -69,6 +69,13 @@ module Apprt
       raise ArgumentError.new("invalid trigger: key value 0x#{keyval.to_s(16)} with #{mods}") unless accelerator?
     end
 
+    # Returns the trigger of *keyval* with *mods*, or nil when the
+    # combination cannot be a shortcut.
+    protected def self.new?(keyval : UInt32, mods : Mods) : self?
+      new(keyval, mods)
+    rescue ArgumentError
+    end
+
     # Parses *text*: modifiers and a key joined by `+`, such as
     # `"ctrl+shift+t"`; raises `ArgumentError` when *text* is not a trigger.
     #

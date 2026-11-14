@@ -12,6 +12,11 @@ module Apprt
     # Returns the hardware code of the key.
     getter keycode : UInt32
 
+    # Returns the physical key, whatever the layout.
+    def key : Key
+      Key.from_keycode(@keycode)
+    end
+
     # Returns the modifiers held. A modifier key going down counts itself; one
     # going up does not.
     getter mods : Mods

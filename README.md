@@ -147,6 +147,8 @@ elsewhere.
 | `Window#decoration=`             | `Apprt::Decoration`: `Auto`, `Client`, `Server` or `None`         |
 | `Window#background_blur=`        | blurs what lies behind the window's transparent parts             |
 | `Window#urgent=`, `#active?`     | asks for the user's attention while inactive, whether it is active |
+| `Window#confirm(heading, body)`  | asks a yes/no question in a dialog and yields the answer          |
+| `Window#prompt(heading, body)`   | asks for a line of text in a dialog and yields it                 |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -158,6 +160,34 @@ the tab, and closing the last tab closes the window. Once closed,
 Closing asks the user first when a surface it closes has
 `Surface#confirm_close = true`: a split, a tab, a window, all windows or
 the application. `App#quit` never asks.
+
+`Window#confirm` and `Window#prompt` ask the user something in a dialog
+over the window. Their block runs once, after the answer; `#prompt` skips
+it when the user cancels, and neither runs it when the window closes
+first. Both take `confirm:` and `cancel:` button labels; `destructive: true`
+shows the confirm button in red and makes cancel the default; `text:` is
+the prompt's initial text.
+
+```crystal
+window.confirm("Discard Changes?", "The draft will be lost.", confirm: "Discard", destructive: true) do |discard|
+  draft.clear if discard
+end
+window.prompt("Rename Session", text: session.name) { |name| session.name = name }
+```
+
+`ToggleCommandPalette` opens a search over the application's commands,
+`App#commands`, with the shortcut of each; Enter or a click performs the
+selected one on the window, Up and Down move the selection and Escape
+closes it. An `Apprt::Command` has a `title`, an `action` and an optional
+`description` that the search also matches. `Apprt::Command.defaults`
+lists the built-in actions that need no input, and is the set until
+`App#commands=` replaces it:
+
+```crystal
+app.commands = Apprt::Command.defaults + [
+  Apprt::Command.new("Open Settings", OpenSettings.new, "preferences"),
+]
+```
 
 Titles: a surface has a `#title`, set by the application, and a
 `#title_override`, set by the user through `PromptTitle`. A tab shows its
@@ -250,6 +280,7 @@ Call `#ime_cursor(x, y, width, height)` with the text cursor's rectangle
 in framebuffer pixels so the input method places its popup there.
 
 `Apprt::KeyEvent` holds `pressed?`, `keyval` (a GDK keysym), `keycode`,
+`key` (the physical key, an `Apprt::Key`),
 `mods` (the modifiers held, counting a modifier key in its own press but
 not in its release), `consumed_mods` (the modifiers the layout used to
 make the key), `text` (what a press types, `nil` for a release or a
@@ -263,6 +294,23 @@ ends the composition. `Apprt::MouseButtonEvent` holds `pressed?`,
 `mods`; `Apprt::MouseMotionEvent` holds `x`, `y` and `mods`;
 `Apprt::ScrollEvent` holds `dx`, `dy`, `precise?` (pixel deltas from a
 touchpad rather than wheel steps) and `mods`.
+
+`Apprt::Key` names a key by its position on a US keyboard, whatever the
+layout, with the W3C UI Events `code` names: `KeyA` is the key right of
+Caps Lock even where it types `q`. Use it for bindings that follow the
+keyboard's shape, such as WASD movement; `keyval` and `text` follow the
+layout. Keys the table does not know are `Unidentified`.
+
+```crystal
+protected def on_key(event : Apprt::KeyEvent) : Bool
+  case event.key
+  when .key_w? then move(:up)
+  when .key_s? then move(:down)
+  else              return false
+  end
+  true
+end
+```
 
 ### Clipboard
 
@@ -339,7 +387,7 @@ Built-in actions, all nested in `Apprt::Action`:
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`                                                                                                                     |
-| `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)` |
+| `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
 | `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`                  |
 
@@ -368,6 +416,7 @@ replacing the previous set:
 app.bindings = [
   Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
   Apprt::Binding.new("ctrl+shift+e", Apprt::Action::NewSplit.new(:right)),
+  Apprt::Binding.new("ctrl+a>n", Apprt::Action::NewTab.new),
   Apprt::Binding.new("super+grave", Apprt::Action::NewWindow.new, global: true),
 ]
 ```
@@ -375,6 +424,16 @@ app.bindings = [
 Bindings become GTK accelerators: `app` actions work in every window, the
 others act on the focused window, tab or split. A trigger bound twice keeps
 its first binding.
+
+A sequence joins triggers with `>`: `"ctrl+a>n"` performs its action when
+`n` follows `ctrl+a`. After each trigger of a sequence the window takes the
+next key; modifier keys alone do not count, and a key that continues no
+sequence ends it and is dropped. A single trigger that starts a sequence
+is ignored with a warning. `>` stays a key at the start of a trigger or
+after `+`, as in `"ctrl+>"` or `"a>>"`. `Binding#triggers` lists the
+triggers, `#sequence?` tells whether there are several, `#label` joins
+their labels with spaces (`"Ctrl+A N"`) and `#to_s` gives back the text.
+Sequences cannot be global.
 
 `global: true` marks a binding that works while the application is not
 focused. Global bindings go to the desktop's global shortcuts portal

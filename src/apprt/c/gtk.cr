@@ -37,6 +37,20 @@ module Apprt
       BaselineCenter = 5
     end
 
+    enum GtkSelectionMode : Int32
+      None     = 0
+      Single   = 1
+      Browse   = 2
+      Multiple = 3
+    end
+
+    enum GtkPolicyType : Int32
+      Always    = 0
+      Automatic = 1
+      Never     = 2
+      External  = 3
+    end
+
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
     fun gtk_widget_unparent(widget : Void*)
@@ -204,5 +218,26 @@ module Apprt
     fun gtk_get_major_version : UInt32
     fun gtk_get_minor_version : UInt32
     fun gtk_get_micro_version : UInt32
+    fun gtk_search_entry_new : Void*
+    fun gtk_list_box_new : Void*
+    fun gtk_list_box_append(box : Void*, child : Void*)
+    fun gtk_list_box_select_row(box : Void*, row : Void*)
+    fun gtk_list_box_get_selected_row(box : Void*) : Void*
+    fun gtk_list_box_set_selection_mode(box : Void*, mode : GtkSelectionMode)
+    fun gtk_list_box_set_activate_on_single_click(box : Void*, single : Int32)
+    fun gtk_list_box_row_new : Void*
+    fun gtk_list_box_row_set_child(row : Void*, child : Void*)
+    fun gtk_list_box_row_get_index(row : Void*) : Int32
+    fun gtk_scrolled_window_new : Void*
+    fun gtk_scrolled_window_set_child(scrolled_window : Void*, child : Void*)
+    fun gtk_scrolled_window_set_policy(scrolled_window : Void*, hscrollbar_policy : GtkPolicyType, vscrollbar_policy : GtkPolicyType)
+    fun gtk_scrolled_window_set_propagate_natural_height(scrolled_window : Void*, propagate : Int32)
+    fun gtk_scrolled_window_set_max_content_height(scrolled_window : Void*, height : Int32)
+    fun gtk_label_set_xalign(self_ : Void*, xalign : Float32)
+    fun gtk_label_get_text(self_ : Void*) : UInt8*
+    fun gtk_widget_set_margin_start(widget : Void*, margin : Int32)
+    fun gtk_widget_set_margin_end(widget : Void*, margin : Int32)
+    fun gtk_widget_set_margin_top(widget : Void*, margin : Int32)
+    fun gtk_widget_set_margin_bottom(widget : Void*, margin : Int32)
   end
 end

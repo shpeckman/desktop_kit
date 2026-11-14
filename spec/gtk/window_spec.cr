@@ -329,7 +329,7 @@ describe Apprt::Window do
       respond(window, "cancel")
       window.closed?.should be_false
       window.close
-      respond(window, "close")
+      respond(window, "ok")
       window.closed?.should be_true
       app.windows.should be_empty
     end
@@ -351,7 +351,7 @@ describe Apprt::Window do
       window.tabs.should eq [first, second]
       second.close
       settle
-      respond(window, "close")
+      respond(window, "ok")
       second.closed?.should be_true
       window.tabs.should eq [first]
       first.close
@@ -577,14 +577,51 @@ describe Apprt::Tab do
       respond(window, "cancel")
       first.closed?.should be_false
       first.close
-      respond(window, "close")
+      respond(window, "ok")
       first.closed?.should be_true
       tab.surfaces.should eq [second]
       second.confirm_close = true
       second.close
       heading(window).should eq "Close Tab?"
-      respond(window, "close")
+      respond(window, "ok")
       window.closed?.should be_true
+    end
+  end
+
+  it "asks the user to confirm" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      answers = [] of Bool
+      window.confirm("Discard Changes?", "The draft will be lost.", confirm: "Discard", destructive: true) { |yes| answers << yes }
+      settle
+      heading(window).should eq "Discard Changes?"
+      respond(window, "ok")
+      window.confirm("Proceed?") { |yes| answers << yes }
+      settle
+      respond(window, "cancel")
+      answers.should eq [true, false]
+    end
+  end
+
+  it "prompts the user for text" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      texts = [] of String
+      window.prompt("Rename", text: "old") { |text| texts << text }
+      settle
+      heading(window).should eq "Rename"
+      entry = Apprt::C.adw_alert_dialog_get_extra_child(dialog(window))
+      Apprt::Native.string?(Apprt::C.gtk_editable_get_text(entry)).should eq "old"
+      Apprt::C.gtk_editable_set_text(entry, "new")
+      respond(window, "ok")
+      window.prompt("Rename") { |text| texts << text }
+      settle
+      respond(window, "cancel")
+      texts.should eq ["new"]
     end
   end
 end

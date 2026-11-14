@@ -51,6 +51,8 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
     cancellable.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
   `Decoration`, `Direction`, `Mods` (public).
+- `src/apprt/key.cr` - `Key` (public): physical keys by evdev code;
+  `Key.from_keycode` (`:nodoc:`).
 - `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
   model the split view renders.
 - `src/apprt/ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
@@ -67,10 +69,12 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt/trigger.cr` - `Trigger` (public): key combinations.
 - `src/apprt/app.cr` - `App` (public): lifecycle, signals, CSS, appearance,
   `perform` and the built-in app action overloads.
-- `src/apprt/binding.cr` - `Binding` (public); reopens `App` with
-  `bindings` and the accelerator sync.
-- `src/apprt/dialogs.cr` - `Dialogs` (`:nodoc:`): the close confirmation and
-  title prompt alert dialogs.
+- `src/apprt/binding.cr` - `Binding` (public): triggers and sequences;
+  reopens `App` with `bindings`, the accelerator sync, the sequence table
+  and `perform_in`.
+- `src/apprt/dialogs.cr` - `Dialogs` (`:nodoc:`): the confirm and prompt
+  alert dialogs behind `Window#confirm`/`#prompt`, the close confirmation
+  and the title prompt.
 - `src/apprt/content.cr` - `Content` (with the `on_drop` hooks),
   `WidgetContent`, `SurfaceContext` (public).
 - `src/apprt/input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
@@ -84,8 +88,12 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `SplitTree(Surface)` as nested `GtkPaned`.
 - `src/apprt/tab.cr` - `Tab` (public); reopens `App` with the tab action
   overloads.
-- `src/apprt/window.cr` - `Window` (public): widget tree, menu, signals;
-  reopens `App` with the window action overloads.
+- `src/apprt/window.cr` - `Window` (public): widget tree, menu, signals,
+  the key sequence controller; reopens `App` with the window action
+  overloads.
+- `src/apprt/command_palette.cr` - `Command` (public), `CommandPalette`
+  (`:nodoc:`); reopens `App` with `commands` and the
+  `ToggleCommandPalette` overload.
 - `src/apprt/notifications.cr` - `Notifications` (`:nodoc:`): a surface's
   sent notifications; reopens `App` with `notify` and the
   `DesktopNotification` and `PresentSurface` overloads.
@@ -107,8 +115,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   resolves with `dlsym`, `GValue` size, a GType round trip), the glib layer
   (`glib_spec.cr`, signals on Gio objects), `Variant`, `Systemd`
   (`with_notify_socket` in `spec/spec_helper.cr`), actions (codecs, detailed
-  names, registry), triggers, `SplitTree` (Ghostty's diagram cases) and
-  the `Notifications` bookkeeping and portal request paths.
+  names, registry), triggers and binding sequences, `Key`, `Command`,
+  `SplitTree` (Ghostty's diagram cases) and the `Notifications`
+  bookkeeping and portal request paths.
 - `spec/gtk/` - specs needing a display. `harness.cr` (`GtkHarness.start` in
   `before_all`) runs a private headless `sway` (`WLR_BACKENDS=headless`,
   `WLR_RENDERER=pixman`, one 1280x800 output at scale 1, floating windows,
@@ -130,7 +139,10 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   directories: names nobody owns, such as the desktop portal or the
   accessibility bus, fail with `ServiceUnknown` instead of starting the
   host's services.
-  `window_spec.cr` covers windows, tabs, splits, titles and dialogs;
+  `window_spec.cr` covers windows, tabs, splits, titles and dialogs
+  (`Window#confirm`/`#prompt` too); `command_palette_spec.cr` the palette;
+  `sequence_spec.cr` key sequences, emitting `key-pressed` on the window's
+  `@sequence_keys`;
   `canvas_spec.cr` the canvas, pointer, bell and clipboard;
   `notifications_spec.cr` notifications against `FakeNotifications`
   (`fake_notifications.cr`); `ipc_spec.cr` IPC round trips;
@@ -261,6 +273,24 @@ Internal contracts of `src/apprt/glib/`:
   focus widget upward. The previous set is cleared first. Global bindings
   get no accelerator; `apply_bindings` hands them to `GlobalShortcuts`
   (see Global shortcuts).
+- Sequences get no accelerator either. `apply_bindings` fills
+  `@sequences` (full trigger list → action, first binding wins) and
+  `@sequence_prefixes` (every proper prefix); a single trigger that equals
+  a prefix is skipped with a warning. `Binding.parse` splits at a `>` that
+  follows a key and not a `+`.
+- Each `Window` adds a capture-phase `GtkEventControllerKey`
+  (`@sequence_keys`) first, so it sees keys before the focus widget.
+  `sequence_key` returns false at once while nothing is pending and the
+  app has no sequences, skips modifier keys, and tries the trigger with
+  the held mods, then without the consumed mods (`shift+>` arrives as
+  `>` with Shift). A completed sequence clears `@sequence` and performs
+  through `App#perform_in(window, action)`, which resolves the target by
+  scope like global bindings do; a prefix extends `@sequence`; any other
+  key while pending clears it and is consumed. There is no timeout.
+  Whether GTK's application accelerators run before the capture phase,
+  for a key that is both a sequence's second trigger and an accelerator,
+  is not covered: the specs emit `key-pressed` directly.
+- `Trigger.new?` (protected) returns nil where `.new` raises.
 - `Trigger` normalizes the keyval to lower case and validates it with
   `gtk_accelerator_valid` plus a name round trip (unnamed keyvals such as
   emoji have no accelerator). Accelerator names and labels come from GTK;
@@ -346,8 +376,20 @@ Internals of `window.cr`, `tab.cr`, `surface.cr`, `split_view.cr` and
 - Tab resize turns `ResizeSplit`'s pixels into a tree fraction: amount
   divided by the root's width or height, negative toward left and up.
 - `Dialogs` runs `AdwAlertDialog` with `adw_alert_dialog_choose`; the
-  callback closure lives in `Handles`. Close confirmation responses are
-  `cancel`/`close`; title prompts `cancel`/`ok`.
+  callback closure lives in `Handles`. `Dialogs.confirm` and
+  `Dialogs.prompt` answer with `cancel`/`ok`; `confirm_close` and
+  `prompt_title` build on them. The prompt's entry is the alert's extra
+  child and activates the default response.
+- `CommandPalette` (after Ghostty's `command_palette.zig`) is an
+  `AdwDialog` with a `GtkSearchEntry` over a browse-mode `GtkListBox`, one
+  row per command in `App#commands` order, so a row's index is its
+  command. `search-changed` hides rows whose `Command#matches?` fails and
+  selects the first shown; a key controller on the entry moves the
+  selection with Up/Down; `activate`, `row-activated` and `stop-search`
+  close it (`adw_dialog_force_close`) before performing through
+  `perform_in`. Shortcut labels come from the first local binding with the
+  same `detailed_name`. `Window#toggle_command_palette` builds a new
+  palette each time, so `commands=` needs no sync; `closed` marks it done.
 - Bell: `Surface#ring_bell` beeps through the native `GdkSurface`; when
   the surface lacks the focus it sets `bell_ringing?` and calls
   `Tab#bell`, which sets the page's `needs-attention` unless selected and
@@ -387,6 +429,9 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
   `gdk_display_map_keycode` at the event's layout, level 0. Modifier keys
   adjust `mods` for themselves (`MODIFIER_KEYS`). When `#on_key` uses a key
   during a composition the context is reset and `#on_preedit(nil)` sent.
+- `KeyEvent#key` is `Key.from_keycode`: on Linux an X11/XKB keycode is the
+  evdev code plus 8, and `Key`'s values are evdev codes, so the table needs
+  no lookup.
 - `Mods.from_gdk`/`#to_gdk` (`:nodoc:`, `types.cr`) map GDK modifier
   masks; the table is module-level `MODS_GDK` because an enum body cannot
   hold a constant.

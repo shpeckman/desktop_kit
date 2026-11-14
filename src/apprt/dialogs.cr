@@ -49,36 +49,54 @@ module Apprt
       nil
     end
 
-    # Asks whether to close what *kind* names, over the window of *parent*,
-    # and yields `true` when the user agrees.
-    def self.confirm_close(parent : Widget, kind : Close, &done : Bool ->) : Nil
-      dialog = C.adw_alert_dialog_new(kind.heading, kind.body)
-      C.adw_alert_dialog_add_response(dialog, "cancel", "Cancel")
-      C.adw_alert_dialog_add_response(dialog, "close", kind.verb)
-      C.adw_alert_dialog_set_response_appearance(dialog, "close", C::AdwResponseAppearance::Destructive)
-      C.adw_alert_dialog_set_default_response(dialog, "cancel")
+    # Asks *heading* and *body* over the window of *parent* and yields
+    # whether the user picked *confirm* over *cancel*. A *destructive*
+    # confirmation is shown in red and is not the default.
+    def self.confirm(parent : Widget, heading : String, body : String?, confirm : String, cancel : String,
+                     destructive : Bool, &done : Bool ->) : Nil
+      dialog = C.adw_alert_dialog_new(heading, body)
+      C.adw_alert_dialog_add_response(dialog, "cancel", cancel)
+      C.adw_alert_dialog_add_response(dialog, "ok", confirm)
+      appearance = destructive ? C::AdwResponseAppearance::Destructive : C::AdwResponseAppearance::Suggested
+      C.adw_alert_dialog_set_response_appearance(dialog, "ok", appearance)
+      C.adw_alert_dialog_set_default_response(dialog, destructive ? "cancel" : "ok")
       C.adw_alert_dialog_set_close_response(dialog, "cancel")
-      choose(dialog, parent) { |response| done.call(response == "close") }
+      choose(dialog, parent) { |response| done.call(response == "ok") }
+    end
+
+    # Asks for a line of text, starting from *text*, and yields the entered
+    # text. Yields nothing when the user cancels.
+    def self.prompt(parent : Widget, heading : String, body : String?, text : String, confirm : String,
+                    cancel : String, &done : String ->) : Nil
+      dialog = C.adw_alert_dialog_new(heading, body)
+      entry = C.gtk_entry_new
+      C.gtk_editable_set_text(entry, text)
+      C.gtk_entry_set_activates_default(entry, 1)
+      C.adw_alert_dialog_set_extra_child(dialog, entry)
+      C.adw_alert_dialog_add_response(dialog, "cancel", cancel)
+      C.adw_alert_dialog_add_response(dialog, "ok", confirm)
+      C.adw_alert_dialog_set_response_appearance(dialog, "ok", C::AdwResponseAppearance::Suggested)
+      C.adw_alert_dialog_set_default_response(dialog, "ok")
+      C.adw_alert_dialog_set_close_response(dialog, "cancel")
+      C.adw_dialog_set_focus(dialog, entry)
+      choose(dialog, parent) do |response|
+        done.call(Native.string?(C.gtk_editable_get_text(entry)) || "") if response == "ok"
+      end
+    end
+
+    # Asks whether to close what *kind* names and yields `true` when the
+    # user agrees.
+    def self.confirm_close(parent : Widget, kind : Close, &done : Bool ->) : Nil
+      confirm(parent, kind.heading, kind.body, kind.verb, "Cancel", destructive: true, &done)
     end
 
     # Asks for a new title of what *kind* names, starting from *current*, and
     # yields it, or `nil` for a blank entry. Yields nothing when the user
     # cancels.
     def self.prompt_title(parent : Widget, kind : Action::PromptTitle::Kind, current : String?, &done : String? ->) : Nil
-      dialog = C.adw_alert_dialog_new("Change #{kind} Title", "Leave blank to restore the default title.")
-      entry = C.gtk_entry_new
-      C.gtk_editable_set_text(entry, current || "")
-      C.gtk_entry_set_activates_default(entry, 1)
-      C.adw_alert_dialog_set_extra_child(dialog, entry)
-      C.adw_alert_dialog_add_response(dialog, "cancel", "Cancel")
-      C.adw_alert_dialog_add_response(dialog, "ok", "OK")
-      C.adw_alert_dialog_set_response_appearance(dialog, "ok", C::AdwResponseAppearance::Suggested)
-      C.adw_alert_dialog_set_default_response(dialog, "ok")
-      C.adw_alert_dialog_set_close_response(dialog, "cancel")
-      C.adw_dialog_set_focus(dialog, entry)
-      choose(dialog, parent) do |response|
-        next unless response == "ok"
-        title = (Native.string?(C.gtk_editable_get_text(entry)) || "").strip
+      prompt(parent, "Change #{kind} Title", "Leave blank to restore the default title.", current || "", "OK",
+        "Cancel") do |text|
+        title = text.strip
         done.call(title.empty? ? nil : title)
       end
     end

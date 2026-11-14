@@ -64,4 +64,37 @@ describe Apprt::Binding do
   it "raises on an invalid trigger" do
     expect_raises(ArgumentError, %(invalid trigger "ctrl+nonsense")) { Apprt::Binding.new("ctrl+nonsense", Apprt::Action::Quit.new) }
   end
+
+  it "parses trigger sequences" do
+    binding = Apprt::Binding.new("ctrl+a>n", Apprt::Action::NewTab.new)
+    binding.sequence?.should be_true
+    binding.triggers.should eq [Apprt::Trigger.parse("ctrl+a"), Apprt::Trigger.parse("n")]
+    binding.trigger.should eq Apprt::Trigger.parse("ctrl+a")
+    binding.to_s.should eq "ctrl+a>n"
+    binding.label.should eq "Ctrl+A N"
+    Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new).sequence?.should be_false
+  end
+
+  it "keeps > as a key where no trigger ends before it" do
+    Apprt::Binding.new("ctrl+>", Apprt::Action::Quit.new).triggers.should eq [Apprt::Trigger.parse("ctrl+>")]
+    Apprt::Binding.new(">", Apprt::Action::Quit.new).triggers.should eq [Apprt::Trigger.parse(">")]
+    Apprt::Binding.new("a>>", Apprt::Action::Quit.new).triggers.should eq [Apprt::Trigger.parse("a"), Apprt::Trigger.parse(">")]
+    Apprt::Binding.new("ctrl+>>a", Apprt::Action::Quit.new).triggers.should eq [Apprt::Trigger.parse("ctrl+>"), Apprt::Trigger.parse("a")]
+  end
+
+  it "builds sequences from triggers" do
+    triggers = [Apprt::Trigger.parse("ctrl+a"), Apprt::Trigger.parse("ctrl+b")]
+    Apprt::Binding.new(triggers, Apprt::Action::Quit.new).to_s.should eq "ctrl+a>ctrl+b"
+    expect_raises(ArgumentError, "empty binding") { Apprt::Binding.new([] of Apprt::Trigger, Apprt::Action::Quit.new) }
+  end
+
+  it "rejects global sequences" do
+    expect_raises(ArgumentError, "sequences cannot be global") do
+      Apprt::Binding.new("ctrl+a>n", Apprt::Action::NewWindow.new, global: true)
+    end
+  end
+
+  it "raises on an invalid trigger in a sequence" do
+    expect_raises(ArgumentError, %(invalid trigger "ctrl+nonsense")) { Apprt::Binding.new("ctrl+a>ctrl+nonsense", Apprt::Action::Quit.new) }
+  end
 end

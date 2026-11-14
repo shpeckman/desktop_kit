@@ -49,6 +49,9 @@ module Apprt
     @destroy_pending = false
     @restored_decoration = Decoration::Auto
     @winproto : Winproto?
+    @palette : CommandPalette?
+    @sequence = [] of Trigger
+    @sequence_keys = Pointer(Void).null
 
     protected def initialize(@app : App)
       @widget = Widget.new(C.adw_application_window_new(@app))
@@ -110,6 +113,39 @@ module Apprt
     # Returns whether the window has the keyboard focus of the desktop.
     def active? : Bool
       C.gtk_window_is_active(@widget) != 0
+    end
+
+    # Asks the user *heading*, explained by *body*, in a dialog over the
+    # window and yields whether they picked *confirm* rather than *cancel*.
+    #
+    # A *destructive* choice shows in red and is not the default. The block
+    # runs once, after the user answers; it does not run when the window
+    # closes first.
+    #
+    # ```
+    # window.confirm("Discard Changes?", "The draft will be lost.", confirm: "Discard", destructive: true) do |discard|
+    #   draft.clear if discard
+    # end
+    # ```
+    def confirm(heading : String, body : String? = nil, *, confirm : String = "OK", cancel : String = "Cancel",
+                destructive : Bool = false, &block : Bool ->) : Nil
+      return if @closed
+      Dialogs.confirm(@widget, heading, body, confirm, cancel, destructive, &block)
+    end
+
+    # Asks the user for a line of text in a dialog over the window, starting
+    # from *text*, and yields what they entered when they pick *confirm*.
+    #
+    # The block does not run when the user cancels or the window closes
+    # first.
+    #
+    # ```
+    # window.prompt("Rename Session", text: session.name) { |name| session.name = name }
+    # ```
+    def prompt(heading : String, body : String? = nil, *, text : String = "", confirm : String = "OK",
+               cancel : String = "Cancel", &block : String ->) : Nil
+      return if @closed
+      Dialogs.prompt(@widget, heading, body, text, confirm, cancel, &block)
     end
 
     # Shows *message* in a toast at the bottom of the window for *timeout*,
@@ -276,6 +312,23 @@ module Apprt
       end
     end
 
+    # Opens a command palette over *commands*, showing the shortcuts of
+    # *bindings*, or closes the open one.
+    protected def toggle_command_palette(commands : Array(Command), bindings : Array(Binding)) : Nil
+      if (palette = @palette) && !palette.closed?
+        palette.close
+      else
+        palette = CommandPalette.new(self, @app, commands, bindings)
+        palette.present
+        @palette = palette
+      end
+    end
+
+    # Returns the open command palette.
+    protected def command_palette : CommandPalette?
+      @palette.try { |palette| palette unless palette.closed? }
+    end
+
     protected def toggle_overview : Nil
       C.adw_tab_overview_set_open(@overview, C.adw_tab_overview_get_open(@overview) != 0 ? 0 : 1)
     end
@@ -386,7 +439,40 @@ module Apprt
       C.g_object_unref(group)
     end
 
+    # Follows the key sequences: a key that starts or continues one is
+    # taken, one that completes it performs its action, and any other key
+    # while one is pending ends it and is dropped.
+    private def sequence_key(keyval : UInt32, state : UInt32) : Bool
+      return false if @sequence.empty? && !@app.sequences?
+      event = C.gtk_event_controller_get_current_event(@sequence_keys)
+      return false if !event.null? && C.gdk_key_event_is_modifier(event) != 0
+      mods = Mods.from_gdk(C::GdkModifierType.new(state))
+      consumed = event.null? ? Mods::None : Mods.from_gdk(C.gdk_key_event_get_consumed_modifiers(event))
+      {mods, mods & ~consumed}.each do |held|
+        trigger = Trigger.new?(keyval, held) || next
+        keys = @sequence + [trigger]
+        case match = @app.sequence_match(keys)
+        when Action
+          @sequence.clear
+          Log.warn { "binding #{keys.join('>')}: action #{match.detailed_name} not handled" } unless @app.perform_in(self, match)
+          return true
+        when true
+          @sequence = keys
+          return true
+        end
+      end
+      return false if @sequence.empty?
+      @sequence.clear
+      true
+    end
+
     private def connect_signals : Nil
+      @sequence_keys = C.gtk_event_controller_key_new
+      C.gtk_event_controller_set_propagation_phase(@sequence_keys, C::GtkPropagationPhase::Capture)
+      Signals.connect(@sequence_keys, "key-pressed", ->(keyval : UInt32, _keycode : UInt32, state : UInt32) : Bool {
+        sequence_key(keyval, state)
+      })
+      @widget.add_controller(@sequence_keys)
       Signals.connect(@tab_view, "page-attached", ->(page : Void*, _position : Int32) { attached(page) })
       Signals.notify(@tab_view, "n-pages", -> { pages_changed })
       Signals.notify(@tab_view, "selected-page", -> { selected_changed })

@@ -34,6 +34,9 @@ module Apprt
     # Shows or hides the overview of the window's tabs.
     Apprt.action ToggleTabOverview, "toggle-tab-overview", scope: :window
 
+    # Opens the command palette of the window, or closes it when open.
+    Apprt.action ToggleCommandPalette, "toggle-command-palette", scope: :window
+
     # Focuses the previous or next window.
     Apprt.action GotoWindow, "goto-window", scope: :window, payload: {direction: Direction} do
       enum Direction

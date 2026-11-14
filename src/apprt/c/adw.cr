@@ -99,5 +99,10 @@ module Apprt
     fun adw_alert_dialog_choose_finish(self_ : Void*, result : Void*) : UInt8*
     fun adw_alert_dialog_get_heading(self_ : Void*) : UInt8*
     fun adw_alert_dialog_get_extra_child(self_ : Void*) : Void*
+    fun adw_dialog_new : Void*
+    fun adw_dialog_set_child(self_ : Void*, child : Void*)
+    fun adw_dialog_set_title(self_ : Void*, title : UInt8*)
+    fun adw_dialog_set_content_width(self_ : Void*, content_width : Int32)
+    fun adw_dialog_set_content_height(self_ : Void*, content_height : Int32)
   end
 end
