@@ -38,6 +38,9 @@ g_menu_new
 g_menu_append
 g_menu_append_section
 
+# launching
+g_app_launch_context_get_startup_notify_id
+
 # notifications and icons
 g_notification_new
 g_notification_set_title

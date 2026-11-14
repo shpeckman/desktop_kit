@@ -8,9 +8,8 @@ desktop notifications, global shortcuts, DBus IPC and systemd integration.
 Status: early. This release holds the application lifecycle, windows with
 tabs and splits of surfaces, an OpenGL drawing canvas with keyboard, input
 method and pointer input, the clipboard, actions with local and global key
-bindings, desktop notifications, IPC, configuration reload and the GLib
-layer the runtime builds on. The built-in action `OpenUrl` is not carried
-out yet.
+bindings, desktop notifications, opening URLs, IPC, configuration reload
+and the GLib layer the runtime builds on.
 
 `examples/` holds runnable programs; `make examples` builds them into
 `bin/`:
@@ -96,9 +95,10 @@ These methods are callable from any thread:
 - `#post { ... }` runs the block on the GTK thread at the next main loop
   iteration, in posting order. Blocks posted before `#run` run once the
   application is active; blocks still queued when it quits are dropped.
-- `#quit` closes the application windows and quits; `#reload` calls
-  `on_reload`, then `Content#on_reload` of every surface's content. Both do
-  nothing unless `#running?`.
+- `#quit` closes the application windows and quits at the next main loop
+  iteration, so the windows outlive the hook or handler that calls it.
+  `#reload` calls `on_reload`, then `Content#on_reload` of every surface's
+  content. Both do nothing unless `#running?`.
 - `#css=` sets the application style sheet, applied above the theme;
   parse errors are logged as warnings.
 - `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
@@ -318,7 +318,11 @@ fullscreen. `SetWindowTheme` sets the appearance of the whole application.
 `GotoTab` counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and
 `LAST`; previous and next wrap around, as `MoveTab` does.
 `PresentSurface` presents the surface with that `Surface#id` and ignores
-an unknown one; `DesktopNotification` is `App#notify`.
+an unknown one; `DesktopNotification` is `App#notify`. `OpenUrl` opens
+the URL with the desktop's default handler through the OpenURI portal, and
+with `xdg-open` when no portal answers or the request fails; file paths
+and `file://` URLs always go to `xdg-open`. A request the user cancels
+opens nothing.
 `direction` is an `Apprt::Direction` (`Left`, `Right`, `Up`, `Down`) unless
 the action lists its own values.
 

@@ -111,6 +111,7 @@ module Apprt
     fun g_menu_new : Void*
     fun g_menu_append(menu : Void*, label : UInt8*, detailed_action : UInt8*)
     fun g_menu_append_section(menu : Void*, label : UInt8*, section : Void*)
+    fun g_app_launch_context_get_startup_notify_id(context : Void*, info : Void*, files : GList*) : UInt8*
     fun g_notification_new(title : UInt8*) : Void*
     fun g_notification_set_title(notification : Void*, title : UInt8*)
     fun g_notification_set_body(notification : Void*, body : UInt8*)

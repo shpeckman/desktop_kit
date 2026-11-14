@@ -85,6 +85,8 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   and the host registry.
 - `src/apprt/global_shortcuts.cr` - `GlobalShortcuts` (`:nodoc:`): the
   global bindings' portal session.
+- `src/apprt/open_uri.cr` - `OpenURI` (`:nodoc:`): `OpenUrl` through the
+  OpenURI portal or `xdg-open`.
 - `examples/` - `hello.cr`, `canvas.cr`, `ipc.cr` (`make examples`). They
   declare their own `lib LibGtk` / `lib LibGL` funs rather than use the
   `:nodoc:` `Apprt::C`.
@@ -124,7 +126,8 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `notifications_spec.cr` notifications against `FakeNotifications`
   (`fake_notifications.cr`); `ipc_spec.cr` IPC round trips;
   `global_shortcuts_spec.cr` global bindings against `FakePortal`
-  (`fake_portal.cr`); `reload_spec.cr` content reload.
+  (`fake_portal.cr`); `reload_spec.cr` content reload; `open_url_spec.cr`
+  `OpenUrl` against `FakePortal` and a fake `xdg-open` first on `PATH`.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -188,8 +191,8 @@ Internal contracts of `src/apprt/glib/`:
   schedule the next one. Exceptions in posted blocks are logged
   (`"posted block"`). `dispatch` runs inline on the UI thread and posts
   elsewhere. `enter` drops the queue when the run ends.
-- `App` state mutators (`quit`, `reload`, `css=`, `appearance=`) store and
-  `dispatch`, and act only while `running?` (set in startup before the CSS
+- `App` state mutators (`reload`, `css=`, `appearance=`) store and
+  `dispatch`, `quit` always posts, and all act only while `running?` (set in startup before the CSS
   and appearance are applied, cleared first thing in shutdown). Stored CSS
   and appearance are applied at startup.
 - Startup order: CSS provider (priority `STYLE_PROVIDER_PRIORITY_USER`,
@@ -197,6 +200,9 @@ Internal contracts of `src/apprt/glib/`:
   appearance, `notify::dark` handler, `on_startup`, first `on_color_scheme`.
   The appearance is applied before the handler connects, so no change is
   reported twice.
+- `quit` posts even on the UI thread: called inline from `new_surface`
+  (inside `Window#open_tab`) it destroyed the window under the caller, and
+  `adw_tab_view_insert` then failed its `ADW_IS_TAB_VIEW` assertion.
 - `quit` destroys only `gtk_application_get_windows` (Ghostty: destroying
   every toplevel double-frees fcitx windows), then `g_application_quit`.
 - `run` passes GApplication only the program name: without `HANDLES_OPEN`
@@ -456,6 +462,39 @@ Ported from Ghostty's `src/apprt/gtk/class/global_shortcuts.zig` and
   shortcuts (mutex-guarded), emits `Response` to the caller after
   replying, and `#activate(id)` emits `Activated`. `FakePortal.poll` waits
   without iterating a main loop, for checks after the app stopped.
+
+## Opening URLs
+
+Ported from Ghostty's `src/apprt/gtk/portal/OpenURI.zig`, `openUrl` in
+`src/apprt/gtk/class/application.zig` and `src/os/open.zig`:
+- `App#perform(App, OpenUrl)` creates one `OpenURI` on GApplication's bus
+  connection; `release_open_uri` at shutdown cancels its pending requests.
+- Paths and `file://` URLs go straight to `xdg-open` (the portal's
+  `OpenURI` refuses them). Others call `org.freedesktop.portal.OpenURI.OpenURI`
+  `(ssa{sv})` with parent window `""` and options `handle_token`,
+  `writable=false`, `ask=false` and `activation_token`, the startup notify
+  id of GDK's app launch context (the XDG activation token on Wayland), so
+  the opened app can take the focus.
+- Response 1 (`Portal::CANCELLED`) opens nothing; any other failure, call
+  errors included, runs `xdg-open`. `OpenURI.xdg_open` closes its output,
+  and a fiber in the default execution context (off the GTK thread) waits
+  for it and logs its error output on failure.
+- Ghostty's 30-second cleanup timer, which also falls back to `xdg-open`,
+  is left out: it would open the URL twice while the portal still waits
+  on the user's choice of app.
+- `Portal::Request#call` ignores the reply's request path: since
+  xdg-desktop-portal 0.9 it is always the predicted one, which Ghostty
+  re-subscribes to only for older portals.
+
+## Live tests
+
+`test/` is a separate shard, `apprt-test`, that runs apprt on the user's
+real KDE Plasma desktop through `livetest` (`../../livetest` via
+`test/shard.override.yml`), for what only a real desktop can show: the
+global shortcuts portal and kglobalaccel. See `test/README.md` and
+`test/AGENTS.md`. Never run `make -C test test` or `make -C test setup`
+unasked: mode `kde` takes over the keyboard and the pointer, and setup
+waits for the user to confirm KDE's shortcut dialog.
 
 ## Bindings
 

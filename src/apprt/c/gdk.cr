@@ -91,6 +91,7 @@ module Apprt
     fun gdk_display_get_primary_clipboard(display : Void*) : Void*
     fun gdk_display_map_keycode(display : Void*, keycode : UInt32, keys : GdkKeymapKey**, keyvals : UInt32**, n_entries : Int32*) : Int32
     fun gdk_display_beep(display : Void*)
+    fun gdk_display_get_app_launch_context(display : Void*) : Void*
     fun gdk_clipboard_set_text(clipboard : Void*, text : UInt8*)
     fun gdk_clipboard_read_text_async(clipboard : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
     fun gdk_clipboard_read_text_finish(clipboard : Void*, result : Void*, error : GError**) : UInt8*

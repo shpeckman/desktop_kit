@@ -11,9 +11,12 @@ module Apprt
     OBJECT_PATH    = "/org/freedesktop/portal/desktop"
     REQUEST_PREFIX = "#{OBJECT_PATH}/request/"
 
+    # The reason a request fails when the user cancelled it.
+    CANCELLED = "the request was cancelled"
+
     # Reasons of the non-zero response codes.
     private FAILURES = {
-      1_u32 => "the request was cancelled",
+      1_u32 => CANCELLED,
       2_u32 => "the request ended unexpectedly",
     }
 
@@ -64,8 +67,10 @@ module Apprt
 
       @done : Proc(Variant?, String?, Nil)
       @subscription = 0_u32
+      # Whether the request answered, failed or was cancelled.
+      getter? finished = false
+
       @cancellable : Void*
-      @finished = false
 
       private RESPONSE = ->(connection : Void*, sender : UInt8*, path : UInt8*, interface : UInt8*, signal : UInt8*, parameters : Void*, data : Void*) do
         begin

@@ -4,6 +4,8 @@ require "./harness"
 module GtkActionSpecs
   Apprt.action Refresh, "spec-gtk-refresh", payload: {force: Bool}
 
+  Apprt.action Ignored, "spec-gtk-ignored", payload: {text: String}
+
   Apprt.action Pick, "spec-gtk-pick", payload: {color: Color} do
     enum Color
       Red
@@ -67,13 +69,13 @@ describe "Apprt actions" do
   it "warns about actions it does not handle or cannot decode" do
     app = ActionApp.new
     app.on_activated = ->(app : TestApp) do
-      activate(app, "open-url", Apprt::Variant.new("https://example.org"))
+      activate(app, "spec-gtk-ignored", Apprt::Variant.new("x"))
       activate(app, "spec-gtk-pick", Apprt::Variant.new("purple"))
       app.quit
     end
     Log.capture("apprt") do |logs|
       run_app(app).should eq 0
-      logs.check(:warn, "action app.open-url('https://example.org') not handled")
+      logs.check(:warn, "action app.spec-gtk-ignored::x not handled")
       logs.check(:warn, /\Aaction app\.spec-gtk-pick: invalid parameter /)
     end
   end

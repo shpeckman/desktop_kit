@@ -12,6 +12,7 @@ gdk_display_get_clipboard
 gdk_display_get_primary_clipboard
 gdk_display_map_keycode
 gdk_display_beep
+gdk_display_get_app_launch_context
 
 # clipboard
 gdk_clipboard_set_text

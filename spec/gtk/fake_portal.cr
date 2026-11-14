@@ -2,20 +2,24 @@
 require "./harness"
 
 # The parts of `org.freedesktop.portal.Desktop` that apprt calls: the host
-# registry and global shortcuts. Like the portal process, it runs on a
+# registry, global shortcuts and OpenURI. Like the portal process, it runs on a
 # thread and bus connection of its own, so it answers while the app under
 # test starts, runs and shuts down; it records the calls until `#stop`.
 # *deny* lists shortcut ids that `BindShortcuts` leaves out of the bound
-# set; *response* is the response code of `BindShortcuts`.
+# set; *response* is the response code of `BindShortcuts` and `OpenURI`.
 class FakePortal
   # One shortcut of a `BindShortcuts` call.
   record Shortcut, id : String, description : String, preferred_trigger : String
+
+  # One `OpenURI` call and the options it passed.
+  record Opened, uri : String, ask : Bool?, writable : Bool?, activation_token : String?
 
   NAME      = Apprt::Portal::BUS_NAME
   PATH      = Apprt::Portal::OBJECT_PATH
   REGISTRY  = "org.freedesktop.host.portal.Registry"
   SHORTCUTS = "org.freedesktop.portal.GlobalShortcuts"
   SESSION   = "org.freedesktop.portal.Session"
+  OPEN_URI  = "org.freedesktop.portal.OpenURI"
 
   private XML = <<-XML
     <node>
@@ -47,6 +51,14 @@ class FakePortal
       <interface name="org.freedesktop.portal.Session">
         <method name="Close"/>
       </interface>
+      <interface name="org.freedesktop.portal.OpenURI">
+        <method name="OpenURI">
+          <arg type="s" direction="in"/>
+          <arg type="s" direction="in"/>
+          <arg type="a{sv}" direction="in"/>
+          <arg type="o" direction="out"/>
+        </method>
+      </interface>
     </node>
     XML
 
@@ -65,6 +77,7 @@ class FakePortal
   @sessions = [] of String
   @closed = [] of String
   @shortcuts = [] of Shortcut
+  @opened = [] of Opened
   @context : Void* = Apprt::C.g_main_context_new
   @connection = Pointer(Void).null
   @node = Pointer(Void).null
@@ -123,6 +136,11 @@ class FakePortal
     @lock.synchronize { @shortcuts.dup }
   end
 
+  # Returns the `OpenURI` calls in order.
+  def opened : Array(Opened)
+    @lock.synchronize { @opened.dup }
+  end
+
   # Emits `Activated` for the shortcut *id* of the newest session, as the
   # desktop does when the user presses it.
   def activate(id : String) : Nil
@@ -154,6 +172,12 @@ class FakePortal
       respond(invocation, sender, options, 0_u32, {"session_handle" => Apprt::Variant.new(session)})
     when {SHORTCUTS, "BindShortcuts"}
       respond(invocation, sender, parameters[3], @response, {"shortcuts" => Apprt::Variant.new(bind(parameters[1]))})
+    when {OPEN_URI, "OpenURI"}
+      options = parameters[2]
+      opened = Opened.new(parameters[1].get(String), options["ask"]?.try(&.get(Bool)), options["writable"]?.try(&.get(Bool)),
+        options["activation_token"]?.try(&.get(String)))
+      @lock.synchronize { @opened << opened }
+      respond(invocation, sender, options, @response, {} of String => Apprt::Variant)
     when {SESSION, "Close"}
       reply(invocation, nil)
       @session_objects.delete(path).try { |id| Apprt::C.g_dbus_connection_unregister_object(@connection, id) }
@@ -222,7 +246,7 @@ class FakePortal
     end
     @node = Apprt::GLibError.check! { |error| Apprt::C.g_dbus_node_info_new_for_xml(XML, error) }
     @handle = Apprt::Handles.retain(self)
-    {REGISTRY, SHORTCUTS}.each { |interface| @registrations << export(PATH, interface) }
+    {REGISTRY, SHORTCUTS, OPEN_URI}.each { |interface| @registrations << export(PATH, interface) }
     reply = Apprt::GLibError.check! do |error|
       Apprt::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
         "RequestName", Apprt::Variant.new({NAME, DO_NOT_QUEUE}), nil, Apprt::C::GDBusCallFlags::None, -1, nil, error)

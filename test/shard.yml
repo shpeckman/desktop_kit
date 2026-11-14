@@ -1,0 +1,23 @@
+name: apprt-test
+version: 0.1.0
+
+description: Live tests of apprt on the KDE Plasma desktop, through livetest.
+
+authors:
+  - shpeckman
+
+crystal: ">= 1.23.0"
+
+dependencies:
+  livetest:
+    github: shpeckman/livetest
+  apprt:
+    path: ..
+
+targets:
+  apprt-test:
+    main: src/main.cr
+  apprt-under-test:
+    main: src/under_test.cr
+
+license: MIT

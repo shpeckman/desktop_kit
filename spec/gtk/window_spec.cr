@@ -90,6 +90,23 @@ describe Apprt::Window do
     expect_raises(RuntimeError, "GTK called outside the UI thread") { TestApp.new.new_window }
   end
 
+  it "keeps a tab that opens while the application quits" do
+    app = TestApp.new
+    tabs = -1
+    app.make_content = ->(context : Apprt::SurfaceContext) do
+      app.quit if context.kind.tab?
+      Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new)).as(Apprt::Content)
+    end
+    app.on_activated = ->(app : TestApp) do
+      window = app.new_window
+      Apprt::C.gtk_widget_activate_action_variant(window.widget, "win.new-tab", nil).should eq 1
+      tabs = window.tabs.size
+    end
+    run_app(app).should eq 0
+    tabs.should eq 2
+    app.windows.should be_empty
+  end
+
   it "opens tabs after the selected tab and from its surface" do
     app = TestApp.new
     run_steps(app) do

@@ -80,10 +80,11 @@ module Apprt
       @running.get
     end
 
-    # Closes the application windows and quits; `#run` then returns 0. Does
-    # nothing unless the application is running.
+    # Closes the application windows and quits at the next main loop
+    # iteration; `#run` then returns 0. Does nothing unless the application
+    # is running.
     def quit : Nil
-      UIThread.dispatch { quit_now } if running?
+      UIThread.post { quit_now } if running?
     end
 
     # Reloads the application: calls `#on_reload` and reports the reload to
@@ -317,6 +318,7 @@ module Apprt
     ensure
       @global_shortcuts.try(&.release)
       @global_shortcuts = nil
+      release_open_uri
       @windows.clear
       @tabs.clear
       @surfaces.clear

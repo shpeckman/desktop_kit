@@ -1,0 +1,15 @@
+# cases.yml
+# The cases of the apprt live tests; see README.md.
+
+# The global binding fires through the desktop's global shortcuts portal
+# while the window has the focus. Global bindings have no window shortcut,
+# so the tab can only come from the portal's Activated signal. The sleep
+# lets the portal bind the shortcut first.
+global-shortcut:
+  modes: [kde]
+  steps:
+    - expect window
+    - sleep 1500
+    - key ctrl+alt+shift+F9
+    - expect tab
+    - close

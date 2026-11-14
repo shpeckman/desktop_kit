@@ -41,6 +41,7 @@ require "./apprt/notifications"
 require "./apprt/ipc"
 require "./apprt/portal"
 require "./apprt/global_shortcuts"
+require "./apprt/open_uri"
 
 # Native application runtime: GTK 4 and libadwaita windows, tabs, splits and
 # surfaces driven by typed actions.

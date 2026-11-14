@@ -19,7 +19,7 @@ module Apprt
     # Shows a desktop notification.
     Apprt.action DesktopNotification, "desktop-notification", payload: {title: String, body: String}
 
-    # Opens *url* with the default handler.
+    # Opens *url* with the default handler; *url* may also be a file path.
     Apprt.action OpenUrl, "open-url", payload: {url: String}
 
     # Closes the window.
