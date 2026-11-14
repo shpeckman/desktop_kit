@@ -236,6 +236,7 @@ module Apprt
 
     # Marks the surface as its tab's active one, for styling.
     protected def active=(active : Bool) : Bool
+      return active if @closed
       active ? @host.add_css_class("active") : @host.remove_css_class("active")
       active
     end
