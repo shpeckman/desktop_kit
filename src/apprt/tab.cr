@@ -66,7 +66,7 @@ module Apprt
     def title : String
       title = @title_override || @active.try(&.shown_title) || Window.default_title
       title = ZOOM_MARK + title if zoomed?
-      title = BELL_MARK + title if @view.tree.any? { |_, surface| surface.bell_ringing? }
+      title = BELL_MARK + title if @app.bell.title? && @view.tree.any? { |_, surface| surface.bell_ringing? }
       title
     end
 
@@ -274,9 +274,10 @@ module Apprt
       true
     end
 
-    # Marks the tab's page for attention unless it is selected.
-    protected def bell : Nil
-      if window = @window
+    # Marks the tab's page for attention unless it is selected or
+    # *attention* is false, and shows the bell in the title.
+    protected def bell(attention : Bool) : Nil
+      if attention && (window = @window)
         page = page(window)
         C.adw_tab_page_set_needs_attention(page, 1) unless page.null? || C.adw_tab_page_get_selected(page) != 0
       end

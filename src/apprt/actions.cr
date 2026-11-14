@@ -175,5 +175,8 @@ module Apprt
 
     # Toggles `Surface#read_only?` of the focused surface.
     Apprt.action ToggleReadOnly, "toggle-read-only", scope: :split
+
+    # Opens the on-screen keyboard for the focused surface.
+    Apprt.action ShowOnScreenKeyboard, "show-on-screen-keyboard", scope: :split
   end
 end

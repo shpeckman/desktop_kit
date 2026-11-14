@@ -109,5 +109,12 @@ module Apprt
     fun adw_header_bar_set_show_title(self_ : Void*, show_title : Int32)
     fun adw_tab_bar_set_expand_tabs(self_ : Void*, expand_tabs : Int32)
     fun adw_tab_page_set_loading(self_ : Void*, loading : Int32)
+    fun adw_banner_new(title : UInt8*) : Void*
+    fun adw_banner_set_title(self_ : Void*, title : UInt8*)
+    fun adw_banner_get_title(self_ : Void*) : UInt8*
+    fun adw_banner_set_button_label(self_ : Void*, label : UInt8*)
+    fun adw_banner_get_button_label(self_ : Void*) : UInt8*
+    fun adw_banner_set_revealed(self_ : Void*, revealed : Int32)
+    fun adw_banner_get_revealed(self_ : Void*) : Int32
   end
 end

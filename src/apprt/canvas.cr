@@ -118,6 +118,10 @@ module Apprt
       C.gtk_im_context_set_cursor_location(@im_context, pointerof(area))
     end
 
+    protected def show_on_screen_keyboard : Bool
+      !@widget_destroyed && C.gtk_im_context_activate_osk(@im_context, nil) != 0
+    end
+
     # :showdoc:
     #
     # Called with the GL context current once GTK made it; makes the GL

@@ -36,6 +36,10 @@ module Apprt
     # The requested appearance.
     getter appearance : Appearance = Appearance::System
 
+    # How long the application keeps running after its last window closes;
+    # nil keeps it running until `#quit`.
+    getter quit_delay : Time::Span? = Time::Span.zero
+
     @@current = Atomic(App?).new(nil)
 
     @application = Pointer(Void).null
@@ -47,6 +51,8 @@ module Apprt
     @windows = [] of Window
     @tabs = {} of Void* => Tab
     @surfaces = {} of UInt64 => Surface
+    @holding = false
+    @quit_timer = 0_u32
 
     # Creates the application with *id*; raises `ArgumentError` when *id* is not
     # a valid application id.
@@ -54,8 +60,8 @@ module Apprt
       raise ArgumentError.new("invalid application id: #{id.inspect}") if C.g_application_id_is_valid(id) == 0
     end
 
-    # Runs the application until `#quit` or until its last window closes, and
-    # returns its exit status.
+    # Runs the application until `#quit` or until `#quit_delay` after its last
+    # window closes, and returns its exit status.
     #
     # Blocks the calling fiber. Until it returns, SIGINT and SIGTERM call
     # `#quit` and SIGUSR2 calls `#reload`. Raises `RuntimeError` when an
@@ -114,6 +120,16 @@ module Apprt
       @appearance = appearance
       UIThread.dispatch { apply_appearance } if running?
       appearance
+    end
+
+    # Sets how long the application keeps running once its last window
+    # closes: zero quits right away, nil never.
+    #
+    # Opening a window before *delay* passes keeps the application running.
+    def quit_delay=(delay : Time::Span?) : Time::Span?
+      @quit_delay = delay
+      UIThread.dispatch { apply_quit_delay } if running?
+      delay
     end
 
     # Opens a window with one tab, from *parent* when given, presents it and
@@ -237,6 +253,7 @@ module Apprt
     end
 
     protected def open_window : Window
+      stop_quit_timer
       window = Window.new(self)
       @windows << window
       on_window(window)
@@ -255,6 +272,7 @@ module Apprt
 
     protected def unregister(window : Window) : Nil
       @windows.delete(window)
+      start_quit_timer if @windows.empty? && running?
     end
 
     protected def unregister(tab : Tab) : Nil
@@ -310,6 +328,7 @@ module Apprt
       apply_key_tables
       load_css
       apply_appearance
+      apply_quit_delay
       @dark_handler = Signals.notify(C.adw_style_manager_get_default, "dark", -> { color_scheme_changed })
       on_startup
       color_scheme_changed
@@ -321,6 +340,7 @@ module Apprt
       unless @ready
         @ready = true
         Systemd.ready
+        sync_config_errors
       end
     end
 
@@ -333,6 +353,10 @@ module Apprt
       @global_shortcuts = nil
       release_open_uri
       undo_stack.clear
+      stop_quit_timer
+      @holding = false
+      release_bell_sound
+      forget_config_errors_dialog
       @windows.clear
       @tabs.clear
       @surfaces.clear
@@ -348,6 +372,32 @@ module Apprt
         C.g_object_unref(@runtime_style)
         @runtime_style = Pointer(Void).null
       end
+    end
+
+    # Holds the application while it should outlive its windows, and
+    # restarts the quit timer for the new delay when no window is open.
+    private def apply_quit_delay : Nil
+      hold = @quit_delay != Time::Span.zero
+      stop_quit_timer
+      start_quit_timer if @ready && @windows.empty?
+      return if hold == @holding
+      @holding = hold
+      hold ? C.g_application_hold(@application) : C.g_application_release(@application)
+    end
+
+    private def start_quit_timer : Nil
+      delay = @quit_delay
+      return unless delay && delay.positive? && @quit_timer == 0
+      @quit_timer = Idle.after(delay) do
+        @quit_timer = 0_u32
+        quit_now
+      end
+    end
+
+    private def stop_quit_timer : Nil
+      return if @quit_timer == 0
+      Idle.cancel(@quit_timer)
+      @quit_timer = 0_u32
     end
 
     private def quit_now : Nil

@@ -240,19 +240,22 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
   `ResetWindowSize`, `ToggleBackgroundOpacity`, `CopyTitleToClipboard`, `ToggleReadOnly`.
 - `d16dbf6`: undo for closed surfaces, tabs and windows (`Undo`, `Redo`, `App#undo_timeout=`); progress
   reports (`Surface#progress=`, `Apprt::Progress`, taskbar via `com.canonical.Unity.LauncherEntry`).
+- `5eac62b`: live tests for key sequences, key tables and progress (`test/`, sway and KDE modes).
+- Small batch: `App#quit_delay=` (Ghostty's `quit-after-last-window-closed(-delay)`), `Apprt::Bell`
+  flags with `App#bell_sound=`/`#bell_volume=` and a border flash, `Surface#confirm_clipboard`
+  (`Clipboard::Request`), `App#config_errors=` with its dialog, `Surface#show_banner`/`#hide_banner`
+  (`AdwBanner`), `ShowOnScreenKeyboard` (`Surface#show_on_screen_keyboard`).
 
 ## Roadmap
 
-1. Live tests on KDE (`test/`): taskbar progress, key sequences and key tables with a real keyboard,
-   tabs-in-header look, drag and drop with a real pointer.
-2. Quit timer: keep running (or wait) after the last window closes; prerequisite for 3.
-3. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME).
-4. Small batch: bell sound and border flash; clipboard confirmation dialog; config errors dialog;
-   pane banner (`AdwBanner`); on-screen keyboard action.
-5. Generic search overlay; hover text and resize readout overlays.
-6. Pane header as drag handle; icons from image files; preferences dialog helper.
-7. Flatpak host commands (only if apps ship as Flatpak).
-8. DMABUF texture offload (`GdkDmabufTextureBuilder`, `GtkGraphicsOffload`).
+1. Live tests on KDE (`test/`, cases written; the user runs them): taskbar progress, key sequences and
+   key tables with a real keyboard, tabs-in-header look, drag and drop with a real pointer.
+2. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME); builds on
+   `App#quit_delay = nil`.
+3. Generic search overlay; hover text and resize readout overlays.
+4. Pane header as drag handle; icons from image files; preferences dialog helper.
+5. Flatpak host commands (only if apps ship as Flatpak).
+6. DMABUF texture offload (`GdkDmabufTextureBuilder`, `GtkGraphicsOffload`).
 
 ## Verification
 

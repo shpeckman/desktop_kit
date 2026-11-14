@@ -37,12 +37,18 @@ module Apprt
     # Whether the surface holds its window's keyboard focus.
     getter? focused : Bool = false
 
+    # The message of the banner across the surface; nil while none shows.
+    getter banner : String?
+
+    @banner_action : Proc(Nil)? = nil
+
     # :nodoc:
     # The style of the pane header, the drag handle and the drop indicator,
     # which the app loads at application priority.
     STYLE = <<-CSS
       .surface-header { padding: 2px 4px 2px 10px; }
       .surface-read-only { margin: 8px; padding: 6px; border-radius: 6px; }
+      .surface-bell-border { border: 3px solid alpha(@accent_bg_color, 0.5); }
       .surface-progress.paused progress { background-color: @warning_bg_color; }
       .surface-progress.error progress { background-color: @error_bg_color; }
       .surface-drag-handle {
@@ -97,6 +103,8 @@ module Apprt
       @header_title = Widget.new(C.gtk_label_new(Window.default_title))
       @read_only_badge = Widget.new(C.gtk_image_new_from_icon_name("changes-prevent-symbolic"))
       @progress_bar = Widget.new(C.gtk_progress_bar_new)
+      @bell_border = Widget.new(C.gtk_revealer_new)
+      @banner_bar = Widget.new(C.adw_banner_new(""))
       layout
       apply_style(@app.window_style)
       install_drag_and_drop
@@ -192,19 +200,62 @@ module Apprt
       visible
     end
 
-    # Rings the bell: beeps and, unless the surface is focused, marks it and
-    # its tab until it gets the focus and asks for the user's attention
-    # while its window is inactive (`Window#urgent=`).
+    # Rings the bell as `App#bell` says: beeps, plays `App#bell_sound` and,
+    # unless the surface is focused, marks it until it gets the focus: a
+    # border, a bell before the tab title, and a request for the user's
+    # attention while its window is inactive (`Window#urgent=`).
     def ring_bell : Nil
       return if @closed
-      @host.native.try do |native|
-        surface = C.gtk_native_get_surface(native)
-        C.gdk_surface_beep(surface) unless surface.null?
+      bell = @app.bell
+      if bell.system?
+        @host.native.try do |native|
+          surface = C.gtk_native_get_surface(native)
+          C.gdk_surface_beep(surface) unless surface.null?
+        end
       end
+      @app.play_bell_sound if bell.audio?
       return if @focused || @bell_ringing
       @bell_ringing = true
-      @tab.try(&.bell)
-      window.try(&.urgent=(true))
+      C.gtk_revealer_set_reveal_child(@bell_border, bell.border? ? 1 : 0)
+      @tab.try(&.bell(bell.attention?))
+      window.try(&.urgent=(true)) if bell.attention?
+    end
+
+    # Shows *message* in a banner across the bottom of the surface, with a
+    # *button* that runs the block.
+    #
+    # The banner stays until `#hide_banner` or the next `#show_banner`.
+    def show_banner(message : String, button : String, &action : ->) : Nil
+      show_banner(message, button, action)
+    end
+
+    # Shows *message* in a banner across the bottom of the surface.
+    #
+    # The banner stays until `#hide_banner` or the next `#show_banner`.
+    def show_banner(message : String) : Nil
+      show_banner(message, nil, nil)
+    end
+
+    # Hides the banner.
+    def hide_banner : Nil
+      @banner = nil
+      @banner_action = nil
+      C.adw_banner_set_revealed(@banner_bar, 0) unless @closed
+    end
+
+    # Asks the user to allow *request* with *text*, the clipboard text it
+    # concerns, and yields whether they did. Yields `false` when the surface
+    # has no window.
+    def confirm_clipboard(request : Clipboard::Request, text : String, &done : Bool ->) : Nil
+      parent = window.try(&.widget)
+      return done.call(false) if @closed || parent.nil?
+      Dialogs.confirm_clipboard(parent, request, text, &done)
+    end
+
+    # Asks the input method to show its on-screen keyboard; returns whether
+    # it did. Only `Canvas` content has one.
+    def show_on_screen_keyboard : Bool
+      !@closed && @content.show_on_screen_keyboard
     end
 
     # Focuses the surface: selects its tab and moves the keyboard focus to
@@ -323,6 +374,17 @@ module Apprt
       C.gtk_widget_set_halign(@read_only_badge, C::GtkAlign::End)
       C.gtk_widget_set_valign(@read_only_badge, C::GtkAlign::Start)
       C.gtk_overlay_add_overlay(overlay, @read_only_badge)
+      bell_border = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 0))
+      bell_border.add_css_class("surface-bell-border")
+      C.gtk_revealer_set_child(@bell_border, bell_border)
+      C.gtk_revealer_set_transition_type(@bell_border, C::GtkRevealerTransitionType::Crossfade)
+      C.gtk_revealer_set_transition_duration(@bell_border, 500)
+      C.gtk_widget_set_can_target(@bell_border, 0)
+      C.gtk_widget_set_can_focus(@bell_border, 0)
+      C.gtk_overlay_add_overlay(overlay, @bell_border)
+      C.gtk_widget_set_valign(@banner_bar, C::GtkAlign::End)
+      Signals.connect(@banner_bar, "button-clicked", -> { @banner_action.try(&.call); nil })
+      C.gtk_overlay_add_overlay(overlay, @banner_bar)
       Widget.new(overlay).vexpand = true
       build_header
       box = C.gtk_box_new(C::GtkOrientation::Vertical, 0)
@@ -465,12 +527,22 @@ module Apprt
       Native.take_string?(C.g_file_get_path(file)).try { |path| Path.new(path) }
     end
 
+    private def show_banner(message : String, button : String?, action : Proc(Nil)?) : Nil
+      @banner = message
+      @banner_action = action
+      return if @closed
+      C.adw_banner_set_title(@banner_bar, message)
+      C.adw_banner_set_button_label(@banner_bar, button)
+      C.adw_banner_set_revealed(@banner_bar, 1)
+    end
+
     private def focus_changed(focused : Bool) : Nil
       @focused = focused
       return unless focused
       @notifications.clear
       if @bell_ringing
         @bell_ringing = false
+        C.gtk_revealer_set_reveal_child(@bell_border, 0)
         @tab.try(&.sync_title)
       end
       @tab.try(&.focused(self))
@@ -485,6 +557,7 @@ module Apprt
       return if @closed
       @closed = true
       @tab = nil
+      @banner_action = nil
       @notifications.clear
       stop_pulse
       @app.unregister(self)
@@ -537,6 +610,10 @@ module Apprt
     protected def perform(target : Surface, action : Action::ToggleReadOnly) : Bool
       target.read_only = !target.read_only?
       true
+    end
+
+    protected def perform(target : Surface, action : Action::ShowOnScreenKeyboard) : Bool
+      target.show_on_screen_keyboard
     end
 
     protected def perform(target : Surface, action : Action::NewSplit) : Bool

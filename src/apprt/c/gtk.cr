@@ -56,6 +56,26 @@ module Apprt
       Hidden  = 1
     end
 
+    enum GtkRevealerTransitionType : Int32
+      None       = 0
+      Crossfade  = 1
+      SlideRight = 2
+      SlideLeft  = 3
+      SlideUp    = 4
+      SlideDown  = 5
+      SwingRight = 6
+      SwingLeft  = 7
+      SwingUp    = 8
+      SwingDown  = 9
+    end
+
+    enum GtkWrapMode : Int32
+      None     = 0
+      Char     = 1
+      Word     = 2
+      WordChar = 3
+    end
+
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
     fun gtk_widget_unparent(widget : Void*)
@@ -254,5 +274,31 @@ module Apprt
     fun gtk_progress_bar_set_fraction(pbar : Void*, fraction : Float64)
     fun gtk_progress_bar_pulse(pbar : Void*)
     fun gtk_progress_bar_set_pulse_step(pbar : Void*, fraction : Float64)
+    fun gtk_im_context_activate_osk(context : Void*, event : Void*) : Int32
+    fun gtk_media_file_new_for_filename(filename : UInt8*) : Void*
+    fun gtk_media_stream_set_volume(self_ : Void*, volume : Float64)
+    fun gtk_media_stream_get_volume(self_ : Void*) : Float64
+    fun gtk_media_stream_seek(self_ : Void*, timestamp : Int64)
+    fun gtk_media_stream_play(self_ : Void*)
+    fun gtk_media_stream_get_error(self_ : Void*) : GError*
+    fun gtk_revealer_new : Void*
+    fun gtk_revealer_set_child(revealer : Void*, child : Void*)
+    fun gtk_revealer_set_reveal_child(revealer : Void*, reveal_child : Int32)
+    fun gtk_revealer_get_reveal_child(revealer : Void*) : Int32
+    fun gtk_revealer_set_transition_type(revealer : Void*, transition : GtkRevealerTransitionType)
+    fun gtk_revealer_set_transition_duration(revealer : Void*, duration : UInt32)
+    fun gtk_text_view_new : Void*
+    fun gtk_text_view_set_editable(text_view : Void*, setting : Int32)
+    fun gtk_text_view_set_cursor_visible(text_view : Void*, setting : Int32)
+    fun gtk_text_view_set_monospace(text_view : Void*, monospace : Int32)
+    fun gtk_text_view_set_wrap_mode(text_view : Void*, wrap_mode : GtkWrapMode)
+    fun gtk_text_view_get_buffer(text_view : Void*) : Void*
+    fun gtk_text_view_set_top_margin(text_view : Void*, top_margin : Int32)
+    fun gtk_text_view_set_bottom_margin(text_view : Void*, bottom_margin : Int32)
+    fun gtk_text_view_set_left_margin(text_view : Void*, left_margin : Int32)
+    fun gtk_text_view_set_right_margin(text_view : Void*, right_margin : Int32)
+    fun gtk_text_buffer_set_text(buffer : Void*, text : UInt8*, len : Int32)
+    fun gtk_scrolled_window_set_min_content_width(scrolled_window : Void*, width : Int32)
+    fun gtk_scrolled_window_set_min_content_height(scrolled_window : Void*, height : Int32)
   end
 end

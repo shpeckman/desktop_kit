@@ -73,15 +73,21 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   reopens `App` with `bindings`, the accelerator sync, the sequence table
   and `perform_in`.
 - `src/apprt/dialogs.cr` - `Dialogs` (`:nodoc:`): the confirm and prompt
-  alert dialogs behind `Window#confirm`/`#prompt`, the close confirmation
-  and the title prompt.
+  alert dialogs behind `Window#confirm`/`#prompt`, the close confirmation,
+  the title prompt, the clipboard confirmation and the configuration
+  errors dialog.
+- `src/apprt/bell.cr` - `Bell` (public); reopens `App` with `bell`,
+  `bell_sound`, `bell_volume` and the sound playback.
+- `src/apprt/config_errors.cr` - reopens `App` with `config_errors` and
+  its dialog.
 - `src/apprt/content.cr` - `Content` (with the `on_drop` hooks),
   `WidgetContent`, `SurfaceContext` (public).
 - `src/apprt/input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
   `MouseMotionEvent`, `ScrollEvent` (public; initializers `:nodoc:`).
 - `src/apprt/canvas.cr` - `Canvas` (public): the `GtkGLArea` content, its
   event controllers and input method context.
-- `src/apprt/clipboard.cr` - `Clipboard` (public): text clipboards.
+- `src/apprt/clipboard.cr` - `Clipboard` and `Clipboard::Request`
+  (public): text clipboards.
 - `src/apprt/surface.cr` - `Surface` (public): host, drag handle, drop
   targets; reopens `App` with the split action overloads.
 - `src/apprt/split_view.cr` - `SplitView` (`:nodoc:`): renders a tab's
@@ -138,7 +144,10 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
   session. GTK renders with `GSK_RENDERER=ngl` and `GDK_DISABLE=vulkan`;
   `GNOTIFICATION_BACKEND=freedesktop` sends notifications to the fake
-  server.
+  server. `GTK_MEDIA=none` keeps GStreamer out: its GL display outlives
+  the media stream and floods "Failed to flush Wayland connection" once
+  `after_suite` stops sway, so bell sounds fail and only the warning is
+  checked.
   A real compositor replaced broadway because `GtkGLArea` needs GL and a
   process can use only one GDK backend. `Spec.after_suite` stops both.
   Test apps hold the GApplication in `on_startup`: without windows or a
@@ -169,8 +178,12 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `decoration_spec.cr` decorations, blur, urgency and toasts;
   `drop_spec.cr` data drops and surface moves (emitting the drop targets'
   signals); `scope_spec.cr` `Systemd.start_scope` against the private bus,
-  which has no systemd. `spec/pure/winproto_spec.cr` covers the blur
-  region slices.
+  which has no systemd; `quit_delay_spec.cr` the quit delay with an app
+  that holds nothing; `bell_spec.cr` the bell flags, border and sound;
+  `banner_spec.cr` banners; `surface_dialogs_spec.cr` the clipboard
+  confirmation, the configuration errors dialog (steps run on an idle
+  after activation, when the errors show) and the on-screen keyboard.
+  `spec/pure/winproto_spec.cr` covers the blur region slices.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -248,6 +261,15 @@ Internal contracts of `src/apprt/glib/`:
   `adw_tab_view_insert` then failed its `ADW_IS_TAB_VIEW` assertion.
 - `quit` destroys only `gtk_application_get_windows` (Ghostty: destroying
   every toplevel double-frees fcitx windows), then `g_application_quit`.
+- Quit delay, after Ghostty's `quit-after-last-window-closed(-delay)`: a
+  nonzero `quit_delay` (or `nil`) holds the GApplication (`@holding`), so
+  it outlives its last window. Unregistering the last window after
+  activation starts an `Idle.after` timer that quits; opening a window
+  and shutdown cancel it. `nil` never starts one. Zero releases the hold
+  and GApplication quits once idle without windows, as before.
+- `@ready` turns true after the first `on_activate` returns: the systemd
+  `READY=1`, the quit timer and the configuration errors dialog wait for
+  it, so errors set during activation show over its window.
 - `run` passes GApplication only the program name: without `HANDLES_OPEN`
   it rejects file arguments. Signals are trapped with `Signal#trap` (the
   handlers run on a default-context fiber and post) and reset after the run.
@@ -384,7 +406,8 @@ Internals of `window.cr`, `tab.cr`, `surface.cr`, `split_view.cr` and
 - Widget tree: `AdwApplicationWindow` > `AdwTabOverview` > `AdwToolbarView`
   (top: `AdwHeaderBar` with `AdwWindowTitle`, `AdwTabBar` with autohide;
   content: `AdwTabView`). The tab view's `notify::n-pages` closes the window
-  on an idle once no page is left and the overview is closed;
+  on an idle once no page is left and the overview is closed (unless it
+  closed meanwhile: the idle must not touch a destroyed tab view);
   `close-page` asks for confirmation and finishes with
   `adw_tab_view_close_page_finish`; `create-window` returns the new
   window's tab view.
@@ -424,13 +447,32 @@ Internals of `window.cr`, `tab.cr`, `surface.cr`, `split_view.cr` and
   `perform_in`. Shortcut labels come from the first local binding with the
   same `detailed_name`. `Window#toggle_command_palette` builds a new
   palette each time, so `commands=` needs no sync; `closed` marks it done.
-- Bell: `Surface#ring_bell` beeps through the native `GdkSurface`; when
-  the surface lacks the focus it sets `bell_ringing?` and calls
-  `Tab#bell`, which sets the page's `needs-attention` unless selected and
-  retitles the tab (`🔔 ` before `🔍 `). The surface's focus controller
+- Bell, after Ghostty's `bell-features`: `Surface#ring_bell` beeps through
+  the native `GdkSurface` (`System`) and plays the app's sound (`Audio`)
+  even while focused; when the surface lacks the focus it sets
+  `bell_ringing?`, reveals the border (`Border`: a crossfading
+  `GtkRevealer` overlay, `.surface-bell-border`, without Ghostty's tint)
+  and calls `Tab#bell(attention)`, which sets the page's `needs-attention`
+  unless selected (`Attention`) and retitles the tab (`🔔 ` before `🔍 `,
+  `Title`). `App#play_bell_sound` keeps one `GtkMediaFile` per path,
+  seeks to 0 and plays; its `error` is logged, checked once after
+  creation too because a backend may fail inside the constructor. The surface's focus controller
   clears the ring on `enter`; the window clears `needs-attention` when a
   page is selected. `MouseVisibility` sets the content widget's cursor to
   `"none"` and back to `Surface#cursor`.
+- Banner (Ghostty's child-exited banner, generic): an `AdwBanner`
+  overlay at the pane's bottom; `button-clicked` runs the stored action.
+  `show_banner(message)` sets no button label.
+- `Dialogs.confirm_clipboard` uses Ghostty's headings and bodies
+  (`CLIPBOARD` table per `Clipboard::Request`), Allow (destructive) and
+  Deny, and the text in a read-only monospace `GtkTextView`; the parent
+  is the surface's window, because a fresh surface's host is unparented
+  until its split view rebuilds. Ghostty's blur toggle and "remember"
+  choice are left out.
+- `Dialogs.config_errors` follows Ghostty's `config_errors_dialog`:
+  `ignore` (close response) and `reload`; the app keeps the dialog and
+  its text buffer, rewrites the buffer when the errors change and closes
+  the dialog when they clear. Without a window the dialog has no parent.
 - Specs: layout and drawing wait for the frame clock, so layout assertions
   poll with `eventually`. A rebuild replaces every `GtkPaned`, so specs
   look panes up again after each split. Dialogs are answered by setting
@@ -469,6 +511,10 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
 - `Mods.from_gdk`/`#to_gdk` (`:nodoc:`, `types.cr`) map GDK modifier
   masks; the table is module-level `MODS_GDK` because an enum body cannot
   hold a constant.
+- `ShowOnScreenKeyboard` calls `Surface#show_on_screen_keyboard`, which
+  asks the protected `Content#show_on_screen_keyboard` (false by
+  default); `Canvas` returns `gtk_im_context_activate_osk(@im_context, nil)`,
+  true when GTK passed the request to the platform.
 - Pointer positions and precise scroll deltas are multiplied by `#scale`.
   `precise?` is `gtk_event_controller_scroll_get_unit == SURFACE`.
 - `Clipboard.read` keeps the block in `Handles` until

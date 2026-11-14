@@ -48,6 +48,12 @@ module Apprt
     protected def drop(data : Array(Path) | String) : Bool
       on_drop(data)
     end
+
+    # Shows the input method's on-screen keyboard; returns whether it
+    # showed. Content has none by default.
+    protected def show_on_screen_keyboard : Bool
+      false
+    end
   end
 
   # Content showing a GTK widget.

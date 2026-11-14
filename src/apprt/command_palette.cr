@@ -48,6 +48,7 @@ module Apprt
         new("Change Tab Title", Action::PromptTitle.new(:tab)),
         new("Copy Title", Action::CopyTitleToClipboard.new),
         new("Toggle Read-Only", Action::ToggleReadOnly.new),
+        new("Show On-Screen Keyboard", Action::ShowOnScreenKeyboard.new),
         new("Split Right", Action::NewSplit.new(:right)),
         new("Split Down", Action::NewSplit.new(:down)),
         new("Split Left", Action::NewSplit.new(:left)),

@@ -95,3 +95,12 @@ adw_toolbar_view_remove
 adw_header_bar_set_show_title
 adw_tab_bar_set_expand_tabs
 adw_tab_page_set_loading
+
+# pane banner
+adw_banner_new
+adw_banner_set_title
+adw_banner_get_title
+adw_banner_set_button_label
+adw_banner_get_button_label
+adw_banner_set_revealed
+adw_banner_get_revealed

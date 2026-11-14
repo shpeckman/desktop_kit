@@ -296,3 +296,18 @@ describe Apprt::Clipboard do
     expect_raises(RuntimeError, "GTK called outside the UI thread") { Apprt::Clipboard.write("x") }
   end
 end
+
+describe "Canvas#show_on_screen_keyboard" do
+  before_all { GtkHarness.start }
+
+  it "asks the input method for the on-screen keyboard" do
+    run_steps(canvas_app) do |app|
+      surface = app.new_window.active_surface.not_nil!
+      eventually { surface.focused? }.should be_true
+      surface.show_on_screen_keyboard.should be_true
+      surface.close
+      eventually { surface.closed? }.should be_true
+      surface.show_on_screen_keyboard.should be_false
+    end
+  end
+end

@@ -14,6 +14,16 @@ module Apprt
       Primary
     end
 
+    # What `Surface#confirm_clipboard` asks the user to allow.
+    enum Request
+      # Pasting text that looks like it runs commands.
+      Paste
+      # The content reading the clipboard.
+      Read
+      # The content writing to the clipboard.
+      Write
+    end
+
     private READ = ->(clipboard : Void*, result : Void*, data : Void*) do
       block = Handles.get(data, Proc(String?, Nil))
       Handles.release(data)

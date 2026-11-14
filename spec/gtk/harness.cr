@@ -71,6 +71,7 @@ module GtkHarness
       "ADW_DISABLE_PORTAL"       => "1",
       "GDK_DEBUG"                => "no-portals",
       "GTK_A11Y"                 => "none",
+      "GTK_MEDIA"                => "none",
       "GSETTINGS_BACKEND"        => "memory",
       "XDG_CONFIG_HOME"          => "#{dir}/config",
     }.each { |name, value| ENV[name] = value }

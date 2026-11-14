@@ -76,8 +76,8 @@ exit Hello.new("org.example.Hello").run
 ```
 
 `#run` drives GTK on a thread of its own and blocks the calling fiber until
-`#quit` is called or the last application window closes; it returns the
-exit status. One application runs at a time. The application id must be a
+`#quit` is called or the last application window closes (see
+`#quit_delay=`); it returns the exit status. One application runs at a time. The application id must be a
 valid reverse-DNS name (`ArgumentError` otherwise). With
 `single_instance: true`, the default, launching the program again
 activates the running instance.
@@ -108,6 +108,14 @@ These methods are callable from any thread:
 - `#window_style=` sets the look of all windows (see Window style).
 - `#undo_timeout=` sets how long `Undo` can reopen closed surfaces, tabs
   and windows; 5 seconds by default, zero turns undo off.
+- `#quit_delay=` sets how long the application keeps running after its
+  last window closes: zero, the default, quits right away; a window that
+  opens in time keeps it running; `nil` runs until `#quit`.
+- `#config_errors=` shows a list of configuration errors in a dialog that
+  offers to reload or to ignore them; an empty list closes it. Errors set
+  before `#run` show once the application is active.
+- `#bell=`, `#bell_sound=` and `#bell_volume=` set what a ringing bell
+  does (see Bell).
 - `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
   the default), `Light` or `Dark`.
 
@@ -149,7 +157,10 @@ elsewhere.
 | `Surface#focused?`               | whether it holds its window's keyboard focus                      |
 | `Surface#cursor=`                | sets the pointer by CSS name (`"text"`, `"pointer"`); `nil` resets |
 | `Surface#mouse_visible=`         | shows or hides the pointer over it (`MouseVisibility`)            |
-| `Surface#ring_bell`              | beeps and marks it until focused (`RingBell`)                     |
+| `Surface#ring_bell`              | rings its bell (`RingBell`, see Bell)                             |
+| `Surface#show_banner(message, button) { }` | shows a bar with *message* over the bottom of its pane, and a button running the block; `#hide_banner` removes it |
+| `Surface#confirm_clipboard(request, text) { \|allowed\| }` | asks the user to allow a clipboard `Paste`, `Read` or `Write` of *text* |
+| `Surface#show_on_screen_keyboard` | asks the input method to show the on-screen keyboard of a `Canvas` (`ShowOnScreenKeyboard`); returns whether it did |
 | `Window#toast(message, timeout)` | shows a message at the bottom of the window, 3 seconds by default |
 | `Window#decoration=`             | `Apprt::Decoration`: `Auto`, `Client`, `Server` or `None`         |
 | `Window#background_blur=`        | blurs what lies behind the window's transparent parts             |
@@ -258,9 +269,7 @@ Titles: a surface has a `#title`, set by the application, and a
 `#title_override`, set by the user through `PromptTitle`. A tab shows its
 `#title_override`, else the title of its focused surface, else the
 application name, marked with 🔍 while zoomed and with 🔔 while one of its
-surfaces rings. A ringing surface keeps `Surface#bell_ringing?` until it
-gets the focus; its tab needs attention in the tab bar while not selected.
-Ringing a focused surface only beeps. A window shows its
+surfaces rings. A window shows its
 `#title_override`, else the title of its selected tab. Assigning `nil` to
 an override restores the default.
 
@@ -292,6 +301,23 @@ class Editor < Apprt::WidgetContent
   end
 end
 ```
+
+#### Bell
+
+`Surface#ring_bell` does what the `Apprt::Bell` flags in `App#bell` say;
+the default is `System | Attention | Title`:
+
+| Flag        | Effect                                                            |
+|-------------|-------------------------------------------------------------------|
+| `System`    | beeps through the display server                                  |
+| `Audio`     | plays `App#bell_sound` at `App#bell_volume` (0 to 1, 0.5 by default) |
+| `Attention` | the tab needs attention while not selected; an inactive window turns urgent |
+| `Title`     | marks the tab title with 🔔                                       |
+| `Border`    | draws a border around the surface                                 |
+
+Ringing an unfocused surface sets `Surface#bell_ringing?` and its marks
+until it gets the focus; a focused surface only beeps and plays the sound.
+A sound file that cannot play is logged as a warning.
 
 ### Canvas
 
@@ -385,6 +411,12 @@ clipboard; `.read(kind = :standard) { |text| }` yields its text later, or
 `Primary` (the selection, pasted by middle-click). Use them on the GTK
 thread only.
 
+`Surface#confirm_clipboard(request, text) { |allowed| }` asks before a
+clipboard access: `Clipboard::Request::Paste` warns about pasting *text*,
+`Read` and `Write` ask to let the content read or write the clipboard, and
+show *text*. The block gets `true` when the user allows it, and `false`
+right away for a closed surface.
+
 ### Notifications
 
 `Surface#notify(title, body)` shows a desktop notification; clicking it
@@ -454,7 +486,7 @@ Built-in actions, all nested in `Apprt::Action`:
 | `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
 | `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
-| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly` |
+| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard` |
 
 Sizes are `UInt32` pixels. `SizeLimit` sets the smallest window size and
 treats 0 as no limit; GTK 4 windows have no largest size, so its maximum is

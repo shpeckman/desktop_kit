@@ -708,7 +708,7 @@ module Apprt
       @destroy_pending = true
       Idle.add do
         @destroy_pending = false
-        destroy if empty?
+        destroy unless @closed || !empty?
       end
     end
 
