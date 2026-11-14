@@ -1,13 +1,17 @@
 # apprt-test
 
-Live tests of apprt on the KDE Plasma desktop, through
-[livetest](https://github.com/shpeckman/livetest). They cover what a
-private test compositor cannot: global key bindings bound by the desktop's
-global shortcuts portal and fired by kglobalaccel.
+Live tests of apprt through
+[livetest](https://github.com/shpeckman/livetest), with real keyboard
+input. On the KDE Plasma desktop they cover what a private test
+compositor cannot: global key bindings bound by the desktop's global
+shortcuts portal and fired by kglobalaccel, and the taskbar's progress.
+Key sequences, key tables and the progress bar also run in a nested sway,
+which leaves your keyboard and pointer alone.
 
 ## Requirements
 
-A KDE Plasma 6 Wayland session with xdg-desktop-portal-kde, plus what
+For mode `kde`, a KDE Plasma 6 Wayland session with
+xdg-desktop-portal-kde; for mode `sway`, sway and `grim`. Plus what
 livetest needs (see its README).
 
 ## Usage
@@ -16,6 +20,7 @@ livetest needs (see its README).
 make setup  # once per desktop
 make test   # runs every case of cases.yml
 make test CASES=global-shortcut
+make test MODE=sway  # the cases that run in sway, in a headless sway
 ```
 
 `make setup` lets the harness take window screenshots, installs
@@ -28,29 +33,57 @@ bind without a dialog.
 
 `make test` takes over the keyboard and the pointer while it runs; press
 Escape three times to abort. Results go to `out/<case>/`, with the app's
-log. Exit status 0 means every case passed.
+log and the screenshots. The shots are compared with `goldens/<case>/`;
+`make test MODE=sway CASES=... ARGS=-u` writes them anew. Exit status 0
+means every case passed.
 
 ## Cases
 
 - `global-shortcut` - opens a window, presses Ctrl+Alt+Shift+F9 while it
   has the focus and expects the tab the global binding opens. Global
   bindings have no window shortcut, so only the portal can open it.
+  `kde` only.
+- `sequences` - Ctrl+T, then Ctrl+A N, then Ctrl+A Ctrl+T. Ctrl+T alone is
+  a window shortcut; after Ctrl+A the sequence must take it. Shoots the
+  pending Ctrl+A in the key state overlay.
+- `key-tables` - Ctrl+A E enters the key table `mode`, where X reports
+  until Escape; Ctrl+A O enters it for one binding. Shoots the overlay
+  naming the table.
+- `progress` - Ctrl+A P sets the surface's progress to 40 % and Ctrl+A
+  Shift+P clears it. Shoots the bar. In mode `kde` the taskbar entry
+  shows the progress too, once `make setup` installed the desktop file;
+  look at it while the case runs, the shot covers the window only.
 
 ## The app under test
 
-`bin/apprt-under-test` is an apprt app with the id `org.example.ApprtLive`
-and the single global binding Ctrl+Alt+Shift+F9 → `NewTab`. It writes to
-`LIVETEST_FIFO` and to standard error:
+`bin/apprt-under-test` is an apprt app with the id `org.example.ApprtLive`.
+Its window shows a label and has these bindings:
 
-| Line                      | When                                   |
-|---------------------------|----------------------------------------|
-| `window`                  | its window is open                     |
-| `tab`                     | the global binding opened a tab        |
-| `unbound TRIGGER: REASON` | the desktop refused the global binding |
+| Keys                        | Action                                    |
+|-----------------------------|-------------------------------------------|
+| Ctrl+T                      | reports `accel`                           |
+| Ctrl+A N                    | reports `sequence`                        |
+| Ctrl+A Ctrl+T               | reports `capture`                         |
+| Ctrl+A E / Ctrl+A O         | key table `mode`, until Escape / for once |
+| X (in `mode`)               | reports `table`                           |
+| Ctrl+A P / Ctrl+A Shift+P   | progress 40 % / no progress               |
+| Ctrl+Alt+Shift+F9 (global)  | `NewTab`, with `--global` or `--setup`    |
+
+It writes to `LIVETEST_FIFO` and to standard error:
+
+| Line                      | When                                         |
+|---------------------------|----------------------------------------------|
+| `window`                  | its window is open                           |
+| `tab`                     | the global binding opened a tab              |
+| `unbound TRIGGER: REASON` | the desktop refused the global binding       |
+| `NAME tables=T,...`       | a binding reported NAME; T the active tables |
+| `progress PERCENT`        | the progress changed; -1 is none             |
 
 `--class ID` sets the window class (Wayland app id) the harness finds the
-window by; `--setup` installs the desktop file and quits after the first
-activation of the shortcut, with status 1 when the desktop refused it.
+window by; `--global` binds the global shortcut (cases with
+`global: true`); `--setup` installs the desktop file and quits after the
+first activation of the shortcut, with status 1 when the desktop refused
+it.
 
 ## License
 

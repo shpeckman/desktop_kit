@@ -10,13 +10,16 @@ make         # shards update + build bin/apprt-test and bin/apprt-under-test
 make spec    # crystal spec: the subject and cases.yml, no desktop
 make docs    # crystal docs src/main.cr
 make setup   # interactive, once per desktop: see README.md
-make test    # MODE=kde (default); CASES=name... runs some cases
+make test    # MODE=kde (default) or sway; CASES=name... runs some cases;
+             # ARGS=-u writes the goldens
 make clean
 ```
 
-Never run `make setup` or `make test` unasked: mode `kde` takes over the
-user's keyboard and pointer, and setup waits for the user to confirm
-KDE's shortcut dialog. Modes `sway` and `offscreen` cannot test global
+Never run `make setup` or `make test` (mode `kde`) unasked: mode `kde`
+takes over the user's keyboard and pointer, and setup waits for the user
+to confirm KDE's shortcut dialog. `make test MODE=sway` runs a headless
+nested sway with virtual input devices and is safe to run. Modes `sway`
+and `offscreen` cannot test global
 shortcuts: a nested sway shares the user's session bus, so the KDE portal
 would bind (and show its dialog) on the real desktop while kglobalaccel
 never sees the nested compositor's keys. Run one Crystal compile at a
@@ -26,9 +29,13 @@ time, with `--threads 2` (`CRFLAGS`).
 
 - `src/main.cr` - the harness: `Livetest.run(ARGV, Apprt::Test::Subject.new)`.
 - `src/apprt/test/subject.cr` - `Apprt::Test::Subject` (`:nodoc:`):
-  starts `apprt-under-test --class <livetest app id>`.
+  starts `apprt-under-test --class <livetest app id>`, plus `--global`
+  for cases with the extra key `global: true`.
 - `src/under_test.cr` - the app under test (`Apprt::Test::UnderTest`).
 - `cases.yml` - the cases; `spec/subject_spec.cr` checks that it parses.
+- `goldens/<case>/<shot>.png` - the screenshots the cases compare with,
+  written by mode `sway` (`ARGS=-u`). Modes share them; the shots hold
+  the window only, client-side decorated.
 - `shard.override.yml` - takes livetest from `../../livetest`; apprt is
   the parent directory (`path: ..`).
 - `bin/`, `lib/`, `out/`, `shard.lock` - generated, ignored.
@@ -52,6 +59,16 @@ time, with `--threads 2` (`CRFLAGS`).
   later need to activate stored shortcuts.
 - apprt has no hook for a successful bind, so the case sleeps 1.5 s
   before pressing the shortcut.
+- Only `--global` (or `--setup`) binds the global shortcut: binding it in
+  a nested sway would reach the real desktop's portal through the shared
+  session bus.
+- `Report` (window) and `ShowProgress` (split) are the app's own actions.
+  `Report` lines carry the active key tables, so `expect` proves which
+  binding ran and in which table. The labels are not focusable, so the
+  window's first button holds the focus (its ring shows in the shots).
+- `expect` skips other lines until the expected one, so a case cannot
+  check that a binding did not fire; it checks that the wanted one did
+  (Ctrl+A Ctrl+T reports `capture` only if the sequence took the key).
 
 ## Code standards
 

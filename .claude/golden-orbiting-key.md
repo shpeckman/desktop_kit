@@ -4,18 +4,22 @@
 
 User wants Ghostty's apprt (`/home/spaceman/Downloads/ghostty-main/src/apprt`, Zig) ported to Crystal as a
 **generic, reusable native Linux app runtime**: GTK4 + libadwaita, Wayland, systemd and DBus, for any app, not
-only terminals. New standalone shard at `/home/spaceman/.lib/crystal/apprt`. It is on branch `dev` and has only an
-empty README.md. No shard dependencies. crwin and wpe_webkit are reference only.
+only terminals. New standalone shard at `/home/spaceman/.lib/crystal/apprt`, worked on in branch `dev` and shipped to `main`.
+No shard dependencies. crwin and wpe_webkit are reference only.
+
+Status (2026-11-14): milestone 1 and the later milestones listed under "Delivered" are done and shipped
+(`main` = `d16dbf6`, 236 specs). "Roadmap" lists what is left.
 
 User decisions:
-- Linux/GTK focus first.
+- Linux/GTK focus first; Wayland only (X11 extras dropped).
 - Milestone 1 covers app lifecycle, windows, surfaces, tabs, splits, global shortcuts, desktop notifications and
   IPC/DBus.
 - Bindings: a GIR generator plus hand-written wrappers.
 - Widgets: composition, built in code. Stock Adw/GTK widgets, no GType subclassing, no templates, no gresource.
+- Wayland protocols (blur, decorations) through a self-contained `libwayland-client` binding, not crwin.
 
 What is dropped from Ghostty: the terminal-specific parts. That covers pty/termio, renderer health, scrollback,
-inspector, OSC handling, search overlay, child-exited and cell size. The apprt contract stays the same (App,
+inspector, OSC handling, child-exited and cell size. (The search overlay can come back as a generic find bar.) The apprt contract stays the same (App,
 Surface, typed actions with a `Target`, async clipboard, NewSurfaceContext, IPC).
 
 ## Architecture decisions (validated against Crystal 1.23 stdlib)
@@ -53,20 +57,28 @@ Surface, typed actions with a `Target`, async clipboard, NewSurfaceContext, IPC)
 
 ## Layout
 
+The authoritative file list is `AGENTS.md` ("Layout"). In short:
+
 ```
 shard.yml  Makefile  README.md  AGENTS.md  LICENSE  .gitignore
-data/gir/{GLib-2.0,GObject-2.0,Gio-2.0,Gdk-4.0,Gtk-4.0,Adw-1}.txt   symbol allowlists, one C id per line
-tools/gen_gir.cr  tools/gir/generator.cr                          generator (pattern: crwin tools/gen_wayland.cr)
-src/apprt.cr                                                      require order: c, glib, types, ui_thread, action, rest
-src/apprt/c/{glib,gobject,gio,gdk,gtk,adw}.cr                     generated, checked in, "Do not edit" header
-src/apprt/c/manual.cr                                             GValue, *_get_type gaps, typing exceptions
-src/apprt/glib/{error,native,handles,wrapper,widget,signals,variant}.cr
-src/apprt/{ui_thread,types,action,actions,trigger,keybinds,config}.cr
-src/apprt/{app,window,tab,split_tree,split_view,surface,content,canvas,input,key,clipboard,dialogs}.cr
-src/apprt/{notifications,dbus,ipc,portal,global_shortcuts,systemd,css}.cr  src/apprt/style.css
-spec/{pure,gtk,dbus,wayland}/  spec/data/Fixture-1.0.gir  spec/support/{gtk_helper,fake_portal,fake_notifications}.cr
-examples/{hello,canvas,ipc}.cr
+data/gir/{GLib-2.0,GObject-2.0,Gio-2.0,Gdk-4.0,Gtk-4.0,Adw-1}.txt   symbol allowlists
+tools/gen_gir.cr  tools/gir/generator.cr                          GIR generator
+src/apprt.cr                                                      entry, require order
+src/apprt/c/{glib,gobject,gio,gdk,gtk,adw}.cr                     generated, never edited
+src/apprt/c/{manual,wayland}.cr                                   GValue, constants, Pango gaps; lib Wl
+src/apprt/glib/{error,native,handles,wrapper,widget,signals,variant,idle}.cr
+src/apprt/{types,key,split_tree,ui_thread,systemd,action,actions,trigger,app,binding}.cr
+src/apprt/{dialogs,content,input,canvas,clipboard,surface,split_view,tab,window,window_style}.cr
+src/apprt/{undo_stack,progress,command_palette,notifications,ipc,portal,global_shortcuts,open_uri}.cr
+src/apprt/{wayland,winproto}.cr
+spec/pure/  spec/gtk/ (harness, fake_portal, fake_notifications)  spec/data/Fixture-1.0.gir
+examples/{hello,canvas,ipc,workspace,snake,dialogs}.cr
+test/                                                             apprt-test: live tests on KDE via livetest
 ```
+
+There is no `keybinds.cr`, `config.cr`, `dbus.cr`, `css.cr` or `style.css`: bindings live in `binding.cr`,
+config reload is the `on_reload` hook plus `Content#on_reload`, GDBus calls sit in their components, and
+runtime CSS is the `STYLE` constants of `Surface` and `Window` plus `WindowStyle#to_css`.
 
 ## Components
 
@@ -187,7 +199,7 @@ examples/{hello,canvas,ipc}.cr
   API, AGENTS.md for layout, commands, standards and `:nodoc:` extension points.
 - `shard.yml`: version 0.1.0, author shpeckman, `crystal: ">= 1.23.0"`, MIT,
   `libraries: gtk4 '>= 4.18', libadwaita-1 '>= 1.7', gio-2.0 '*'`, no dependencies.
-- Makefile in crwin style (`.POSIX`). Targets: `gen`, `spec`, `spec-gtk`, `spec-dbus`, `spec-wayland`, `docs`,
+- Makefile in crwin style (`.POSIX`). Targets: `gen`, `spec`, `spec-pure`, `spec-gtk`, `examples`, `docs`,
   `format`, `clean`.
 - One compile at a time, `--threads 2`. Prefix commands that change files with `dev`.
 - Work on `dev`. Ship only when asked.
@@ -211,33 +223,61 @@ examples/{hello,canvas,ipc}.cr
 12. End-to-end config reload, `examples/hello.cr` and `examples/canvas.cr`, docs pass (`crystal docs` shows only
     the public API), README/AGENTS sync.
 
-Later milestones: layer-shell quick window, blur, xdg-activation urgency and KDE decorations; X11 extras; systemd
-transient scopes (`StartTransientUnit`, post_fork/pre_exec); command palette, toasts and more dialogs; drag and
-drop; physical-key table; DMABUF texture offload rendering.
+Milestone 1 is done (commits `b77ff8c` … `4878b08`). Deviations: no `load_config`/`Config` (apps reload
+in `on_reload`); `Surface#close` is not the only death path (closing tabs and windows releases surfaces too).
+
+## Delivered after milestone 1
+
+- `fb97e2f`: toasts (`Window#toast`), drag and drop (surface drag handle, drop indicator,
+  `Content#on_drop` for files and text, tab drag-out), Wayland window extras (`Window#decoration=`,
+  `#background_blur=`, `#urgent=`), systemd transient scopes (`Systemd.start_scope`).
+- `aaaef3f`: command palette (`Command`, `ToggleCommandPalette`), key sequences (`ctrl+a>n`), the
+  physical-key table (`Apprt::Key`, `KeyEvent#key`), `Window#confirm` and `#prompt` dialogs.
+- `2fad3ca`: `WindowStyle` (pane headers, cards, tabs in the header bar, opacity), `Surface#icon=`,
+  `Window#subtitle=`, `#pack_start`/`#pack_end`, the `on_window` hook; examples workspace, snake, dialogs.
+- `ca96d39`: key tables (`App#key_tables=`, `ActivateKeyTable[Once]`, `DeactivateKeyTable`,
+  `DeactivateAllKeyTables`) and the key-state overlay; `ToggleVisibility`, `ShowGtkInspector`,
+  `ResetWindowSize`, `ToggleBackgroundOpacity`, `CopyTitleToClipboard`, `ToggleReadOnly`.
+- `d16dbf6`: undo for closed surfaces, tabs and windows (`Undo`, `Redo`, `App#undo_timeout=`); progress
+  reports (`Surface#progress=`, `Apprt::Progress`, taskbar via `com.canonical.Unity.LauncherEntry`).
+
+## Roadmap
+
+1. Live tests on KDE (`test/`): taskbar progress, key sequences and key tables with a real keyboard,
+   tabs-in-header look, drag and drop with a real pointer.
+2. Quit timer: keep running (or wait) after the last window closes; prerequisite for 3.
+3. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME).
+4. Small batch: bell sound and border flash; clipboard confirmation dialog; config errors dialog;
+   pane banner (`AdwBanner`); on-screen keyboard action.
+5. Generic search overlay; hover text and resize readout overlays.
+6. Pane header as drag handle; icons from image files; preferences dialog helper.
+7. Flatpak host commands (only if apps ship as Flatpak).
+8. DMABUF texture offload (`GdkDmabufTextureBuilder`, `GtkGraphicsOffload`).
 
 ## Verification
 
-- `make spec`: pure specs (split tree, action codec and registry, Trigger strings, object and portal paths,
-  sd_notify over a temporary DGRAM socket, generator fixture). No display needed.
-- `make spec-gtk`: `gtk4-broadwayd :5`, then
-  `GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 dbus-run-session -- crystal spec spec/gtk --threads 2`. Drives the
-  app via `post` and `g_action_group_activate_action` and checks the widget tree.
-- `make spec-dbus`: under `dbus-run-session`, covers the IPC round trip, the fake portal (GlobalShortcuts
-  Activated, Request.Response) and the fake notifications server.
-- `make spec-wayland`: headless sway (`WLR_BACKENDS=headless WLR_RENDERER=pixman`) for the GLArea canvas.
-- Manual check in the real session:
-  - `crystal run examples/hello.cr`: tabs, splits, drag-out, accels, a notification click presenting the surface.
-  - `examples/ipc.cr`: opens a window in the running instance.
-  - SIGUSR2 reloads the config.
-- `crystal docs`: the API shows only the intended public surface.
+- `make spec` (what `dev repo ship` runs): `spec/pure` (no display) and `spec/gtk`.
+- `spec/gtk` runs a private headless sway (`WLR_BACKENDS=headless`, `WLR_RENDERER=pixman`) and a private
+  `dbus-daemon` with no service directories; fakes stand in for the portal and the notification server.
+  Broadway was replaced because `GtkGLArea` needs GL and a process can use only one GDK backend. The
+  compositor has no keyboard, so key specs emit controller signals.
+- `make docs`: the API shows only the intended public surface.
+- `test/` (`make -C test test`, only when the user asks): livetest cases on the real KDE desktop, which
+  take over the keyboard and the pointer.
+- Manual: `make examples`, then `bin/hello`, `bin/workspace`, `bin/snake`, `bin/dialogs`, `bin/canvas`,
+  `bin/ipc`; SIGUSR2 reloads.
 
 ## Risks
 
-- GTK running on an Isolated (non-main) thread is unverified for GTK 4 on Linux. Step 4's spec checks it first.
-  The fallback is GTK on the main thread with app fibers in a Parallel context.
-- Crystal's SIGCHLD handler reaps every child, including GLib-spawned ones, so children should be started with
-  Crystal `Process`.
-- GLArea is unrealized and realized again on split rebuilds, so the canvas must rebuild its GL state in `realize`.
-- The GlobalShortcuts portal outside Flatpak needs a desktop file or host registry. Desktop support varies
+Resolved:
+- GTK on an `Isolated` thread works for GTK 4 on Linux (step 4's spec, and every GTK spec since).
+- GLArea re-realizes on split rebuilds; the canvas rebuilds GL state in `realize`.
+- GIO's freedesktop notification backend double-frees after the bus name vanishes; the notification specs
+  settle around shutdown (see `AGENTS.md`).
+
+Open:
+- Crystal's SIGCHLD handler reaps every child, including GLib-spawned ones, so children should be started
+  with Crystal `Process`.
+- The GlobalShortcuts portal outside Flatpak needs a desktop file or host registry; desktop support varies
   (GNOME 48+, KDE).
-- Broadway has no GL and no real key injection, hence the headless-sway target.
+- Taskbar progress likely shows only for an app id with an installed desktop file (unverified).

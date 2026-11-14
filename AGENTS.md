@@ -735,13 +735,16 @@ Crystal's `Process` has no hook between fork and exec.
 
 ## Live tests
 
-`test/` is a separate shard, `apprt-test`, that runs apprt on the user's
-real KDE Plasma desktop through `livetest` (`../../livetest` via
-`test/shard.override.yml`), for what only a real desktop can show: the
-global shortcuts portal and kglobalaccel. See `test/README.md` and
-`test/AGENTS.md`. Never run `make -C test test` or `make -C test setup`
-unasked: mode `kde` takes over the keyboard and the pointer, and setup
-waits for the user to confirm KDE's shortcut dialog.
+`test/` is a separate shard, `apprt-test`, that runs apprt with real
+keyboard input through `livetest` (`../../livetest` via
+`test/shard.override.yml`): key sequences, key tables and progress in a
+nested sway or on the user's KDE Plasma desktop, and what only a real
+desktop can show (the global shortcuts portal, kglobalaccel, taskbar
+progress) on KDE only. See `test/README.md` and `test/AGENTS.md`.
+`make -C test test MODE=sway` is safe; never run `make -C test test`
+(mode `kde`) or `make -C test setup` unasked: mode `kde` takes over the
+keyboard and the pointer, and setup waits for the user to confirm KDE's
+shortcut dialog.
 
 ## Bindings
 

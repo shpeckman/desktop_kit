@@ -3,10 +3,13 @@
 
 CRYSTAL = crystal
 CRFLAGS = --threads 2
-# kde: the only mode whose desktop serves the global shortcuts portal
+# kde: the only mode whose desktop serves the global shortcuts portal;
+# sway: a headless nested sway, for the cases that need no desktop
 MODE = kde
 # the names of the cases in cases.yml to run; empty: all of them
 CASES =
+# extra harness flags, such as -u to write the goldens or -S to show sway
+ARGS =
 # how the shards are fetched: "shards update" takes the local checkouts of
 # shard.override.yml on every make, "shards install" keeps shard.lock
 SHARDS = shards update
@@ -50,7 +53,7 @@ setup: all
 
 # runs the cases; MODE=kde takes over the keyboard and the pointer
 test: all
-	bin/apprt-test -m $(MODE) -b bin/apprt-under-test $(CASES)
+	bin/apprt-test -m $(MODE) -b bin/apprt-under-test $(ARGS) $(CASES)
 
 spec: bin/shard.lock
 	$(CRYSTAL) spec $(CRFLAGS)

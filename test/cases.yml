@@ -7,9 +7,66 @@
 # lets the portal bind the shortcut first.
 global-shortcut:
   modes: [kde]
+  global: true
   steps:
     - expect window
     - sleep 1500
     - key ctrl+alt+shift+F9
     - expect tab
+    - close
+
+# Key sequences on a real keyboard. ctrl+t is also a plain window shortcut:
+# after ctrl+a the sequence must take it, so `capture` reports and `accel`
+# does not. The shot shows the pending sequence in the key state overlay.
+sequences:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+t
+    - expect accel tables=
+    - key ctrl+a n
+    - expect sequence tables=
+    - key ctrl+a
+    - settle
+    - shoot pending
+    - key ctrl+t
+    - expect capture tables=
+    - close
+
+# The key table `mode` stays until Escape; the once variant leaves after
+# its first binding. The shot shows the table in the key state overlay.
+key-tables:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a e
+    - settle
+    - shoot mode
+    - key x
+    - expect table tables=mode
+    - key x
+    - expect table tables=mode
+    - key Escape
+    - key ctrl+a n
+    - expect sequence tables=
+    - key ctrl+a o
+    - key x
+    - expect table tables=
+    - key ctrl+a n
+    - expect sequence tables=
+    - close
+
+# A surface's progress: the bar on the pane, the tab's loading indicator
+# and, in kde mode, the taskbar entry of the installed desktop file (see
+# README.md). The shot covers the window only.
+progress:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a p
+    - expect progress 40
+    - settle
+    - shoot progress
+    - key ctrl+a shift+p
+    - expect progress -1
     - close
