@@ -49,6 +49,42 @@ module Apprt
       on_drop(data)
     end
 
+    # :showdoc:
+    #
+    # Called when the search text of the surface's search bar changes to
+    # *needle*; an empty *needle* clears the search. Report the matches
+    # with `Surface#search_total=` and `Surface#search_selected=`.
+    protected def on_search(needle : String) : Nil
+    end
+
+    # :showdoc:
+    #
+    # Called to select the next match when *forward*, else the previous one.
+    protected def on_search_navigate(forward : Bool) : Nil
+    end
+
+    # :showdoc:
+    #
+    # Called when the search bar closes.
+    protected def on_search_end : Nil
+    end
+
+    # Calls the search hooks with an implicit receiver, which reaches
+    # overrides defined outside `Apprt`.
+    protected def search(needle : String) : Nil
+      on_search(needle)
+    end
+
+    # :ditto:
+    protected def search_navigate(forward : Bool) : Nil
+      on_search_navigate(forward)
+    end
+
+    # :ditto:
+    protected def search_end : Nil
+      on_search_end
+    end
+
     # Shows the input method's on-screen keyboard; returns whether it
     # showed. Content has none by default.
     protected def show_on_screen_keyboard : Bool

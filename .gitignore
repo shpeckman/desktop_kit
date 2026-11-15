@@ -5,3 +5,5 @@
 /lib/
 /.shards/
 shard.lock
+/.claude/
+AGENTS.md

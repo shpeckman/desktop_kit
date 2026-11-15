@@ -16,7 +16,7 @@ module Apprt
     record ClosedTab, state : TabState, window : Window, position : Int32
 
     # A closed window's tabs, in order.
-    record ClosedWindow, tabs : Array(TabState)
+    record ClosedWindow, tabs : Array(TabState), panel : Panel?
 
     alias Closed = ClosedSurface | ClosedTab | ClosedWindow
 
@@ -110,7 +110,7 @@ module Apprt
     end
 
     private def reopen(closed : ClosedWindow) : Window
-      target = @app.open_window
+      target = @app.open_window(closed.panel)
       closed.tabs.each { |state| reopen_tab(state, target, nil) }
       target.present
       target

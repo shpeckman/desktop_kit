@@ -16,6 +16,28 @@ module Apprt
       target.show_on_screen_keyboard
     end
 
+    protected def perform(target : Surface, action : Action::StartSearch) : Bool
+      target.start_search
+      true
+    end
+
+    protected def perform(target : Surface, action : Action::EndSearch) : Bool
+      return false unless target.search_active?
+      target.end_search
+      true
+    end
+
+    protected def perform(target : Surface, action : Action::Search) : Bool
+      target.start_search(action.needle)
+      true
+    end
+
+    protected def perform(target : Surface, action : Action::NavigateSearch) : Bool
+      return false unless target.search_active?
+      target.navigate_search(action.direction.next?)
+      true
+    end
+
     protected def perform(target : Surface, action : Action::NewSplit) : Bool
       target.split(action.direction)
       true

@@ -45,9 +45,34 @@ module Apprt
 
     # Runs `xdg-open` on *url* and logs its error output when it fails.
     #
-    # GIO spawns and reaps the process, so the wait does not depend on
-    # Crystal's SIGCHLD handler, which applications may reset.
+    # Crystal's SIGCHLD handler reaps every child, so while it is installed
+    # the process is a Crystal `Process`; GIO's wait would find it gone. An
+    # application that resets SIGCHLD to the default or ignores it gets a
+    # `GSubprocess`, which GIO reaps, as `Process#wait` would hang there.
     def self.xdg_open(url : String) : Nil
+      crystal_reaps? ? process_open(url) : gio_open(url)
+    end
+
+    # Whether a handler, Crystal's, is installed for SIGCHLD.
+    private def self.crystal_reaps? : Bool
+      LibC.sigaction(LibC::SIGCHLD, nil, out action)
+      action.sa_sigaction.pointer.address > 1
+    end
+
+    private def self.process_open(url : String) : Nil
+      process = File.open(File::NULL, "w") do |null|
+        Process.new("xdg-open", [url], output: null, error: :pipe)
+      end
+      spawn do
+        message = process.error.gets_to_end.strip
+        status = process.wait
+        Log.warn { "xdg-open #{url}: #{message.presence || status.description}" } unless status.success?
+      end
+    rescue ex : IO::Error
+      Log.error { "open url #{url}: #{ex.message}" }
+    end
+
+    private def self.gio_open(url : String) : Nil
       argv = Native.strv({"xdg-open", url})
       flags = C::GSubprocessFlags::StdoutSilence | C::GSubprocessFlags::StderrPipe
       process = GLibError.check! { |error| C.g_subprocess_newv(argv.to_unsafe, flags, error) }

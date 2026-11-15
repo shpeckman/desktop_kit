@@ -255,6 +255,14 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
   `wayland/` (no public names changed); `window.cr`, `canvas.cr` and `surface.cr` split into
   `window_keys`/`window_actions`, `canvas_input`, `surface_drop`/`surface_actions`; specs mirror the
   groups.
+- `OpenURI.xdg_open` runs a Crystal `Process` while Crystal's SIGCHLD handler is installed (GIO's
+  `waitid` lost the child to it), a `GSubprocess` otherwise.
+- Surface overlays: search bar (`Surface#start_search`, `Content#on_search` hooks, `StartSearch`,
+  `EndSearch`, `Search`, `NavigateSearch`), `Surface#hover_text=` and `Surface#show_size`.
+- Panels after kitty's panel kitten (`src/apprt/window/panel.cr`): `Panel` (edge incl. background,
+  center, center-sized, none; layer; width/height; margins; output; focus; exclusive zone;
+  hide on focus loss; name), `App#new_panel`, `#panels?`, `#outputs`, `Window#panel=`, the ipc
+  action `TogglePanel`; undo reopens panels as panels. Through gtk4-layer-shell (new dependency).
 
 ## Roadmap
 
@@ -262,10 +270,8 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
    and key tables with a real keyboard, progress (the user saw 40 % on the taskbar entry),
    `header-tabs`, `drag-drop` and `header-drag` with a real pointer, and `offload` (the canvas's frames
    reach KWin as DMA-BUFs). Every case passes; new features get a case here.
-2. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME); builds on
-   `App#quit_delay = nil`.
-3. Generic search overlay; hover text and resize readout overlays.
-4. Flatpak host commands (only if apps ship as Flatpak).
+2. Live case for panels on KDE (a quick panel toggled by a global binding).
+3. Flatpak host commands (only if apps ship as Flatpak).
 
 ## Verification
 
@@ -289,8 +295,8 @@ Resolved:
   settle around shutdown (see `AGENTS.md`).
 
 Open:
-- Crystal's SIGCHLD handler reaps every child, including GLib-spawned ones, so children should be started
-  with Crystal `Process`.
+- Crystal's SIGCHLD handler reaps every child, including GLib-spawned ones: children must be started with
+  Crystal `Process` while it is installed (`OpenURI.xdg_open` picks by the SIGCHLD disposition).
 - The GlobalShortcuts portal outside Flatpak needs a desktop file or host registry; desktop support varies
   (GNOME 48+, KDE).
 - Taskbar progress shows on KDE for an app id with an installed desktop file (live test); without one,

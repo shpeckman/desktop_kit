@@ -4,7 +4,11 @@ module Apprt
   # The libwayland-client functions `Wayland` builds on. Protocol interfaces
   # are described at runtime (`Wayland::PROTOCOL`), not taken from the
   # library, so no generated protocol code is needed.
+  #
+  # gtk4-layer-shell must be linked before libwayland-client, and Crystal
+  # links the later annotation first.
   @[Link(pkg_config: "wayland-client")]
+  @[Link(pkg_config: "gtk4-layer-shell-0")]
   lib Wl
     MARSHAL_FLAG_DESTROY = 1_u32
 

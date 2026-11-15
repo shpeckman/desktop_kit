@@ -116,3 +116,7 @@ g_subprocess_get_term_sig
 # icons from files
 g_file_new_for_path
 g_file_icon_new
+
+GListModel
+g_list_model_get_n_items
+g_list_model_get_item

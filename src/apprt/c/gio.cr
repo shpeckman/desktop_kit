@@ -187,5 +187,8 @@ module Apprt
     fun g_subprocess_get_term_sig(subprocess : Void*) : Int32
     fun g_file_new_for_path(path : UInt8*) : Void*
     fun g_file_icon_new(file : Void*) : Void*
+    fun g_list_model_get_type : GType
+    fun g_list_model_get_n_items(list : Void*) : UInt32
+    fun g_list_model_get_item(list : Void*, position : UInt32) : Void*
   end
 end

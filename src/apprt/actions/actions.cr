@@ -25,6 +25,10 @@ module Apprt
     # Hides every window, or shows them all again when none is visible.
     Apprt.action ToggleVisibility, "toggle-visibility"
 
+    # Hides the panels whose `Panel#name` is *panel*, or shows them again
+    # when none is visible.
+    Apprt.action TogglePanel, "toggle-panel", ipc: true, payload: {panel: String}
+
     # Reopens the latest closed surface, tab or window while
     # `App#undo_timeout` has not passed.
     Apprt.action Undo, "undo"
@@ -151,6 +155,23 @@ module Apprt
     # Closes the focused surface, asking first when it has
     # `Surface#confirm_close?`.
     Apprt.action CloseSurface, "close-surface", scope: :split
+
+    # Opens the focused surface's search bar.
+    Apprt.action StartSearch, "start-search", scope: :split
+
+    # Closes the focused surface's search bar.
+    Apprt.action EndSearch, "end-search", scope: :split
+
+    # Searches the focused surface for *needle*, opening its search bar.
+    Apprt.action Search, "search", scope: :split, payload: {needle: String}
+
+    # Selects the next or previous match of the focused surface's search.
+    Apprt.action NavigateSearch, "navigate-search", scope: :split, payload: {direction: Direction} do
+      enum Direction
+        Previous
+        Next
+      end
+    end
 
     # Sets the title of the focused surface.
     Apprt.action SetTitle, "set-title", scope: :split, payload: {title: String}

@@ -359,5 +359,14 @@ module Apprt
     fun gtk_string_list_new(strings : UInt8**) : Void*
     fun gtk_graphics_offload_new(child : Void*) : Void*
     fun gtk_graphics_offload_set_enabled(self_ : Void*, enabled : GtkGraphicsOffloadEnabled)
+    fun gtk_search_entry_set_placeholder_text(entry : Void*, text : UInt8*)
+    fun gtk_gesture_drag_new : Void*
+    fun gtk_gesture_drag_get_offset(gesture : Void*, x : Float64*, y : Float64*) : Int32
+    fun gtk_gesture_drag_get_start_point(gesture : Void*, x : Float64*, y : Float64*) : Int32
+    fun gtk_label_set_width_chars(self_ : Void*, n_chars : Int32)
+    fun gtk_widget_get_halign(widget : Void*) : GtkAlign
+    fun gtk_widget_get_valign(widget : Void*) : GtkAlign
+    fun gtk_widget_queue_resize(widget : Void*)
+    fun gtk_editable_set_width_chars(editable : Void*, n_chars : Int32)
   end
 end

@@ -66,9 +66,14 @@ module Apprt
     @shortcuts_inhibited = false
     @suspended = false
 
-    protected def initialize(@app : App)
+    protected def initialize(@app : App, @panel : Panel? = nil)
       @widget = Widget.new(C.adw_application_window_new(@app))
       C.gtk_window_set_default_size(@widget, *@initial_size)
+      if panel = @panel
+        Panel.init(@widget)
+        panel.apply(@widget)
+        @decoration = Decoration::None
+      end
       @tab_view = Widget.new(C.adw_tab_view_new)
       @title_widget = Widget.new(C.adw_window_title_new(Window.default_title, ""))
       @overview = Widget.new(C.adw_tab_overview_new)
@@ -122,6 +127,7 @@ module Apprt
     # bar and the row below it.
     protected def apply_style(style : WindowStyle) : Nil
       header = style.header_bar?
+      @header.visible = !@panel
       C.adw_toolbar_view_set_reveal_top_bars(@toolbar, header ? 1 : 0)
       shortcuts = header ? C::AdwTabViewShortcuts::AllShortcuts : C::AdwTabViewShortcuts.new(0)
       C.adw_tab_view_set_shortcuts(@tab_view, shortcuts)
@@ -496,7 +502,7 @@ module Apprt
       states = ordered.compact_map { |tab| tab.state unless tab.state.tree.empty? }
       ordered.each(&.destroy(keep: true))
       @app.tabs.each { |tab| tab.destroy if tab.window == self }
-      @app.undo_stack.record(UndoStack::ClosedWindow.new(states)) unless states.empty?
+      @app.undo_stack.record(UndoStack::ClosedWindow.new(states, @panel)) unless states.empty?
     end
 
     private def page_count : Int32
@@ -599,7 +605,10 @@ module Apprt
       Signals.connect(@widget, "destroy", -> { destroyed })
       Signals.connect(@widget, "realize", -> { realized })
       Signals.connect(@widget, "unrealize", -> { unrealized })
-      Signals.notify(@widget, "is-active", -> { self.urgent = false if active? })
+      Signals.notify(@widget, "is-active", -> do
+        self.urgent = false if active?
+        panel_focus_changed
+      end)
     end
 
     # Attaches the Wayland extras to the new surface and applies the

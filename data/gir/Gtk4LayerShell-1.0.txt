@@ -1,0 +1,16 @@
+# data/gir/Gtk4LayerShell-1.0.txt
+# Gtk4LayerShell symbols of Apprt::C (src/apprt/c/gtk4layershell.cr); see tools/gir/generator.cr.
+
+GtkLayerShellEdge
+GtkLayerShellLayer
+GtkLayerShellKeyboardMode
+gtk_layer_is_supported
+gtk_layer_init_for_window
+gtk_layer_set_namespace
+gtk_layer_set_layer
+gtk_layer_set_anchor
+gtk_layer_set_margin
+gtk_layer_set_exclusive_zone
+gtk_layer_auto_exclusive_zone_enable
+gtk_layer_set_keyboard_mode
+gtk_layer_set_monitor

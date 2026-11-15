@@ -59,6 +59,9 @@ module Apprt
       .surface-drag-handle:hover { opacity: 1; }
       .surface-drop-indicator { opacity: 0; }
       .canvas-frame { transform: scaleY(-1); }
+      .surface-search { padding: 6px; border-radius: 8px; }
+      .surface-size { padding: 6px 12px; border-radius: 6px; }
+      .surface-hover { margin: 4px; padding: 2px 8px; border-radius: 6px; }
       .surface-drop-indicator.drop-left { opacity: 1; background: linear-gradient(to right, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-right { opacity: 1; background: linear-gradient(to left, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-up { opacity: 1; background: linear-gradient(to bottom, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
@@ -93,6 +96,7 @@ module Apprt
       @progress_bar = Widget.new(C.gtk_progress_bar_new)
       @bell_border = Widget.new(C.gtk_revealer_new)
       @banner_bar = Widget.new(C.adw_banner_new(""))
+      @overlay = C.gtk_overlay_new
       layout
       apply_style(@app.window_style)
       install_drag_and_drop
@@ -320,7 +324,7 @@ module Apprt
 
     # Stacks the content under the drag handle and the drop indicator.
     private def layout : Nil
-      overlay = C.gtk_overlay_new
+      overlay = @overlay
       C.gtk_overlay_set_child(overlay, @content.widget)
       image = C.gtk_image_new_from_icon_name("view-more-horizontal-symbolic")
       C.gtk_center_box_set_center_widget(@handle, image)
@@ -357,6 +361,7 @@ module Apprt
       C.gtk_widget_set_valign(@banner_bar, C::GtkAlign::End)
       Signals.connect(@banner_bar, "button-clicked", -> { @banner_action.try(&.call); nil })
       C.gtk_overlay_add_overlay(overlay, @banner_bar)
+      layout_overlays(overlay)
       Widget.new(overlay).vexpand = true
       build_header
       box = C.gtk_box_new(C::GtkOrientation::Vertical, 0)
@@ -429,6 +434,7 @@ module Apprt
       @banner_action = nil
       @notifications.clear
       stop_pulse
+      release_overlays
       @app.unregister(self)
       @app.sync_progress if @progress
       C.g_object_unref(@host)

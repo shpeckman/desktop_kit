@@ -282,9 +282,9 @@ module Apprt
       perform(target, action)
     end
 
-    protected def open_window : Window
+    protected def open_window(panel : Panel? = nil) : Window
       stop_quit_timer
-      window = Window.new(self)
+      window = Window.new(self, panel)
       @windows << window
       on_window(window)
       window

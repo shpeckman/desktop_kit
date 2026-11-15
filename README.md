@@ -26,8 +26,8 @@ and the GLib layer the runtime builds on.
 ## Requirements
 
 - Crystal ≥ 1.23
-- GTK ≥ 4.18, libadwaita ≥ 1.7 and wayland-client (development packages,
-  found with `pkg-config`)
+- GTK ≥ 4.18, libadwaita ≥ 1.7, gtk4-layer-shell ≥ 1.0 and wayland-client
+  (development packages, found with `pkg-config`)
 
 ## Installation
 
@@ -205,6 +205,10 @@ elsewhere.
 | `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
 | `Window#key_tables`              | the names of its active key tables, innermost last                |
 | `Surface#progress=`              | shows an `Apprt::Progress` on its pane, tab and the taskbar; `nil` hides it |
+| `Surface#hover_text=`            | shows text, such as a hovered link's target, at the bottom of its pane; `nil` hides it |
+| `Surface#show_size(text)`        | shows *text*, such as the new size after a resize, in the middle of its pane for a moment |
+| `Surface#start_search(needle)`, `#end_search`, `#search_active?` | opens and closes its search bar (`StartSearch`, `Search(needle)`, `EndSearch`) |
+| `Surface#search_total=`, `#search_selected=` | the match count and the current match (from 0) the search bar shows |
 
 A window has a header bar with a new tab button, a tab overview button and
 a menu with the window, tab, split and title actions; the tab bar shows
@@ -292,6 +296,55 @@ surface.icon = Path["/usr/share/pixmaps/editor.png"]
 window.pack_start(OpenSettings.new, "emblem-system-symbolic", "Settings")
 ```
 
+#### Panels
+
+`App#new_panel` opens a window that the desktop docks to a screen edge,
+shows as the wallpaper or floats above other windows, like kitty's panel
+kitten: a quick terminal, a status bar, a desktop widget. Panels have tabs
+and splits like other windows, but no header bar or decorations. They need
+a Wayland compositor with the wlr layer shell protocol, such as sway, KDE
+Plasma, Hyprland or niri; GNOME has none, and `App#panels?` is then false.
+
+```crystal
+quick = Apprt::Panel.new(edge: :top, height: 400, layer: :overlay,
+  focus: :on_demand, hide_on_focus_loss: true, name: "quick")
+app.new_panel(quick, shown: false)
+app.bindings = [Apprt::Binding.new("super+grave", Apprt::Action::TogglePanel.new("quick"), global: true)]
+```
+
+`Apprt::IPC.send(app_id, Apprt::Action::TogglePanel.new("quick"))` toggles it
+from another process. `Window#panel=` moves and resizes an open panel;
+`Window#panel` is `nil` for ordinary windows. `App#outputs` lists the
+monitors' names for `output`.
+
+| `Panel` field        | default         | meaning                                                                                       |
+|----------------------|-----------------|-----------------------------------------------------------------------------------------------|
+| `edge`               | `:top`          | where it sits; see below                                                                      |
+| `layer`              | `:bottom`       | `:background`, `:bottom`, `:top` or `:overlay`, from the bottom up; `edge: :background` forces `:background` |
+| `width`, `height`    | `0`             | logical pixels; 0 takes the content's natural size, which is also the minimum                   |
+| `margin_top`, `margin_right`, `margin_bottom`, `margin_left` | `0` | logical pixels, on the edges the panel touches only                      |
+| `output`             | `nil`           | monitor name, such as `"DP-1"`; `nil` lets the compositor choose                              |
+| `focus`              | `:not_allowed`  | keyboard focus: `:not_allowed`, `:exclusive` (always, as the desktop permits) or `:on_demand` (on click) |
+| `exclusive_zone`     | `nil`           | pixels other windows and panels keep clear of; see below                                      |
+| `hide_on_focus_loss` | `false`         | hides the panel when it loses the focus; implies `focus: :on_demand`                         |
+| `name`               | `"apprt-panel"` | layer namespace, for `TogglePanel` and compositor rules                                       |
+
+| `edge`          | placement                                   | size from         |
+|-----------------|---------------------------------------------|-------------------|
+| `:top`, `:bottom` | along the edge, full width                | `height`          |
+| `:left`, `:right` | along the edge, full height               | `width`           |
+| `:background`   | whole monitor, below every window           | —                 |
+| `:center`       | whole monitor less the margins              | —                 |
+| `:center_sized` | centered; margins have no effect            | `width`, `height` |
+| `:none`         | top left corner, offset by the top and left margins | `width`, `height` |
+
+An edge panel reserves its own thickness by default, so maximized windows
+and other panels stay clear of it; other panels take `-1` by default and
+cover what others reserve. An explicit `exclusive_zone` overrides both
+(not for `:background`): `0` reserves nothing but stays clear of others'
+zones, `-1` covers them. `Window#shortcuts_inhibited=` lets a focused
+panel take the desktop's own shortcuts, like kitty's `--grab-keyboard`.
+
 #### Preferences
 
 `Apprt::Preferences` builds a preferences dialog from pages of groups of
@@ -374,6 +427,30 @@ class Editor < Apprt::WidgetContent
   protected def on_drop(text : String) : Bool
     insert(text)
     true
+  end
+end
+```
+
+Search: the search bar sits in a corner of the pane (top right at first;
+dragging it moves it to the nearest corner) with an entry, the match count,
+previous and next buttons and a close button. Return selects the next
+match, Shift+Return the previous one, Escape closes it. The content does
+the searching:
+
+```crystal
+class Editor < Apprt::WidgetContent
+  protected def on_search(needle : String) : Nil
+    @matches = find_all(needle)
+    surface.search_total = needle.empty? ? nil : @matches.size
+    surface.search_selected = @matches.empty? ? nil : 0
+  end
+
+  protected def on_search_navigate(forward : Bool) : Nil
+    select_match(forward ? 1 : -1)
+  end
+
+  protected def on_search_end : Nil
+    clear_highlights
   end
 end
 ```
@@ -661,10 +738,10 @@ Built-in actions, all nested in `Apprt::Action`:
 
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
+| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `TogglePanel(panel : String)` (ipc), `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
 | `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
-| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard` |
+| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard`, `StartSearch`, `EndSearch`, `Search(needle)`, `NavigateSearch(direction : Previous/Next)` |
 
 Sizes are `UInt32` pixels. `SizeLimit` sets the smallest window size and
 treats 0 as no limit; GTK 4 windows have no largest size, so its maximum is
@@ -677,7 +754,8 @@ fullscreen. `SetWindowTheme` sets the appearance of the whole application.
 fullscreen to its `InitialSize`, 800x600 by default.
 `ToggleBackgroundOpacity` makes a window opaque and back while the
 `WindowStyle` opacity is below 1. `ToggleVisibility` hides every window
-when any is shown and shows them all otherwise. `ShowGtkInspector` opens
+when any is shown and shows them all otherwise; `TogglePanel` does the
+same for the panels whose `Panel#name` it names. `ShowGtkInspector` opens
 GTK's interactive debugger. `CopyTitleToClipboard` copies the surface's
 shown title.
 `PresentSurface` presents the surface with that `Surface#id` and ignores

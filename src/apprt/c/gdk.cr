@@ -207,6 +207,8 @@ module Apprt
     fun gdk_toplevel_restore_system_shortcuts(toplevel : Void*)
     fun gdk_monitor_get_type : GType
     fun gdk_display_get_monitor_at_surface(display : Void*, surface : Void*) : Void*
+    fun gdk_display_get_monitors(self_ : Void*) : Void*
+    fun gdk_monitor_get_connector(monitor : Void*) : UInt8*
     fun gdk_monitor_get_geometry(monitor : Void*, geometry : GdkRectangle*)
     fun gdk_surface_get_width(surface : Void*) : Int32
     fun gdk_surface_get_height(surface : Void*) : Int32

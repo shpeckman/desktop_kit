@@ -3,13 +3,14 @@ require "file_utils"
 require "./fake_portal"
 
 # Puts a fake `xdg-open` first on PATH while the block runs; it appends its
-# argument to the log whose path the block receives.
-private def with_xdg_open(& : String ->) : Nil
+# argument to the log whose path the block receives, then exits with
+# *status* after printing *error* on standard error.
+private def with_xdg_open(status : Int32 = 0, error : String = "", & : String ->) : Nil
   dir = File.tempname("apprt-xdg-open")
   Dir.mkdir(dir)
   log = File.join(dir, "opened")
   script = File.join(dir, "xdg-open")
-  File.write(script, "#!/bin/sh\nprintf '%s\\n' \"$1\" >> '#{log}'\n")
+  File.write(script, "#!/bin/sh\nprintf '%s\\n' \"$1\" >> '#{log}'\nprintf '%s' '#{error}' >&2\nexit #{status}\n")
   File.chmod(script, 0o755)
   path = ENV["PATH"]?
   ENV["PATH"] = [dir, path].compact.join(':')
@@ -32,6 +33,37 @@ private def open_urls(urls : Array(String)) : Nil
   run_steps(app) do
     window = app.new_window
     urls.each { |url| trigger(window, Apprt::Action::OpenUrl.new(url: url)) }
+  end
+end
+
+# Runs the block with SIGCHLD reset to the default disposition, as an
+# application that waits for its own children might.
+private def with_default_sigchld(&) : Nil
+  LibC.sigaction(LibC::SIGCHLD, nil, out saved)
+  default = LibC::Sigaction.new
+  default.sa_sigaction = LibC::SigactionHandlerT.new(Pointer(Void).null, Pointer(Void).null)
+  LibC.sigaction(LibC::SIGCHLD, pointerof(default), nil)
+  begin
+    yield
+  ensure
+    LibC.sigaction(LibC::SIGCHLD, pointerof(saved), nil)
+  end
+end
+
+# Opens a URL with a failing `xdg-open` and checks that its error output
+# is logged.
+private def check_failing_xdg_open : Nil
+  with_xdg_open(status: 3, error: "no handler") do |log|
+    Log.capture("apprt") do |logs|
+      app = TestApp.new
+      logged = false
+      run_steps(app) do
+        trigger(app.new_window, Apprt::Action::OpenUrl.new(url: "/tmp/c.txt"))
+        logged = eventually { logs.@entries.any?(&.message.==("xdg-open /tmp/c.txt: no handler")) }
+      end
+      logged.should be_true
+      xdg_opened(log).should eq ["/tmp/c.txt"]
+    end
   end
 end
 
@@ -83,6 +115,14 @@ describe Apprt::Action::OpenUrl do
       end
       FakePortal.poll { xdg_opened(log) == ["/tmp/b.txt", "file:///tmp/a.txt"] }.should be_true
     end
+  end
+
+  it "logs a failing xdg-open's error output" do
+    check_failing_xdg_open
+  end
+
+  it "logs a failing xdg-open's error output with SIGCHLD at its default" do
+    with_default_sigchld { check_failing_xdg_open }
   end
 
   it "opens with xdg-open when no portal runs" do
