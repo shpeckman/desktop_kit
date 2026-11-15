@@ -298,8 +298,6 @@ gtk_graphics_offload_set_enabled
 GtkGraphicsOffloadEnabled
 gtk_search_entry_set_placeholder_text
 gtk_gesture_drag_new
-gtk_gesture_drag_get_offset
-gtk_gesture_drag_get_start_point
 gtk_label_set_width_chars
 gtk_widget_get_halign
 gtk_widget_get_valign

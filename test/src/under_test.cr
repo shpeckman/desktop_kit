@@ -1,9 +1,10 @@
 # src/under_test.cr
 #
 # The apprt app the live tests run: one window of labels with key
-# sequences, a key table, progress, tab, split, header, pane header and
-# offloading canvas bindings, and with --global the global Ctrl+Alt+Shift+F9, which opens a tab. It
-# reports through LIVETEST_FIFO, and on standard error:
+# sequences, a key table, progress, tab, split, header, pane header,
+# offloading canvas, search and panel bindings, and with --global the
+# global Ctrl+Alt+Shift+F9, which opens a tab. Closing the window closes
+# its panels. It reports through LIVETEST_FIFO, and on standard error:
 #
 #   window                     its window is open
 #   tab                        a tab opened
@@ -17,6 +18,15 @@
 #   pane headers               every surface shows its pane header
 #   canvas dmabuf=BOOL         the canvas tab showed its first frame, as a
 #                              DMA-BUF when BOOL is true
+#   search NEEDLE              the search text changed to NEEDLE; every
+#                              label matches three times
+#   navigate next|previous     the search moved to the next or previous match
+#   search end                 the search bar closed
+#   panel shown=BOOL           the quick panel opened or toggled, or was
+#                              asked about
+#   dock clear=BOOL            a bottom dock opened; BOOL is true when a
+#                              left panel that respects reserved space lost
+#                              exactly the dock's height
 #
 #   apprt-under-test --class ID  runs under the harness with window class ID
 #   apprt-under-test --global    also binds the global shortcut
@@ -28,6 +38,8 @@ require "apprt"
 lib LibGtk
   fun gtk_label_new(text : UInt8*) : Void*
   fun gtk_native_get_surface(native : Void*) : Void*
+  fun gtk_settings_get_default : Void*
+  fun g_object_set(object : Void*, property : UInt8*, ...)
 end
 
 @[Link("GL")]
@@ -72,6 +84,25 @@ module Apprt::Test
   # Opens a tab whose content is an offloading `Halves` canvas.
   Apprt.action OpenCanvas, "open-canvas", scope: :window
 
+  # Opens the quick panel the first time, toggles it after that.
+  Apprt.action QuickPanel, "quick-panel", scope: :app
+
+  # Reports whether the quick panel is shown.
+  Apprt.action ReportPanel, "report-panel", scope: :app
+
+  # Opens a bottom dock and checks the space it reserves.
+  Apprt.action DockPanel, "dock-panel", scope: :app
+
+  # The quick panel: a drop-down above other windows that hides when it
+  # loses the focus.
+  QUICK = Apprt::Panel.new(edge: :top, height: 200, layer: :overlay,
+    hide_on_focus_loss: true, name: "quick")
+
+  # The dock `DockPanel` opens, and the left panel whose height shows
+  # the space the dock reserves.
+  DOCK  = Apprt::Panel.new(edge: :bottom, height: 160, name: "dock")
+  PROBE = Apprt::Panel.new(edge: :left, width: 60, exclusive_zone: 0, name: "probe")
+
   # The window bindings under test. `ctrl+t` is a plain window shortcut
   # that `ctrl+a>ctrl+t` must win over while the sequence is pending.
   BINDINGS = {
@@ -88,6 +119,10 @@ module Apprt::Test
     "ctrl+a>h"       => HeaderTabs.new,
     "ctrl+a>m"       => PaneHeaders.new,
     "ctrl+a>c"       => OpenCanvas.new,
+    "ctrl+a>f"       => Action::StartSearch.new,
+    "ctrl+a>q"       => QuickPanel.new,
+    "ctrl+a>v"       => ReportPanel.new,
+    "ctrl+a>b"       => DockPanel.new,
   }
 
   # The key table `mode`.
@@ -129,6 +164,34 @@ module Apprt::Test
     end
   end
 
+  # A label that reports its search and matches every needle three times.
+  class Label < Apprt::WidgetContent
+    MATCHES = 3
+
+    @selected = 0
+
+    def initialize(text : String)
+      super(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
+    end
+
+    protected def on_search(needle : String) : Nil
+      @selected = 0
+      surface.search_total = needle.empty? ? nil : MATCHES
+      surface.search_selected = needle.empty? ? nil : @selected
+      Test.report "search #{needle}"
+    end
+
+    protected def on_search_navigate(forward : Bool) : Nil
+      @selected = (@selected + (forward ? 1 : -1)) % MATCHES
+      surface.search_selected = @selected
+      Test.report "navigate #{forward ? "next" : "previous"}"
+    end
+
+    protected def on_search_end : Nil
+      Test.report "search end"
+    end
+  end
+
   class UnderTest < Apprt::App
     getter? failed = false
 
@@ -137,6 +200,9 @@ module Apprt::Test
 
     # Whether the next surface is a `Halves` canvas.
     @canvas = false
+
+    # The quick panel once `QuickPanel` opened it.
+    @quick : Apprt::Window?
 
     # Runs with *window_class* as the Wayland app id of its window when
     # given; *global* binds the global shortcut; *setup* waits for the
@@ -165,6 +231,8 @@ module Apprt::Test
     end
 
     protected def on_startup : Nil
+      # A blinking caret would make shots of the search bar differ.
+      LibGtk.g_object_set(LibGtk.gtk_settings_get_default, "gtk-cursor-blink", 0, Pointer(Void).null)
       bindings = BINDINGS.map { |keys, action| Apprt::Binding.new(keys, action) }
       bindings << Apprt::Binding.new(TRIGGER, Apprt::Action::NewTab.new, global: true) if @global || @setup
       self.bindings = bindings
@@ -173,6 +241,7 @@ module Apprt::Test
 
     protected def on_activate : Nil
       window = new_window
+      close_panels_with(window)
       # GTK gives the window the application id at realize, which
       # new_window did; the harness finds the window by its own id.
       @window_class.try do |id|
@@ -194,7 +263,7 @@ module Apprt::Test
         return Halves.new
       end
       text = @setup ? "Confirm the shortcut in the desktop's dialog, then press #{TRIGGER.label}." : context.kind.to_s
-      content = Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
+      content = Label.new(text)
       @kinds[content] = context.kind.to_s.downcase
       content
     end
@@ -236,6 +305,47 @@ module Apprt::Test
     protected def perform(target : Apprt::Window, action : OpenCanvas) : Bool
       @canvas = true
       perform(target, Apprt::Action::NewTab.new)
+    end
+
+    protected def perform(target : Apprt::App, action : QuickPanel) : Bool
+      if @quick
+        perform(target, Apprt::Action::TogglePanel.new(QUICK.name))
+      else
+        @quick = new_panel(QUICK)
+      end
+      report_panel
+      true
+    end
+
+    protected def perform(target : Apprt::App, action : ReportPanel) : Bool
+      report_panel
+      true
+    end
+
+    protected def perform(target : Apprt::App, action : DockPanel) : Bool
+      probe = new_panel(PROBE)
+      after(500.milliseconds) do
+        before = probe.widget.height
+        new_panel(DOCK)
+        after(1.second) { report "dock clear=#{before - probe.widget.height == DOCK.height}" }
+      end
+      true
+    end
+
+    # Closes every panel once *window* closed, so the app quits; apprt has
+    # no hook for a closed window, so this checks every 100 ms.
+    private def close_panels_with(window : Apprt::Window) : Nil
+      after(100.milliseconds) do
+        if window.closed?
+          windows.select(&.panel).each(&.close)
+        else
+          close_panels_with(window)
+        end
+      end
+    end
+
+    private def report_panel : Nil
+      report "panel shown=#{@quick.try(&.widget.visible?) || false}"
     end
 
     private def report(line : String) : Nil

@@ -121,6 +121,19 @@ describe "Surface search" do
       surface.content.as(SearchContent).events.should be_empty
     end
   end
+
+  it "snaps to the corner nearest to where a drag ends" do
+    run_steps(search_app) do |app|
+      surface = app.new_window.active_surface.not_nil!
+      surface.start_search
+      bar = overlay(surface)
+      eventually { bar.widget.width > 0 }
+      Apprt::C.g_signal_emit_by_name(bar.@drag, "drag-begin", 10.0, 10.0)
+      Apprt::C.g_signal_emit_by_name(bar.@drag, "drag-end", -600.0, 400.0)
+      Apprt::C.gtk_widget_get_halign(bar.widget).should eq Apprt::C::GtkAlign::Start
+      Apprt::C.gtk_widget_get_valign(bar.widget).should eq Apprt::C::GtkAlign::End
+    end
+  end
 end
 
 describe "Surface#hover_text" do

@@ -66,6 +66,16 @@ means every case passed.
 - `offload` - Ctrl+A C opens a tab with a canvas that offloads its
   frames; its first frame must arrive as a DMA-BUF. Shoots the canvas,
   red on top and blue below.
+- `search-overlay` - Ctrl+A F opens the search bar; typing, Return and
+  Shift+Return report to the content, which has three matches. Shoots the
+  bar, drags it by its match count to the bottom left, shoots it snapped
+  there, and Escape closes it.
+- `panel-quick` - Ctrl+A Q opens a top overlay panel that hides on focus
+  loss. The harness focuses the window before each key, so Ctrl+A V then
+  reports it hidden; Ctrl+A Q shows it again.
+- `panel-dock` - Ctrl+A B opens a 160 px bottom dock and a left probe
+  panel that keeps clear of reserved space; the probe must lose exactly
+  the dock's height. Panels close with the window.
 
 ## The app under test
 
@@ -86,6 +96,10 @@ Its window shows a label and has these bindings:
 | Ctrl+A H                    | moves the tab bar into the header bar     |
 | Ctrl+A M                    | shows pane headers                        |
 | Ctrl+A C                    | opens a tab with an offloading canvas     |
+| Ctrl+A F                    | opens the search bar (three matches)      |
+| Ctrl+A Q                    | opens the quick panel, or toggles it      |
+| Ctrl+A V                    | reports whether the quick panel is shown  |
+| Ctrl+A B                    | opens a bottom dock and a probe panel     |
 | Ctrl+Alt+Shift+F9 (global)  | `NewTab`, with `--global` or `--setup`    |
 
 It writes to `LIVETEST_FIFO` and to standard error:
@@ -103,6 +117,12 @@ It writes to `LIVETEST_FIFO` and to standard error:
 | `pane headers`            | every surface shows its pane header          |
 | `canvas dmabuf=BOOL`      | the canvas showed its first frame, as a      |
 |                           | DMA-BUF when BOOL is `true`                  |
+| `search TEXT` / `search end` | the search text changed / the bar closed  |
+| `navigate next\|previous` | Return / Shift+Return in the search bar      |
+| `panel shown=BOOL`        | the quick panel opened or toggled, or was    |
+|                           | asked about                                  |
+| `dock clear=BOOL`         | the probe panel lost exactly the dock's      |
+|                           | height                                       |
 
 `--class ID` sets the window class (Wayland app id) the harness finds the
 window by; `--global` binds the global shortcut (cases with

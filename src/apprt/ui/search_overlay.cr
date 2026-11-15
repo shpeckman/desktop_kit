@@ -20,6 +20,10 @@ module Apprt
     @total : Int32?
     @selected : Int32?
 
+    # Where the current drag started, in the bar's coordinates. GTK no
+    # longer reports it once the drag ended.
+    @drag_start = {0.0, 0.0}
+
     def initialize(@surface : Surface)
       @widget = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 6))
       @entry = Widget.new(C.gtk_search_entry_new)
@@ -106,6 +110,7 @@ module Apprt
       })
       @entry.add_controller(@keys)
       C.gtk_gesture_single_set_button(@drag, 1)
+      Signals.connect(@drag, "drag-begin", ->(x : Float64, y : Float64) { @drag_start = {x, y} })
       Signals.connect(@drag, "drag-end", ->(dx : Float64, dy : Float64) { snap(dx, dy) })
       @widget.add_controller(@drag)
     end
@@ -115,10 +120,12 @@ module Apprt
     private def snap(dx : Float64, dy : Float64) : Nil
       parent = @widget.parent || return
       return if dx.abs < 1 && dy.abs < 1
-      return if C.gtk_gesture_drag_get_start_point(@drag, out x, out y) == 0
+      x, y = @drag_start
       return if C.gtk_widget_translate_coordinates(@widget, parent, x + dx, y + dy, out px, out py) == 0
       C.gtk_widget_set_halign(@widget, px * 2 < parent.width ? C::GtkAlign::Start : C::GtkAlign::End)
       C.gtk_widget_set_valign(@widget, py * 2 < parent.height ? C::GtkAlign::Start : C::GtkAlign::End)
+      # The overlay keeps a child's position until it lays itself out.
+      C.gtk_widget_queue_resize(parent)
     end
 
     # Shows "selected/total", "-/total" without a selection, or nothing

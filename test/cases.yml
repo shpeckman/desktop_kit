@@ -162,3 +162,63 @@ offload:
     - settle
     - shoot canvas tolerance=4
     - close
+
+# The search bar: typing reports each search text, Enter and Shift+Enter
+# move between the label's three matches, a drag on the match count snaps
+# the bar to the nearest corner (bottom left here), Escape closes it.
+search-overlay:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a f
+    - type abc
+    - expect search abc
+    - key Return
+    - expect navigate next
+    - key Return
+    - expect navigate next
+    - key shift+Return
+    - expect navigate previous
+    - settle
+    - shoot search tolerance=2
+    - move 660 77
+    - down
+    - move 650 90
+    - move 600 150
+    - move 400 300
+    - move 200 450
+    - move 150 500
+    - sleep 200
+    - up
+    - settle
+    - shoot snapped tolerance=2
+    - key Escape
+    - expect search end
+    - close
+
+# The quick panel: a top overlay panel that takes the focus when shown
+# and hides when it loses it. The harness focuses the window before every
+# key step, so the report after the panel opened sees it hidden; its
+# binding shows it again.
+panel-quick:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a q
+    - expect panel shown=true
+    - sleep 500
+    - key ctrl+a v
+    - expect panel shown=false
+    - key ctrl+a q
+    - expect panel shown=true
+    - close
+
+# A bottom dock reserves its height: a left panel that keeps clear of
+# reserved space gets exactly that much shorter.
+panel-dock:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a b
+    - expect dock clear=true
+    - close

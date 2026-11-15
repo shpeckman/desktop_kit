@@ -32,6 +32,7 @@ examples:
 	$(CRYSTAL) build --threads 2 examples/workspace.cr -o bin/workspace
 	$(CRYSTAL) build --threads 2 examples/snake.cr -o bin/snake
 	$(CRYSTAL) build --threads 2 examples/dialogs.cr -o bin/dialogs
+	$(CRYSTAL) build --threads 2 examples/panel.cr -o bin/panel
 
 # API documentation into docs/.
 docs:

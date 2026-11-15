@@ -22,6 +22,7 @@ and the GLib layer the runtime builds on.
 | `workspace.cr` | the card window style, pane icons, header bar content, the command palette with custom commands, key sequences, a key table |
 | `snake.cr`     | a game on OpenGL canvases in split cards, steered with physical keys |
 | `dialogs.cr`   | header bar buttons for confirm and prompt dialogs, toasts, notifications, opening a URL, drops |
+| `panel.cr`     | a hidden drop-down panel toggled by a global binding, Escape or `panel toggle` over IPC |
 
 ## Requirements
 
