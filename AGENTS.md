@@ -51,95 +51,112 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
     cancellable.
   - `stream.cr` - `Stream` (`:nodoc:`): reads a `GInputStream` to its end
     (spliced into a `GMemoryOutputStream`) and converts `GBytes`.
-- `src/apprt/source.cr` - `Source` (public): `App#after` timers and
-  `App#watch` file descriptor watches.
-- `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
-  `Decoration`, `Direction`, `Mods` (public).
-- `src/apprt/icon.cr` - `Icon` (public alias: themed name `String` or
-  image `Path`) and `GIcon` (`:nodoc:`): builds the `GIcon`
-  (`g_themed_icon_new` / `g_file_icon_new`), a `GtkImage` of it, or sets
-  one on an image.
-- `src/apprt/key.cr` - `Key` (public): physical keys by evdev code;
-  `Key.from_keycode` (`:nodoc:`).
-- `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
-  model the split view renders.
-- `src/apprt/ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
-  cross-thread queue.
-- `src/apprt/systemd.cr` - `Systemd` (public `notify` and `start_scope`;
-  `ready`, `reloading`, `stopping` and `cgroup` protected).
-- `src/apprt/wayland.cr` - `Wayland` (`:nodoc:`): protocol tables,
-  `Proxy` and the per-display `Globals`.
-- `src/apprt/winproto.cr` - `Winproto` (`:nodoc:`): a window's server
-  decoration, blur and activation objects.
-- `src/apprt/action.cr` - the `Apprt.action` macro and `Action` (public);
-  the registry and GAction installation (`:nodoc:`).
-- `src/apprt/actions.cr` - the built-in action table, nested in `Action`.
-- `src/apprt/trigger.cr` - `Trigger` (public): key combinations.
-- `src/apprt/app.cr` - `App` (public): lifecycle, signals, CSS, appearance,
-  `perform` and the built-in app action overloads.
-- `src/apprt/binding.cr` - `Binding` (public): triggers and sequences;
-  reopens `App` with `bindings`, the accelerator sync, the sequence table
-  and `perform_in`.
-- `src/apprt/dialogs.cr` - `Dialogs` (`:nodoc:`): the confirm and prompt
-  alert dialogs behind `Window#confirm`/`#prompt`, the close confirmation,
-  the title prompt, the clipboard confirmation and the configuration
-  errors dialog.
-- `src/apprt/bell.cr` - `Bell` (public); reopens `App` with `bell`,
-  `bell_sound`, `bell_volume` and the sound playback.
-- `src/apprt/config_errors.cr` - reopens `App` with `config_errors` and
-  its dialog.
-- `src/apprt/content.cr` - `Content` (with the `on_drop` hooks),
-  `WidgetContent`, `SurfaceContext` (public).
-- `src/apprt/input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
-  `MouseMotionEvent`, `ScrollEvent` (public; initializers `:nodoc:`).
-- `src/apprt/canvas.cr` - `Canvas` and `FrameTiming` (public): the
-  OpenGL content, its event controllers, input method context, drop
-  target and drags.
-- `src/apprt/gl.cr` - `GLContext` (public), `GL`, `Dmabuf` and
-  `CanvasBuffers` (`:nodoc:`): GL contexts, the epoxy GL and EGL calls,
-  DMA-BUF export and the canvas's buffers.
-- `src/apprt/drag.cr` - `DragAction`, `Drop`, `Drag`, `Drag::Request`,
-  `Drag::Icon` (public); `DragContent` (`:nodoc:`), the lazy
-  `GdkContentProvider` subclass behind `Canvas#drag`.
-- `src/apprt/clipboard.cr` - `Clipboard` and `Clipboard::Request`
-  (public): text clipboards.
-- `src/apprt/surface.cr` - `Surface` (public): host, drag handle, drop
-  targets; reopens `App` with the split action overloads.
-- `src/apprt/split_view.cr` - `SplitView` (`:nodoc:`): renders a tab's
-  `SplitTree(Surface)` as nested `GtkPaned`.
-- `src/apprt/tab.cr` - `Tab` (public); reopens `App` with the tab action
-  overloads.
-- `src/apprt/window.cr` - `Window` (public): widget tree, menu, signals,
-  the key sequence controller; reopens `App` with the window action
-  overloads.
-- `src/apprt/command_palette.cr` - `Command` (public), `CommandPalette`
-  (`:nodoc:`); reopens `App` with `commands` and the
-  `ToggleCommandPalette` overload.
-- `src/apprt/preferences.cr` - `Preferences`, `Preferences::Page`,
-  `Preferences::Group` (public): the preferences dialog builder; its row
-  classes are private.
-- `src/apprt/window_style.cr` - `WindowStyle` (public; `to_css`
-  `:nodoc:`); reopens `App` with `window_style` and the runtime style
-  sheet.
-- `src/apprt/undo_stack.cr` - `UndoStack` (`:nodoc:`): closed surfaces,
-  tabs and windows kept for undo; reopens `App` with `undo_timeout` and
-  the `Undo`/`Redo` overloads.
-- `src/apprt/progress.cr` - `Progress` (public), `LauncherEntry`
-  (`:nodoc:`); reopens `App` with `sync_progress`.
-- `src/apprt/notifications.cr` - `Notifications` (`:nodoc:`): a surface's
-  sent notifications; reopens `App` with `notify` and the
-  `DesktopNotification` and `PresentSurface` overloads.
-- `src/apprt/ipc.cr` - `IPC` (public): `IPC.send` over `org.gtk.Actions`.
-- `src/apprt/portal.cr` - `Portal` (`:nodoc:`): XDG desktop portal requests
-  and the host registry.
-- `src/apprt/global_shortcuts.cr` - `GlobalShortcuts` (`:nodoc:`): the
-  global bindings' portal session.
-- `src/apprt/open_uri.cr` - `OpenURI` (`:nodoc:`): `OpenUrl` through the
-  OpenURI portal or `xdg-open`.
-- `src/apprt/dbus.cr` - `DBus` (public): GDBus connections, calls,
-  signals and subscriptions; reopens `App` with `dbus`.
-- `src/apprt/user_idle.cr` - reopens `App` with `idle_timeout`,
-  `user_idle?` and `on_user_idle` (ext-idle-notify-v1).
+- `src/apprt/core/` - the runtime core.
+  - `source.cr` - `Source` (public): `App#after` timers and `App#watch`
+    file descriptor watches.
+  - `types.cr` - value types: `ColorScheme`, `Appearance`, `Decoration`,
+    `Direction`, `Mods` (public).
+  - `icon.cr` - `Icon` (public alias: themed name `String` or image
+    `Path`) and `GIcon` (`:nodoc:`): builds the `GIcon`
+    (`g_themed_icon_new` / `g_file_icon_new`), a `GtkImage` of it, or sets
+    one on an image.
+  - `ui_thread.cr` - `UIThread` (`:nodoc:`): the GTK thread and the
+    cross-thread queue.
+  - `systemd.cr` - `Systemd` (public `notify` and `start_scope`; `ready`,
+    `reloading`, `stopping` and `cgroup` protected).
+  - `app.cr` - `App` (public): lifecycle, signals, CSS, appearance,
+    `perform` and the built-in app action overloads.
+- `src/apprt/actions/` - actions, bindings and triggers.
+  - `action.cr` - the `Apprt.action` macro and `Action` (public); the
+    registry and GAction installation (`:nodoc:`).
+  - `actions.cr` - the built-in action table, nested in `Action`.
+  - `trigger.cr` - `Trigger` (public): key combinations.
+  - `binding.cr` - `Binding` (public): triggers and sequences; reopens
+    `App` with `bindings`, the accelerator sync, the sequence table and
+    `perform_in`.
+- `src/apprt/window/` - windows, tabs, surfaces and splits.
+  - `split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
+    model the split view renders.
+  - `surface.cr` - `Surface` (public): host, header, banner, bell and
+    progress.
+  - `split_view.cr` - `SplitView` (`:nodoc:`): renders a tab's
+    `SplitTree(Surface)` as nested `GtkPaned`.
+  - `tab.cr` - `Tab` (public); reopens `App` with the tab action
+    overloads.
+  - `window.cr` - `Window` (public): widget tree, menu, signals, tabs
+    and window state.
+  - `window_style.cr` - `WindowStyle` (public; `to_css` `:nodoc:`);
+    reopens `App` with `window_style` and the runtime style sheet.
+  - `undo_stack.cr` - `UndoStack` (`:nodoc:`): closed surfaces, tabs and
+    windows kept for undo; reopens `App` with `undo_timeout` and the
+    `Undo`/`Redo` overloads.
+  - `window_keys.cr` - reopens `Window` with the key sequence controller
+    and the key table stack.
+  - `window_actions.cr` - reopens `Window` with the protected toggles the
+    window actions call, and `App` with the window action overloads.
+  - `surface_drop.cr` - reopens `Surface` with the drag handle's drag
+    source, the drop targets and the drop indicator.
+  - `surface_actions.cr` - reopens `App` with the surface and split action
+    overloads.
+- `src/apprt/ui/` - dialogs and feedback: palette, preferences, bell,
+  progress.
+  - `dialogs.cr` - `Dialogs` (`:nodoc:`): the confirm and prompt alert
+    dialogs behind `Window#confirm`/`#prompt`, the close confirmation, the
+    title prompt, the clipboard confirmation and the configuration errors
+    dialog.
+  - `bell.cr` - `Bell` (public); reopens `App` with `bell`, `bell_sound`,
+    `bell_volume` and the sound playback.
+  - `config_errors.cr` - reopens `App` with `config_errors` and its
+    dialog.
+  - `command_palette.cr` - `Command` (public), `CommandPalette`
+    (`:nodoc:`); reopens `App` with `commands` and the
+    `ToggleCommandPalette` overload.
+  - `preferences.cr` - `Preferences`, `Preferences::Page`,
+    `Preferences::Group` (public): the preferences dialog builder; its row
+    classes are private.
+  - `progress.cr` - `Progress` (public), `LauncherEntry` (`:nodoc:`);
+    reopens `App` with `sync_progress`.
+- `src/apprt/content/` - surface content: canvas, GL, input, drag and
+  drop, clipboard.
+  - `key.cr` - `Key` (public): physical keys by evdev code;
+    `Key.from_keycode` (`:nodoc:`).
+  - `content.cr` - `Content` (with the `on_drop` hooks), `WidgetContent`,
+    `SurfaceContext` (public).
+  - `input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
+    `MouseMotionEvent`, `ScrollEvent` (public; initializers `:nodoc:`).
+  - `canvas.cr` - `Canvas` and `FrameTiming` (public): the OpenGL content,
+    its widgets, GL context, buffers and frame ticks.
+  - `gl.cr` - `GLContext` (public), `GL`, `Dmabuf` and `CanvasBuffers`
+    (`:nodoc:`): GL contexts, the epoxy GL and EGL calls, DMA-BUF export
+    and the canvas's buffers.
+  - `drag.cr` - `DragAction`, `Drop`, `Drag`, `Drag::Request`,
+    `Drag::Icon` (public); `DragContent` (`:nodoc:`), the lazy
+    `GdkContentProvider` subclass behind `Canvas#drag`.
+  - `clipboard.cr` - `Clipboard` and `Clipboard::Request` (public): text
+    clipboards.
+  - `canvas_input.cr` - reopens `Canvas` with the input hooks, the event
+    controllers, the input method, drops and `#drag`.
+- `src/apprt/desktop/` - D-Bus and the desktop: IPC, portals, shortcuts,
+  URLs, notifications.
+  - `notifications.cr` - `Notifications` (`:nodoc:`): a surface's sent
+    notifications; reopens `App` with `notify` and the
+    `DesktopNotification` and `PresentSurface` overloads.
+  - `ipc.cr` - `IPC` (public): `IPC.send` over `org.gtk.Actions`.
+  - `portal.cr` - `Portal` (`:nodoc:`): XDG desktop portal requests and
+    the host registry.
+  - `global_shortcuts.cr` - `GlobalShortcuts` (`:nodoc:`): the global
+    bindings' portal session.
+  - `open_uri.cr` - `OpenURI` (`:nodoc:`): `OpenUrl` through the OpenURI
+    portal or `xdg-open`.
+  - `dbus.cr` - `DBus` (public): GDBus connections, calls, signals and
+    subscriptions; reopens `App` with `dbus`.
+- `src/apprt/wayland/` - Wayland protocol extras.
+  - `wayland.cr` - `Wayland` (`:nodoc:`): protocol tables, `Proxy` and the
+    per-display `Globals`.
+  - `winproto.cr` - `Winproto` (`:nodoc:`): a window's server decoration,
+    blur and activation objects.
+  - `user_idle.cr` - reopens `App` with `idle_timeout`, `user_idle?` and
+    `on_user_idle` (ext-idle-notify-v1).
 - `examples/` - `hello.cr`, `canvas.cr`, `ipc.cr`, `workspace.cr`,
   `snake.cr`, `dialogs.cr` (`make examples`). They declare their own
   `lib LibGtk` / `lib LibGL` funs rather than use the `:nodoc:` `Apprt::C`.
@@ -149,6 +166,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `tools/gen_gir.cr` - generator CLI; `tools/gir/generator.cr` - the
   `GirGenerator` module (GIR → `lib C`).
 - `data/gir/<Namespace-Version>.txt` - allowlists.
+- Specs mirror the source groups: `spec/pure/<group>/` and
+  `spec/gtk/<group>/`; the glib layer, bindings, generator and `Variant`
+  specs stay at the top of `spec/pure/`.
 - `spec/pure/` - specs needing no display: generator (fixture
   `spec/data/Fixture-1.0.gir` + `.txt`), bindings (every generated `fun`
   resolves with `dlsym`, `GValue` size, a GType round trip), the glib layer
@@ -208,7 +228,7 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `banner_spec.cr` banners; `surface_dialogs_spec.cr` the clipboard
   confirmation, the configuration errors dialog (steps run on an idle
   after activation, when the errors show) and the on-screen keyboard.
-  `spec/pure/winproto_spec.cr` covers the blur region slices.
+  `spec/pure/wayland/winproto_spec.cr` covers the blur region slices.
 - Types the `Variant` macros expand over (action payload enums) must not be
   file-private in specs: the expansion cannot see them.
 
@@ -549,7 +569,7 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
 - `GL` (`:nodoc:`) calls GL through libepoxy's `epoxy_gl*` function
   pointers (`$` globals), the dispatch GTK uses; `Proc#call` does not
   autocast literals, so arguments carry their exact types (`0_u32`).
-- `spec/gtk/canvas_render_spec.cr` checks the orientation from a `grim`
+- `spec/gtk/content/canvas_render_spec.cr` checks the orientation from a `grim`
   shot of the headless output (red top, blue bottom), buffer ages,
   frame timings, a fractional output and `GLContext`. The fractional
   case adds a second headless output (`swaymsg create_output`, scale 1.5,
@@ -704,7 +724,7 @@ Internals of `notifications.cr`, ported from Ghostty's
   subscriptions belong on the GTK thread. Subscriptions release their
   block through `Handles::RELEASE` when GDBus drops the handler.
 - Non-tuple arguments raise before GIO's own `g_return_if_fail`.
-- `spec/gtk/dbus_spec.cr` calls the private bus daemon itself
+- `spec/gtk/desktop/dbus_spec.cr` calls the private bus daemon itself
   (`ListNames`, `GetNameOwner`, an unowned name with `auto_start: false`)
   and loops a signal back to its own subscription.
 
@@ -893,7 +913,7 @@ After Ghostty's split header bars (`surface.blp`) and
   `notify::value`, `notify::selected`; `notify::text` because the
   editable's `changed` fires twice on `set_text`). `present` builds a new
   `AdwPreferencesDialog` each time; `closed` clears `@dialog`.
-  `spec/gtk/preferences_spec.cr` finds rows by GType name below the dialog.
+  `spec/gtk/ui/preferences_spec.cr` finds rows by GType name below the dialog.
 - `Tab` sets its active surface through a private `active=` that moves
   the `active` CSS class; `sync_title` also sets the page icon
   (`g_themed_icon_new(Surface#icon)`, or none).

@@ -246,10 +246,15 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
   (`Clipboard::Request`), `App#config_errors=` with its dialog, `Surface#show_banner`/`#hide_banner`
   (`AdwBanner`), `ShowOnScreenKeyboard` (`Surface#show_on_screen_keyboard`).
 - `b1cf9e7`: what asekii needs to run on apprt.
-- Roadmap 4 and 6: the pane header drags its surface like the handle; `Apprt::Icon` (themed name or image
+- `f6d6ddc` Roadmap 4 and 6: the pane header drags its surface like the handle; `Apprt::Icon` (themed name or image
   `Path`) for `Surface#icon=` and `Window#pack_start`/`#pack_end` buttons; `Apprt::Preferences` (pages,
   groups, switch/entry/spin/choice rows); `Canvas.new(offload: true)` sends frames as `GdkDmabufTexture`s
   (EGL `EGL_MESA_image_dma_buf_export`) inside a `GtkGraphicsOffload`, `Canvas#dmabuf?`.
+- `6fdf577`: live cases `header-drag` and `offload`, passing on KDE.
+- Layout: `src/apprt/` grouped into `core/`, `actions/`, `window/`, `ui/`, `content/`, `desktop/`,
+  `wayland/` (no public names changed); `window.cr`, `canvas.cr` and `surface.cr` split into
+  `window_keys`/`window_actions`, `canvas_input`, `surface_drop`/`surface_actions`; specs mirror the
+  groups.
 
 ## Roadmap
 
