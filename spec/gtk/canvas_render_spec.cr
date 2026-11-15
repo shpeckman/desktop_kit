@@ -1,5 +1,6 @@
 # spec/gtk/canvas_render_spec.cr
 require "./harness"
+require "json"
 
 @[Link("GL")]
 lib LibSpecGL
@@ -35,9 +36,9 @@ class HalvesCanvas < Apprt::Canvas
   end
 end
 
-private def halves_app : TestApp
+private def halves_app(offload : Bool = false) : TestApp
   TestApp.new.tap do |app|
-    app.make_content = ->(context : Apprt::SurfaceContext) { HalvesCanvas.new.as(Apprt::Content) }
+    app.make_content = ->(context : Apprt::SurfaceContext) { HalvesCanvas.new(offload: offload).as(Apprt::Content) }
   end
 end
 
@@ -85,12 +86,31 @@ private def red_and_blue_rows : {Float64, Float64}?
   {red / reds, blue / blues} if reds > 1000 && blues > 1000
 end
 
-# Sets the scale of the headless output through sway's IPC socket.
-private def sway_output_scale(scale : Number) : Nil
+# Runs a sway command through the harness's IPC socket and returns its
+# output.
+private def swaymsg(*args : String) : String
   dir = ENV["XDG_RUNTIME_DIR"]
   socket = Dir.children(dir).find(&.starts_with?("sway-ipc.")).not_nil!
-  Process.run("swaymsg", ["-s", "#{dir}/#{socket}", "output", "HEADLESS-1", "scale", scale.to_s],
-    output: :close, error: :inherit).success?.should be_true
+  output = IO::Memory.new
+  Process.run("swaymsg", ["-s", "#{dir}/#{socket}", *args], output: output, error: :inherit).success?.should be_true
+  output.to_s
+end
+
+# Adds a second headless output at *scale*, focuses it so new windows open
+# there, yields and removes it. GDK does not lower a monitor's scale again
+# once it rose, so the specs leave the first output's scale alone.
+private def with_scaled_output(scale : Number, &) : Nil
+  before = JSON.parse(swaymsg("-t", "get_outputs", "-r")).as_a.map(&.["name"].as_s)
+  swaymsg("create_output")
+  name = JSON.parse(swaymsg("-t", "get_outputs", "-r")).as_a.map(&.["name"].as_s).find { |output| !before.includes?(output) }.not_nil!
+  begin
+    swaymsg("output", name, "resolution", "1280x800", "scale", scale.to_s)
+    swaymsg("focus", "output", name)
+    yield
+  ensure
+    swaymsg("focus", "output", "HEADLESS-1")
+    swaymsg("output", name, "unplug")
+  end
 end
 
 describe "Canvas rendering" do
@@ -103,6 +123,25 @@ describe "Canvas rendering" do
       eventually { settle(50.milliseconds); !(rows = red_and_blue_rows).nil? }.should be_true
       red, blue = rows.not_nil!
       red.should be < blue
+    end
+  end
+
+  it "offloads its frames as DMA-BUFs the right way up" do
+    run_steps(halves_app(offload: true)) do |app|
+      canvas = halves(app)
+      eventually { canvas.dmabuf? }.should be_true
+      rows = nil.as({Float64, Float64}?)
+      eventually { settle(50.milliseconds); !(rows = red_and_blue_rows).nil? }.should be_true
+      red, blue = rows.not_nil!
+      red.should be < blue
+    end
+  end
+
+  it "sends GL textures without offload" do
+    run_steps(halves_app) do |app|
+      canvas = halves(app)
+      settle
+      canvas.dmabuf?.should be_false
     end
   end
 
@@ -124,16 +163,13 @@ describe "Canvas rendering" do
   end
 
   it "draws at the exact size of a fractional scale" do
-    run_steps(halves_app) do |app|
-      canvas = halves(app)
-      sway_output_scale(1.5)
-      begin
+    with_scaled_output(1.5) do
+      run_steps(halves_app) do |app|
+        canvas = halves(app)
         eventually do
           canvas.scale == 1.5 && canvas.width == (canvas.widget.width * 1.5).round.to_i &&
             canvas.height == (canvas.widget.height * 1.5).round.to_i
         end.should be_true
-      ensure
-        sway_output_scale(1)
       end
     end
   end

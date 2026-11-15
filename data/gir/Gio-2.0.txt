@@ -112,3 +112,7 @@ g_subprocess_get_successful
 g_subprocess_get_exit_status
 g_subprocess_get_if_exited
 g_subprocess_get_term_sig
+
+# icons from files
+g_file_new_for_path
+g_file_icon_new

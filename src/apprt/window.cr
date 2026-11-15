@@ -107,9 +107,9 @@ module Apprt
       C.adw_header_bar_pack_start(@header, widget)
     end
 
-    # Adds a button with the themed icon *icon* that performs *action* to the
-    # start of the header bar.
-    def pack_start(action : Action, icon : String, tooltip : String) : Nil
+    # Adds a button showing *icon* that performs *action* to the start of the
+    # header bar.
+    def pack_start(action : Action, icon : Icon, tooltip : String) : Nil
       C.adw_header_bar_pack_start(@header, button(icon, tooltip, action))
     end
 
@@ -118,9 +118,9 @@ module Apprt
       C.adw_header_bar_pack_end(@header, widget)
     end
 
-    # Adds a button with the themed icon *icon* that performs *action* to the
-    # end of the header bar.
-    def pack_end(action : Action, icon : String, tooltip : String) : Nil
+    # Adds a button showing *icon* that performs *action* to the end of the
+    # header bar.
+    def pack_end(action : Action, icon : Icon, tooltip : String) : Nil
       C.adw_header_bar_pack_end(@header, button(icon, tooltip, action))
     end
 
@@ -680,8 +680,10 @@ module Apprt
       C.adw_application_window_set_content(@widget, @overview)
     end
 
-    private def button(icon : String, tooltip : String, action : Action) : Void*
-      button = C.gtk_button_new_from_icon_name(icon)
+    private def button(icon : Icon, tooltip : String, action : Action) : Void*
+      button = C.gtk_button_new
+      C.gtk_button_set_child(button, GIcon.image(icon))
+      Widget.new(button).add_css_class("image-button")
       C.gtk_actionable_set_detailed_action_name(button, action.detailed_name)
       Widget.new(button).tooltip = tooltip
       button

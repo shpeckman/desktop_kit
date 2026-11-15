@@ -60,7 +60,9 @@ module GtkHarness
     end
     raise "GtkHarness: sway or dbus-daemon did not start" unless display && File.exists?("#{dir}/bus")
     ENV.delete("DISPLAY")
+    ENV.delete("LANGUAGE")
     {
+      "LC_ALL"                   => "C.UTF-8",
       "XDG_RUNTIME_DIR"          => dir,
       "WAYLAND_DISPLAY"          => display,
       "DBUS_SESSION_BUS_ADDRESS" => "unix:path=#{dir}/bus",

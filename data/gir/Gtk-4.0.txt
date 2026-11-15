@@ -286,3 +286,13 @@ gtk_picture_set_can_shrink
 GtkContentFit
 gtk_picture_set_content_fit
 gtk_drawing_area_new
+
+# icons from files, preferences choices, canvas offload
+gtk_image_new_from_gicon
+gtk_image_set_from_gicon
+gtk_button_new
+gtk_button_set_child
+gtk_string_list_new
+gtk_graphics_offload_new
+gtk_graphics_offload_set_enabled
+GtkGraphicsOffloadEnabled

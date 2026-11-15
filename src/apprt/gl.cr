@@ -20,8 +20,14 @@ module Apprt
     FRAMEBUFFER_COMPLETE       = 0x8CD5_u32
     SYNC_GPU_COMMANDS_COMPLETE = 0x9117_u32
 
+    EGL_GL_TEXTURE_2D_KHR    = 0x30B1_u32
+    EGL_GL_TEXTURE_LEVEL_KHR =     0x30BC
+    EGL_NONE                 =     0x3038
+
     fun epoxy_gl_version : Int32
     fun epoxy_is_desktop_gl : Int32
+    fun epoxy_has_egl : Int32
+    fun epoxy_has_egl_extension(display : Void*, extension : UInt8*) : Int32
 
     $epoxy_glGenFramebuffers : (Int32, UInt32* -> Void)
     $epoxy_glDeleteFramebuffers : (Int32, UInt32* -> Void)
@@ -42,6 +48,76 @@ module Apprt
     $epoxy_glFenceSync : (UInt32, UInt32 -> Void*)
     $epoxy_glDeleteSync : (Void* -> Void)
     $epoxy_glFlush : (-> Void)
+
+    $epoxy_eglGetCurrentDisplay : (-> Void*)
+    $epoxy_eglGetCurrentContext : (-> Void*)
+    $epoxy_eglCreateImageKHR : (Void*, Void*, UInt32, Void*, Int32* -> Void*)
+    $epoxy_eglDestroyImageKHR : (Void*, Void* -> UInt32)
+    $epoxy_eglExportDMABUFImageQueryMESA : (Void*, Void*, Int32*, Int32*, UInt64* -> UInt32)
+    $epoxy_eglExportDMABUFImageMESA : (Void*, Void*, Int32*, Int32*, Int32* -> UInt32)
+  end
+
+  # :nodoc:
+  # The DMA-BUF planes of a GL texture, exported through
+  # `EGL_MESA_image_dma_buf_export`. The buffer owns the file descriptors.
+  struct Dmabuf
+    MAX_PLANES = 4
+    EXTENSIONS = {"EGL_KHR_gl_texture_2D_image", "EGL_MESA_image_dma_buf_export"}
+
+    getter fourcc : UInt32
+    getter modifier : UInt64
+    getter planes : Int32
+    getter fds : StaticArray(Int32, 4)
+    getter strides : StaticArray(Int32, 4)
+    getter offsets : StaticArray(Int32, 4)
+
+    def initialize(@fourcc, @modifier, @planes, @fds, @strides, @offsets)
+    end
+
+    # Returns whether the current context can export textures.
+    def self.supported? : Bool
+      return false if GL.epoxy_has_egl == 0
+      display = GL.epoxy_eglGetCurrentDisplay.call
+      return false if display.null? || GL.epoxy_eglGetCurrentContext.call.null?
+      EXTENSIONS.all? { |name| GL.epoxy_has_egl_extension(display, name) != 0 }
+    end
+
+    # Exports *texture* of the current context, or returns `nil` when EGL
+    # refuses.
+    def self.export(texture : UInt32) : Dmabuf?
+      display = GL.epoxy_eglGetCurrentDisplay.call
+      context = GL.epoxy_eglGetCurrentContext.call
+      attributes = StaticArray[GL::EGL_GL_TEXTURE_LEVEL_KHR, 0, GL::EGL_NONE]
+      image = GL.epoxy_eglCreateImageKHR.call(display, context, GL::EGL_GL_TEXTURE_2D_KHR,
+        Pointer(Void).new(texture.to_u64), attributes.to_unsafe)
+      return if image.null?
+      begin
+        fourcc = 0
+        planes = 0
+        modifiers = StaticArray(UInt64, 4).new(0_u64)
+        return if GL.epoxy_eglExportDMABUFImageQueryMESA.call(display, image, pointerof(fourcc), pointerof(planes), Pointer(UInt64).null) == 0
+        return unless 0 < planes <= MAX_PLANES
+        return if GL.epoxy_eglExportDMABUFImageQueryMESA.call(display, image, pointerof(fourcc), pointerof(planes), modifiers.to_unsafe) == 0
+        fds = StaticArray(Int32, 4).new(-1)
+        strides = StaticArray(Int32, 4).new(0)
+        offsets = StaticArray(Int32, 4).new(0)
+        return if GL.epoxy_eglExportDMABUFImageMESA.call(display, image, fds.to_unsafe, strides.to_unsafe, offsets.to_unsafe) == 0
+        new(fourcc.to_u32!, modifiers[0], planes, fds, strides, offsets)
+      ensure
+        GL.epoxy_eglDestroyImageKHR.call(display, image)
+      end
+    end
+
+    # Closes the file descriptors.
+    def close : Nil
+      seen = StaticArray(Int32, 4).new(-1)
+      @planes.times do |plane|
+        fd = @fds[plane]
+        next if fd < 0 || seen.includes?(fd)
+        seen[plane] = fd
+        LibC.close(fd)
+      end
+    end
   end
 
   # An OpenGL context on the application's display, for drawing off screen.
@@ -101,8 +177,10 @@ module Apprt
       property? busy = false
       property? orphaned = false
       property sync = Pointer(Void).null
+      # The texture's DMA-BUF export, when offloading.
+      getter dmabuf : Dmabuf?
 
-      def initialize(@context : GLContext, @width : Int32, @height : Int32, depth : UInt32)
+      def initialize(@context : GLContext, @width : Int32, @height : Int32, depth : UInt32, offload : Bool)
         GL.epoxy_glGenTextures.call(1, pointerof(@texture))
         GL.epoxy_glBindTexture.call(GL::TEXTURE_2D, @texture)
         GL.epoxy_glTexParameteri.call(GL::TEXTURE_2D, GL::TEXTURE_MIN_FILTER, GL::NEAREST)
@@ -118,6 +196,13 @@ module Apprt
         status = GL.epoxy_glCheckFramebufferStatus.call(GL::FRAMEBUFFER)
         GL.epoxy_glBindFramebuffer.call(GL::FRAMEBUFFER, 0_u32)
         Log.warn { "canvas framebuffer incomplete: 0x#{status.to_s(16)}" } unless status == GL::FRAMEBUFFER_COMPLETE
+        @dmabuf = Dmabuf.export(@texture) if offload
+      end
+
+      # Closes the DMA-BUF export; later frames go as GL textures.
+      def drop_dmabuf : Nil
+        @dmabuf.try(&.close)
+        @dmabuf = nil
       end
 
       # Called when GTK drops the buffer's texture.
@@ -141,6 +226,7 @@ module Apprt
         @sync = Pointer(Void).null
         GL.epoxy_glDeleteFramebuffers.call(1, pointerof(@framebuffer))
         GL.epoxy_glDeleteTextures.call(1, pointerof(@texture))
+        drop_dmabuf
       end
     end
 
@@ -158,7 +244,14 @@ module Apprt
     # Frames drawn since the pool was made.
     @frames = 0_i64
 
-    def initialize(@context : GLContext, @depth_stencil : Bool)
+    # Returns whether the last texture was a `GdkDmabufTexture`.
+    getter? dmabuf = false
+
+    # With *offload*, buffers are exported as DMA-BUFs when the context
+    # supports it (EGL with `EGL_MESA_image_dma_buf_export`); the context
+    # must be current.
+    def initialize(@context : GLContext, @depth_stencil : Bool, offload : Bool)
+      @offload = offload && Dmabuf.supported?
     end
 
     # Returns a free buffer of *width* × *height* pixels, bound as the draw
@@ -167,7 +260,7 @@ module Apprt
     def acquire(width : Int32, height : Int32) : {Buffer, Int32}
       resize(width, height) unless width == @width && height == @height
       free = @buffers.reject(&.busy?)
-      buffer = free.max_by?(&.drawn) || Buffer.new(@context, width, height, @depth).tap { |made| @buffers << made }
+      buffer = free.max_by?(&.drawn) || Buffer.new(@context, width, height, @depth, @offload).tap { |made| @buffers << made }
       age = buffer.drawn == 0 ? 0 : (@frames + 1 - buffer.drawn).to_i32
       buffer.busy = true
       @frames += 1
@@ -177,10 +270,19 @@ module Apprt
       {buffer, age}
     end
 
-    # Fences the drawn *buffer* and returns a new `GdkGLTexture` of it; the
-    # caller owns the texture. The context must be current.
+    # Fences the drawn *buffer* and returns a new texture of it: a
+    # `GdkDmabufTexture` when the buffer is exported and GDK takes it, else a
+    # `GdkGLTexture`. The caller owns the texture. The context must be
+    # current.
     def texture(buffer : Buffer) : Void*
       GL.epoxy_glBindFramebuffer.call(GL::FRAMEBUFFER, 0_u32)
+      if @offload && (dmabuf = buffer.dmabuf)
+        GL.epoxy_glFlush.call
+        texture = dmabuf_texture(buffer, dmabuf)
+        @dmabuf = !texture.null?
+        return texture if @dmabuf
+      end
+      @dmabuf = false
       GL.epoxy_glDeleteSync.call(buffer.sync) unless buffer.sync.null?
       buffer.sync = fences? ? GL.epoxy_glFenceSync.call(GL::SYNC_GPU_COMMANDS_COMPLETE, 0_u32) : Pointer(Void).null
       GL.epoxy_glFlush.call
@@ -194,6 +296,37 @@ module Apprt
       texture = C.gdk_gl_texture_builder_build(builder, RELEASED, Handles.retain(buffer))
       C.g_object_unref(builder)
       texture
+    end
+
+    # Builds a `GdkDmabufTexture` of *buffer*'s export; on failure, logs
+    # once, stops offloading and returns null. GDK relies on the implicit
+    # synchronisation of the DMA-BUF, so the texture carries no fence.
+    private def dmabuf_texture(buffer : Buffer, dmabuf : Dmabuf) : Void*
+      builder = C.gdk_dmabuf_texture_builder_new
+      C.gdk_dmabuf_texture_builder_set_display(builder, C.gdk_gl_context_get_display(@context))
+      C.gdk_dmabuf_texture_builder_set_width(builder, buffer.width.to_u32)
+      C.gdk_dmabuf_texture_builder_set_height(builder, buffer.height.to_u32)
+      C.gdk_dmabuf_texture_builder_set_fourcc(builder, dmabuf.fourcc)
+      C.gdk_dmabuf_texture_builder_set_modifier(builder, dmabuf.modifier)
+      C.gdk_dmabuf_texture_builder_set_premultiplied(builder, 1)
+      C.gdk_dmabuf_texture_builder_set_n_planes(builder, dmabuf.planes.to_u32)
+      dmabuf.planes.times do |plane|
+        C.gdk_dmabuf_texture_builder_set_fd(builder, plane.to_u32, dmabuf.fds[plane])
+        C.gdk_dmabuf_texture_builder_set_stride(builder, plane.to_u32, dmabuf.strides[plane].to_u32)
+        C.gdk_dmabuf_texture_builder_set_offset(builder, plane.to_u32, dmabuf.offsets[plane].to_u32)
+      end
+      error = Pointer(C::GError).null
+      data = Handles.retain(buffer)
+      texture = C.gdk_dmabuf_texture_builder_build(builder, RELEASED, data, pointerof(error))
+      C.g_object_unref(builder)
+      return texture unless texture.null?
+      Handles.release(data)
+      message = error.null? ? "unsupported format" : GLibError.take(error).message
+      Log.warn { "canvas DMA-BUF offload off: #{message}" }
+      @offload = false
+      buffer.drop_dmabuf
+      @buffers.each { |other| other.drop_dmabuf unless other.busy? }
+      Pointer(Void).null
     end
 
     # Deletes the free buffers and the renderbuffer and leaves the busy

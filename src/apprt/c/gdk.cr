@@ -246,5 +246,18 @@ module Apprt
     fun gdk_frame_timings_get_complete(timings : Void*) : Int32
     fun gdk_frame_timings_get_presentation_time(timings : Void*) : Int64
     fun gdk_frame_timings_get_refresh_interval(timings : Void*) : Int64
+    fun gdk_gl_context_get_display(context : Void*) : Void*
+    fun gdk_dmabuf_texture_builder_new : Void*
+    fun gdk_dmabuf_texture_builder_set_display(self_ : Void*, display : Void*)
+    fun gdk_dmabuf_texture_builder_set_width(self_ : Void*, width : UInt32)
+    fun gdk_dmabuf_texture_builder_set_height(self_ : Void*, height : UInt32)
+    fun gdk_dmabuf_texture_builder_set_fourcc(self_ : Void*, fourcc : UInt32)
+    fun gdk_dmabuf_texture_builder_set_modifier(self_ : Void*, modifier : UInt64)
+    fun gdk_dmabuf_texture_builder_set_premultiplied(self_ : Void*, premultiplied : Int32)
+    fun gdk_dmabuf_texture_builder_set_n_planes(self_ : Void*, n_planes : UInt32)
+    fun gdk_dmabuf_texture_builder_set_fd(self_ : Void*, plane : UInt32, fd : Int32)
+    fun gdk_dmabuf_texture_builder_set_stride(self_ : Void*, plane : UInt32, stride : UInt32)
+    fun gdk_dmabuf_texture_builder_set_offset(self_ : Void*, plane : UInt32, offset : UInt32)
+    fun gdk_dmabuf_texture_builder_build(self_ : Void*, destroy : GDestroyNotify, data : Void*, error : GError**) : Void*
   end
 end

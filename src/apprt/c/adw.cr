@@ -135,5 +135,29 @@ module Apprt
     fun adw_banner_get_button_label(self_ : Void*) : UInt8*
     fun adw_banner_set_revealed(self_ : Void*, revealed : Int32)
     fun adw_banner_get_revealed(self_ : Void*) : Int32
+    fun adw_preferences_dialog_new : Void*
+    fun adw_preferences_dialog_add(self_ : Void*, page : Void*)
+    fun adw_preferences_page_new : Void*
+    fun adw_preferences_page_add(self_ : Void*, group : Void*)
+    fun adw_preferences_page_set_title(self_ : Void*, title : UInt8*)
+    fun adw_preferences_page_set_icon_name(self_ : Void*, icon_name : UInt8*)
+    fun adw_preferences_group_new : Void*
+    fun adw_preferences_group_add(self_ : Void*, child : Void*)
+    fun adw_preferences_group_set_title(self_ : Void*, title : UInt8*)
+    fun adw_preferences_group_set_description(self_ : Void*, description : UInt8*)
+    fun adw_preferences_row_set_title(self_ : Void*, title : UInt8*)
+    fun adw_action_row_set_subtitle(self_ : Void*, subtitle : UInt8*)
+    fun adw_switch_row_new : Void*
+    fun adw_switch_row_get_active(self_ : Void*) : Int32
+    fun adw_switch_row_set_active(self_ : Void*, is_active : Int32)
+    fun adw_entry_row_new : Void*
+    fun adw_spin_row_new_with_range(min : Float64, max : Float64, step : Float64) : Void*
+    fun adw_spin_row_get_value(self_ : Void*) : Float64
+    fun adw_spin_row_set_value(self_ : Void*, value : Float64)
+    fun adw_spin_row_set_digits(self_ : Void*, digits : UInt32)
+    fun adw_combo_row_new : Void*
+    fun adw_combo_row_set_model(self_ : Void*, model : Void*)
+    fun adw_combo_row_get_selected(self_ : Void*) : UInt32
+    fun adw_combo_row_set_selected(self_ : Void*, position : UInt32)
   end
 end

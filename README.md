@@ -200,8 +200,8 @@ elsewhere.
 | `Window#activate(token)`         | raises and focuses it with an activation token from another application |
 | `Window#monitor_size`            | the logical size of its monitor, `nil` while not shown            |
 | `Window#suspended?`              | whether the desktop stopped showing it (`on_window_suspended`)    |
-| `Window#pack_start`, `#pack_end` | adds a widget, or a button performing an action, to the header bar |
-| `Surface#icon=`                  | sets a themed icon name for its pane header and, while active, its tab |
+| `Window#pack_start`, `#pack_end` | adds a widget, or a button with an `Apprt::Icon` performing an action, to the header bar |
+| `Surface#icon=`                  | sets an `Apprt::Icon` for its pane header and, while active, its tab; `nil` removes it |
 | `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
 | `Window#key_tables`              | the names of its active key tables, innermost last                |
 | `Surface#progress=`              | shows an `Apprt::Progress` on its pane, tab and the taskbar; `nil` hides it |
@@ -284,6 +284,49 @@ end
 window.prompt("Rename Session", text: session.name) { |name| session.name = name }
 ```
 
+An `Apprt::Icon` is a themed icon name (`String`, such as
+`"utilities-terminal"`) or the `Path` of an image file:
+
+```crystal
+surface.icon = Path["/usr/share/pixmaps/editor.png"]
+window.pack_start(OpenSettings.new, "emblem-system-symbolic", "Settings")
+```
+
+#### Preferences
+
+`Apprt::Preferences` builds a preferences dialog from pages of groups of
+rows. Each row edits one value and passes every change to its block:
+
+| Row                                                        | Value   | Edits it with           |
+|------------------------------------------------------------|---------|-------------------------|
+| `switch(title, subtitle:, value:)`                         | `Bool`  | a switch                |
+| `entry(title, value:)`                                     | `String`| a text entry            |
+| `spin(title, subtitle:, value:, range:, step:, digits:)`   | `Float64` | a spin button, `step` 1 and `digits` 0 by default |
+| `choice(title, options, subtitle:, selected:)`             | `Int32` | a drop-down of `options`, the index of the chosen one |
+
+`Preferences#page(title, icon:)` and `Page#group(title, description:)`
+yield the page or group to fill. `#present(window)` shows the dialog over
+*window* (on the GTK thread), closing an earlier one; the rows keep their
+values, so the dialog shows the latest ones when presented again.
+`#close` closes it and `#open?` tells whether it is shown. `choice` raises
+`ArgumentError` without options and `IndexError` when `selected` lies
+outside them.
+
+```crystal
+prefs = Apprt::Preferences.new("Preferences")
+prefs.page("General", icon: "preferences-system-symbolic") do |page|
+  page.group("Appearance", description: "How windows look") do |group|
+    group.switch("Pane headers", value: true) { |on| app.window_style = Apprt::WindowStyle.new(pane_headers: on) }
+    group.spin("Opacity", value: 1.0, range: 0.2..1.0, step: 0.05, digits: 2) { |value| settings.opacity = value }
+    group.choice("Colours", ["System", "Light", "Dark"]) { |index| settings.scheme = index }
+  end
+  page.group("Session") do |group|
+    group.entry("Name", value: settings.name) { |name| settings.name = name }
+  end
+end
+prefs.present(window)
+```
+
 `ToggleCommandPalette` opens a search over the application's commands,
 `App#commands`, with the shortcut of each; Enter or a click performs the
 selected one on the window, Up and Down move the selection and Escape
@@ -316,8 +359,8 @@ the window's rounded corners. Urgency uses `xdg-activation-v1`: a ringing
 bell in an inactive window makes it urgent, and activating the window
 clears it.
 
-Drag and drop: hovering a split shows a handle at its top; dragging it onto
-another surface, in any tab or window, moves it there, beside the edge
+Drag and drop: hovering a split shows a handle at its top; dragging it, or
+the pane header, onto another surface, in any tab or window, moves it there, beside the edge
 nearest to the pointer. Files and text dropped on a surface go to
 `Content#on_drop`:
 
@@ -377,7 +420,7 @@ class Scene < Apprt::Canvas
 end
 ```
 
-`.new(*, api, version, depth_buffer, stencil_buffer, input_purpose)` sets
+`.new(*, api, version, depth_buffer, stencil_buffer, input_purpose, offload)` sets
 the GL context and framebuffer: `api` is `Canvas::API::GL`, `GLES` or both
 (the default), `version` the least `{major, minor}`, and the framebuffer
 gets a 24-bit depth and 8-bit stencil buffer when either is asked for. `input_purpose`
@@ -389,6 +432,13 @@ GTK made, and `#error` the reason when it made none. Moving a canvas, such
 as into a split, unrealizes and realizes it again, so `#on_realize` must
 recreate GL objects. The canvas draws a frame when it is shown, resized
 or rescaled, and after `#queue_render`; call that after a change.
+
+`offload: true` hands frames to GTK as DMA-BUFs where the GL driver can
+export them (EGL with `EGL_MESA_image_dma_buf_export`, as on Mesa), and
+puts the frame in a `GtkGraphicsOffload`, so the compositor may show it
+on a subsurface without GTK copying it. Elsewhere, or when GTK refuses the
+buffer's format, frames go as GL textures, as without the option.
+`#dmabuf?` tells whether the last frame went as a DMA-BUF.
 
 Each frame goes to a framebuffer of exactly the canvas's size at the
 output's scale, fractional scales included (`#scale` is a `Float64` such

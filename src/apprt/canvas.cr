@@ -108,6 +108,7 @@ module Apprt
     @api : API
     @version : {Int32, Int32}?
     @depth_stencil : Bool
+    @offload : Bool
     @context : GLContext?
     @buffers : CanvasBuffers?
     @logical_width = 0
@@ -143,17 +144,24 @@ module Apprt
     # at least *version* (`{major, minor}`), with depth and stencil buffers
     # when asked. *input_purpose* tells the input method what text the
     # canvas takes.
+    #
+    # With *offload*, frames go to GTK as DMA-BUFs where the driver can
+    # export them, and the compositor may show them on a subsurface without
+    # GTK copying them; `#dmabuf?` tells whether the last frame went so.
     def initialize(*, api : API = API::All, version : {Int32, Int32}? = nil,
                    depth_buffer : Bool = false, stencil_buffer : Bool = false,
-                   input_purpose : InputPurpose = InputPurpose::FreeForm)
+                   input_purpose : InputPurpose = InputPurpose::FreeForm, offload : Bool = false)
       @api = api
       @version = version
       @depth_stencil = depth_buffer || stencil_buffer
+      @offload = offload
       @widget = Widget.new(C.gtk_overlay_new)
       @area = Widget.new(C.gtk_drawing_area_new)
       @picture = Widget.new(C.gtk_picture_new)
       C.gtk_overlay_set_child(@widget, @area)
-      C.gtk_overlay_add_overlay(@widget, @picture)
+      frame = offload ? Widget.new(C.gtk_graphics_offload_new(@picture)) : @picture
+      C.gtk_overlay_add_overlay(@widget, frame)
+      C.gtk_widget_set_can_target(frame, 0)
       C.gtk_widget_set_can_target(@picture, 0)
       C.gtk_picture_set_can_shrink(@picture, 1)
       C.gtk_picture_set_content_fit(@picture, C::GtkContentFit::Fill)
@@ -180,6 +188,12 @@ module Apprt
     # Returns the OpenGL flavour in use, or `nil` while there is no context.
     def api : API?
       @context.try(&.api)
+    end
+
+    # Returns whether the last frame went to GTK as a DMA-BUF; always false
+    # without *offload* (see `.new`).
+    def dmabuf? : Bool
+      @buffers.try(&.dmabuf?) || false
     end
 
     # Returns the GL context the canvas draws with, or `nil` while it has
@@ -434,8 +448,8 @@ module Apprt
       context = GLContext.new(api: @api, version: @version)
       @error = nil
       @context = context
-      @buffers = CanvasBuffers.new(context, @depth_stencil)
       context.make_current
+      @buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
       on_realize
       queue_render
     rescue ex : GLibError

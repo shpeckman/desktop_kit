@@ -290,7 +290,7 @@ module Apprt
       page = page(window)
       unless page.null?
         C.adw_tab_page_set_title(page, title)
-        icon = @active.try(&.icon).try { |name| C.g_themed_icon_new(name) } || Pointer(Void).null
+        icon = @active.try(&.icon).try { |value| GIcon.new(value) } || Pointer(Void).null
         C.adw_tab_page_set_icon(page, icon)
         C.g_object_unref(icon) unless icon.null?
         C.adw_tab_page_set_loading(page, @view.tree.any? { |_, surface| surface.progress } ? 1 : 0)

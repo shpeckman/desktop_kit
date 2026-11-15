@@ -105,6 +105,11 @@ module Apprt
       ScaleDown = 3
     end
 
+    enum GtkGraphicsOffloadEnabled : Int32
+      Enabled  = 0
+      Disabled = 1
+    end
+
     alias GtkTickCallback = Void*, Void*, Void* -> Int32
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
@@ -347,5 +352,12 @@ module Apprt
     fun gtk_picture_set_can_shrink(self_ : Void*, can_shrink : Int32)
     fun gtk_picture_set_content_fit(self_ : Void*, content_fit : GtkContentFit)
     fun gtk_drawing_area_new : Void*
+    fun gtk_image_new_from_gicon(icon : Void*) : Void*
+    fun gtk_image_set_from_gicon(image : Void*, icon : Void*)
+    fun gtk_button_new : Void*
+    fun gtk_button_set_child(button : Void*, child : Void*)
+    fun gtk_string_list_new(strings : UInt8**) : Void*
+    fun gtk_graphics_offload_new(child : Void*) : Void*
+    fun gtk_graphics_offload_set_enabled(self_ : Void*, enabled : GtkGraphicsOffloadEnabled)
   end
 end

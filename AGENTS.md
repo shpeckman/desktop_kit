@@ -55,6 +55,10 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `App#watch` file descriptor watches.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
   `Decoration`, `Direction`, `Mods` (public).
+- `src/apprt/icon.cr` - `Icon` (public alias: themed name `String` or
+  image `Path`) and `GIcon` (`:nodoc:`): builds the `GIcon`
+  (`g_themed_icon_new` / `g_file_icon_new`), a `GtkImage` of it, or sets
+  one on an image.
 - `src/apprt/key.cr` - `Key` (public): physical keys by evdev code;
   `Key.from_keycode` (`:nodoc:`).
 - `src/apprt/split_tree.cr` - `SplitTree(V)` (`:nodoc:`): the immutable split
@@ -91,8 +95,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt/canvas.cr` - `Canvas` and `FrameTiming` (public): the
   OpenGL content, its event controllers, input method context, drop
   target and drags.
-- `src/apprt/gl.cr` - `GLContext` (public), `GL` and `CanvasBuffers`
-  (`:nodoc:`): GL contexts, the epoxy calls and the canvas's buffers.
+- `src/apprt/gl.cr` - `GLContext` (public), `GL`, `Dmabuf` and
+  `CanvasBuffers` (`:nodoc:`): GL contexts, the epoxy GL and EGL calls,
+  DMA-BUF export and the canvas's buffers.
 - `src/apprt/drag.cr` - `DragAction`, `Drop`, `Drag`, `Drag::Request`,
   `Drag::Icon` (public); `DragContent` (`:nodoc:`), the lazy
   `GdkContentProvider` subclass behind `Canvas#drag`.
@@ -110,6 +115,9 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
 - `src/apprt/command_palette.cr` - `Command` (public), `CommandPalette`
   (`:nodoc:`); reopens `App` with `commands` and the
   `ToggleCommandPalette` overload.
+- `src/apprt/preferences.cr` - `Preferences`, `Preferences::Page`,
+  `Preferences::Group` (public): the preferences dialog builder; its row
+  classes are private.
 - `src/apprt/window_style.cr` - `WindowStyle` (public; `to_css`
   `:nodoc:`); reopens `App` with `window_style` and the runtime style
   sheet.
@@ -156,9 +164,12 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   points `GDK_BACKEND=wayland`, `WAYLAND_DISPLAY`,
   `DBUS_SESSION_BUS_ADDRESS`, `XDG_CONFIG_HOME` and
   `GSETTINGS_BACKEND=memory` at them, so the suite never touches the user's
-  session. GTK renders with `GSK_RENDERER=ngl` and `GDK_DISABLE=vulkan`;
-  `GNOTIFICATION_BACKEND=freedesktop` sends notifications to the fake
-  server. `GTK_MEDIA=none` keeps GStreamer out: its GL display outlives
+  session. It also sets `LC_ALL=C.UTF-8` and drops `LANGUAGE`:
+  `gtk_init` calls `setlocale`, so translated accelerator labels ("Enter"
+  from a `LANGUAGE=en_US:nl` fallback) otherwise leaked into the pure
+  trigger specs that run after it. GTK renders with `GSK_RENDERER=ngl`
+  and `GDK_DISABLE=vulkan`; `GNOTIFICATION_BACKEND=freedesktop` sends
+  notifications to the fake server. `GTK_MEDIA=none` keeps GStreamer out: its GL display outlives
   the media stream and floods "Failed to flush Wayland connection" once
   `after_suite` stops sway, so bell sounds fail and only the warning is
   checked.
@@ -540,8 +551,12 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
   autocast literals, so arguments carry their exact types (`0_u32`).
 - `spec/gtk/canvas_render_spec.cr` checks the orientation from a `grim`
   shot of the headless output (red top, blue bottom), buffer ages,
-  frame timings, a fractional output (`swaymsg output HEADLESS-1 scale
-  1.5` on the harness's sway socket) and `GLContext`.
+  frame timings, a fractional output and `GLContext`. The fractional
+  case adds a second headless output (`swaymsg create_output`, scale 1.5,
+  focused so the window opens there) and unplugs it afterwards: GDK 4.18
+  never lowers a monitor's scale again (sway sends `wl_output.scale(1)`
+  and the right `logical_size`, yet `gdk_monitor_get_scale` stays 2), so
+  rescaling `HEADLESS-1` broke the monitor size of every later spec.
 - Controllers: key (with the `GtkIMMulticontext`), focus, click gesture
   (button 0, all buttons), motion and scroll (both axes). Ivars carry
   `@im_`/`_controller`/`_gesture` names: subclasses share the instance
@@ -611,6 +626,24 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
   spec reads it through the clipboard, as headless sway has no pointer to
   drag with; the drop hooks have no spec (a `GdkDrop` comes only from a
   real drag).
+- Offload (`Canvas.new(offload: true)`): the `GtkPicture` sits in a
+  `GtkGraphicsOffload` (the overlay child, `can-target` off too).
+  `CanvasBuffers` offloads only when `Dmabuf.supported?` (libepoxy has
+  EGL, a current EGL display and context, `EGL_KHR_gl_texture_2D_image`
+  and `EGL_MESA_image_dma_buf_export`), checked with the context current
+  in `realize`. Each new `Buffer` exports its texture once
+  (`eglCreateImageKHR(EGL_GL_TEXTURE_2D_KHR)`, `...QueryMESA` twice for
+  the plane count and modifiers, `eglExportDMABUFImageMESA`, image
+  destroyed at once) and owns the fds, closed (each distinct fd once) in
+  `delete` or `drop_dmabuf`. `texture` flushes and builds a
+  `GdkDmabufTexture` (premultiplied, no fence: GDK relies on implicit
+  sync) with the same `RELEASED` notify; the CSS flip applies as for GL
+  textures, since the memory rows are the GL rows. A failed build logs
+  `canvas DMA-BUF offload off: …` once, stops offloading and drops the
+  exports of the free buffers (busy ones keep theirs until GTK lets go),
+  then sends a GL texture. `#dmabuf?` is the pool's last-frame flag. The
+  render spec checks orientation and `dmabuf?` with offload (headless
+  sway, Mesa).
 - Specs drive the controllers by emitting their signals
   (`g_signal_emit_by_name` on `canvas.@key_controller` and friends), so
   they need no input devices.
@@ -750,9 +783,11 @@ Ported from Ghostty's `class/surface.zig` and `moveSplit` in
   (`:nodoc:`) is loaded by `App` into a provider at
   `STYLE_PROVIDER_PRIORITY_APPLICATION` (`@runtime_style`; `@style`
   collided with a spec subclass ivar).
-- The handle's `GtkDragSource` (move) carries the surface id as a `uint64`
-  `GValue`; the drag icon is a `GtkWidgetPaintable` of the host scaled to
-  0.2.
+- The handle and the pane header (`@header`) each have a `GtkDragSource`
+  (move) sharing one content provider that carries the surface id as a
+  `uint64` `GValue`; the drag icon is a `GtkWidgetPaintable` of the host
+  scaled to 0.2. Header buttons claim their clicks, so drags start only
+  from the header's free area; the header's click gesture still focuses.
 - Two drop targets on the host: `uint64` (move) rejects the surface's own
   id on `notify::value`, marks the nearest side on `motion` (`drop-left`
   …, ties left, right, up, down; `Surface.drop_side`, 0.5 for an
@@ -847,6 +882,18 @@ After Ghostty's split header bars (`surface.blp`) and
   content overlay. Header visibility follows `pane_headers`. A click on
   the header focuses the surface; buttons dispatch their action on the
   surface through `App#dispatch`. Surface titles update the header label.
+- Icons: `Surface#icon=`, the tab page icon and `Window#pack_start`/
+  `#pack_end` buttons go through `GIcon`; the buttons are `gtk_button_new`
+  with a `GtkImage` child and the `image-button` class (what
+  `gtk_button_new_from_icon_name` sets).
+- Preferences: `Preferences` keeps pages > groups > rows as data; each
+  private row (`SwitchRow`, `EntryRow`, `SpinRow`, `ChoiceRow`) builds its
+  Adw row from its current value on `#present` and updates the value
+  before calling the block (`notify::active`, `notify::text`,
+  `notify::value`, `notify::selected`; `notify::text` because the
+  editable's `changed` fires twice on `set_text`). `present` builds a new
+  `AdwPreferencesDialog` each time; `closed` clears `@dialog`.
+  `spec/gtk/preferences_spec.cr` finds rows by GType name below the dialog.
 - `Tab` sets its active surface through a private `active=` that moves
   the `active` CSS class; `sync_title` also sets the page icon
   (`g_themed_icon_new(Surface#icon)`, or none).

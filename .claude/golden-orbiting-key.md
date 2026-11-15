@@ -245,6 +245,11 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
   flags with `App#bell_sound=`/`#bell_volume=` and a border flash, `Surface#confirm_clipboard`
   (`Clipboard::Request`), `App#config_errors=` with its dialog, `Surface#show_banner`/`#hide_banner`
   (`AdwBanner`), `ShowOnScreenKeyboard` (`Surface#show_on_screen_keyboard`).
+- `b1cf9e7`: what asekii needs to run on apprt.
+- Roadmap 4 and 6: the pane header drags its surface like the handle; `Apprt::Icon` (themed name or image
+  `Path`) for `Surface#icon=` and `Window#pack_start`/`#pack_end` buttons; `Apprt::Preferences` (pages,
+  groups, switch/entry/spin/choice rows); `Canvas.new(offload: true)` sends frames as `GdkDmabufTexture`s
+  (EGL `EGL_MESA_image_dma_buf_export`) inside a `GtkGraphicsOffload`, `Canvas#dmabuf?`.
 
 ## Roadmap
 
@@ -255,9 +260,7 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
 2. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME); builds on
    `App#quit_delay = nil`.
 3. Generic search overlay; hover text and resize readout overlays.
-4. Pane header as drag handle; icons from image files; preferences dialog helper.
-5. Flatpak host commands (only if apps ship as Flatpak).
-6. DMABUF texture offload (`GdkDmabufTextureBuilder`, `GtkGraphicsOffload`).
+4. Flatpak host commands (only if apps ship as Flatpak).
 
 ## Verification
 

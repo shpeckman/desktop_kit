@@ -2,6 +2,10 @@
 require "./harness"
 
 lib DropSpecLib
+  fun gtk_widget_observe_controllers(widget : Void*) : Void*
+  fun g_list_model_get_n_items(list : Void*) : UInt32
+  fun g_list_model_get_item(list : Void*, position : UInt32) : Void*
+  fun g_type_name_from_instance(instance : Void*) : UInt8*
   fun gtk_widget_has_css_class(widget : Void*, css_class : UInt8*) : Int32
   fun g_file_new_for_path(path : UInt8*) : Void*
   fun gdk_file_list_new_from_array(files : Void**, n_files : LibC::SizeT) : Void*
@@ -91,6 +95,17 @@ private def handle_visible?(surface : Apprt::Surface) : Bool
   Apprt::C.gtk_widget_get_visible(surface.@handle) != 0
 end
 
+# Returns the type names of *widget*'s event controllers.
+private def controllers(widget : Apprt::Widget) : Array(String)
+  list = DropSpecLib.gtk_widget_observe_controllers(widget)
+  names = Array(String).new(DropSpecLib.g_list_model_get_n_items(list)) do |index|
+    item = DropSpecLib.g_list_model_get_item(list, index.to_u32)
+    String.new(DropSpecLib.g_type_name_from_instance(item)).tap { Apprt::C.g_object_unref(item) }
+  end
+  Apprt::C.g_object_unref(list)
+  names
+end
+
 describe "drag and drop" do
   before_all { GtkHarness.start }
 
@@ -132,6 +147,16 @@ describe "drag and drop" do
       second.close
       settle
       handle_visible?(first).should be_false
+    end
+  end
+
+  it "drags the surface from its pane header as from its handle" do
+    app = TestApp.new
+    run_steps(app) do
+      surface = app.new_window.tabs.first.surfaces.first
+      settle
+      controllers(surface.@handle).count("GtkDragSource").should eq 1
+      controllers(surface.@header).count("GtkDragSource").should eq 1
     end
   end
 

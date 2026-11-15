@@ -1,5 +1,6 @@
 # spec/gtk/window_style_spec.cr
 require "./harness"
+require "base64"
 
 lib WindowStyleSpecLib
   fun gtk_widget_has_css_class(widget : Void*, css_class : UInt8*) : Int32
@@ -7,6 +8,9 @@ lib WindowStyleSpecLib
   fun gtk_widget_get_next_sibling(widget : Void*) : Void*
   fun gtk_label_get_label(label : Void*) : UInt8*
   fun adw_tab_page_get_icon(page : Void*) : Void*
+  fun g_icon_to_string(icon : Void*) : UInt8*
+  fun gtk_image_get_gicon(image : Void*) : Void*
+  fun gtk_image_get_type : UInt64
   fun adw_window_title_get_subtitle(title : Void*) : UInt8*
   fun gtk_widget_is_ancestor(widget : Void*, ancestor : Void*) : Int32
   fun gtk_button_get_type : UInt64
@@ -25,6 +29,33 @@ end
 
 private def header(surface : Apprt::Surface) : Apprt::Widget
   surface.@header
+end
+
+private def icon_string(icon : Void*) : String
+  pointer = WindowStyleSpecLib.g_icon_to_string(icon)
+  String.new(pointer).tap { Apprt::C.g_free(pointer) }
+end
+
+# A red 1x1 PNG.
+private ICON_PNG = Base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==")
+
+# Writes the icon to a file in the temporary directory and returns its path.
+private def icon_file : Path
+  Path[Dir.tempdir, "apprt-icon.png"].tap { |path| File.write(path, ICON_PNG) }
+end
+
+# Returns the icons of the images below *widget*.
+private def image_icons(widget : Void*, icons = [] of String) : Array(String)
+  child = WindowStyleSpecLib.gtk_widget_get_first_child(widget)
+  until child.null?
+    if Apprt::C.g_type_check_instance_is_a(child, WindowStyleSpecLib.gtk_image_get_type) != 0
+      gicon = WindowStyleSpecLib.gtk_image_get_gicon(child)
+      icons << icon_string(gicon) unless gicon.null?
+    end
+    image_icons(child, icons)
+    child = WindowStyleSpecLib.gtk_widget_get_next_sibling(child)
+  end
+  icons
 end
 
 private def header_title(surface : Apprt::Surface) : String
@@ -147,6 +178,23 @@ describe "window style" do
     end
   end
 
+  it "shows icons from image files" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      surface = window.tabs.first.surfaces.first
+      settle
+      page = Apprt::C.adw_tab_view_get_selected_page(window.@tab_view)
+      path = icon_file
+      surface.icon = path
+      surface.icon.should eq path
+      icon_string(WindowStyleSpecLib.adw_tab_page_get_icon(page)).should eq path.to_s
+      icon_string(WindowStyleSpecLib.gtk_image_get_gicon(surface.@header_icon)).should eq path.to_s
+      surface.icon = "utilities-terminal"
+      icon_string(WindowStyleSpecLib.adw_tab_page_get_icon(page)).should eq "utilities-terminal"
+    end
+  end
+
   it "moves the tab bar into the header bar and back" do
     app = TestApp.new
     run_steps(app) do
@@ -198,7 +246,12 @@ describe "window style" do
       window.pack_start(label)
       inside?(label, window.@header).should be_true
       window.pack_end(Apprt::Action::ToggleCommandPalette.new, "system-search-symbolic", "Commands")
+      path = icon_file
+      window.pack_start(Apprt::Action::NewTab.new, path, "New tab")
       settle
+      icons = image_icons(window.@header.to_unsafe)
+      icons.should contain "system-search-symbolic"
+      icons.should contain path.to_s
     end
   end
 

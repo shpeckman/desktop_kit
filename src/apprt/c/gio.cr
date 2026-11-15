@@ -185,5 +185,7 @@ module Apprt
     fun g_subprocess_get_exit_status(subprocess : Void*) : Int32
     fun g_subprocess_get_if_exited(subprocess : Void*) : Int32
     fun g_subprocess_get_term_sig(subprocess : Void*) : Int32
+    fun g_file_new_for_path(path : UInt8*) : Void*
+    fun g_file_icon_new(file : Void*) : Void*
   end
 end

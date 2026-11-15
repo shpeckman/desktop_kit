@@ -79,7 +79,7 @@ module Apprt
     @tab : Tab?
     @closed = false
     @surface_drop_target = Pointer(Void).null
-    @icon : String?
+    @icon : Icon?
 
     # Icons, tooltips and actions of the buttons in the pane header.
     private HEADER_BUTTONS = [
@@ -123,15 +123,15 @@ module Apprt
       title
     end
 
-    # Returns the name of the themed icon shown in the pane header and on
-    # the tab while the surface is active.
-    getter icon : String?
+    # Returns the icon shown in the pane header and on the tab while the
+    # surface is active.
+    getter icon : Icon?
 
-    # Sets the icon by its themed icon name, such as `"utilities-terminal"`;
-    # `nil` removes it.
-    def icon=(icon : String?) : String?
+    # Sets the icon: a themed icon name such as `"utilities-terminal"` or
+    # the `Path` of an image file; `nil` removes it.
+    def icon=(icon : Icon?) : Icon?
       @icon = icon
-      C.gtk_image_set_from_icon_name(@header_icon, icon)
+      GIcon.set(@header_icon, icon)
       @header_icon.visible = !icon.nil?
       @tab.try(&.sync_title)
       icon
@@ -425,20 +425,23 @@ module Apprt
       @tab.try(&.sync_title)
     end
 
-    # Lets the drag handle carry the surface id onto other surfaces, and
-    # hands files and text dropped on the surface to the content.
+    # Lets the drag handle and the pane header carry the surface id onto
+    # other surfaces, and hands files and text dropped on the surface to the
+    # content.
     private def install_drag_and_drop : Nil
-      source = C.gtk_drag_source_new
-      C.gtk_drag_source_set_actions(source, C::GdkDragAction::Move)
       value = C::GValue.new
       C.g_value_init(pointerof(value), C::TYPE_UINT64)
       C.g_value_set_uint64(pointerof(value), @id)
       provider = C.gdk_content_provider_new_for_value(pointerof(value))
       C.g_value_unset(pointerof(value))
-      C.gtk_drag_source_set_content(source, provider)
+      {@handle, @header}.each do |widget|
+        source = C.gtk_drag_source_new
+        C.gtk_drag_source_set_actions(source, C::GdkDragAction::Move)
+        C.gtk_drag_source_set_content(source, provider)
+        Signals.connect(source, "drag-begin", ->(_drag : Void*) { drag_icon(source) })
+        widget.add_controller(source)
+      end
       C.g_object_unref(provider)
-      Signals.connect(source, "drag-begin", ->(_drag : Void*) { drag_icon(source) })
-      @handle.add_controller(source)
 
       @surface_drop_target = surfaces = C.gtk_drop_target_new(C::TYPE_UINT64, C::GdkDragAction::Move)
       Signals.notify(surfaces, "value", -> { reject_self(surfaces) })
