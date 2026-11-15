@@ -254,9 +254,9 @@ in `on_reload`); `Surface#close` is not the only death path (closing tabs and wi
 ## Roadmap
 
 1. Live tests on KDE (`test/`; the user runs them). Passing on KDE: the global shortcut, key sequences
-   and key tables with a real keyboard, progress (the user saw 40 % on the taskbar entry). Added and
-   passing in sway, still to run on KDE: `header-tabs` (tabs-in-header look), `drag-drop` (a surface
-   dragged by its handle with a real pointer).
+   and key tables with a real keyboard, progress (the user saw 40 % on the taskbar entry),
+   `header-tabs`, `drag-drop` and `header-drag` with a real pointer, and `offload` (the canvas's frames
+   reach KWin as DMA-BUFs). Every case passes; new features get a case here.
 2. Quick terminal: layer-shell drop-down window on a global binding (KDE, sway; not GNOME); builds on
    `App#quit_delay = nil`.
 3. Generic search overlay; hover text and resize readout overlays.

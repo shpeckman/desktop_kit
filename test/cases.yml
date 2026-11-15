@@ -115,3 +115,50 @@ drag-drop:
     - key ctrl+a l
     - expect surfaces split,window
     - close
+
+# Dragging a surface by its pane header instead of the drag handle: pane
+# headers on, the window's surface split, then the pointer drags the left
+# header's title onto the right edge of the split. As with drag-drop, the
+# first moves stay on the header. The shot shows both pane headers.
+header-drag:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a m
+    - expect pane headers
+    - key ctrl+a s
+    - key ctrl+a l
+    - expect surfaces window,split
+    - settle
+    - shoot headers tolerance=2
+    - move 150 58
+    - settle
+    - down
+    - move 155 58
+    - move 160 58
+    - move 165 58
+    - move 170 58
+    - sleep 200
+    - move 400 200
+    - move 700 300
+    - move 780 300
+    - sleep 300
+    - up
+    - settle
+    - key ctrl+a l
+    - expect surfaces split,window
+    - close
+
+# A canvas with offload on, in a tab of its own: its first frame must
+# reach the screen as a DMA-BUF texture, the right way up (red top, blue
+# bottom in the shot). KWin antialiases the bottom corners over saturated
+# blue up to 4 off from sway, hence the higher tolerance.
+offload:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a c
+    - expect canvas dmabuf=true
+    - settle
+    - shoot canvas tolerance=4
+    - close

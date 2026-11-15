@@ -5,8 +5,9 @@ Live tests of apprt through
 input and a real pointer. On the KDE Plasma desktop they cover what a private test
 compositor cannot: global key bindings bound by the desktop's global
 shortcuts portal and fired by kglobalaccel, and the taskbar's progress.
-Key sequences, key tables, the progress bar, tabs in the header bar and
-dragging a surface also run in a nested sway,
+Key sequences, key tables, the progress bar, tabs in the header bar,
+dragging a surface by its handle or pane header and a canvas offloading
+its frames as DMA-BUFs also run in a nested sway,
 which leaves your keyboard and pointer alone.
 
 ## Requirements
@@ -59,6 +60,12 @@ means every case passed.
 - `drag-drop` - Ctrl+A S splits the window's surface; the pointer drags
   that surface's drag handle onto the right edge of the split, and
   Ctrl+A L reports the surfaces swapped.
+- `header-drag` - Ctrl+A M turns pane headers on and Ctrl+A S splits;
+  the pointer drags the left pane header onto the right edge of the
+  split, and Ctrl+A L reports the surfaces swapped. Shoots both headers.
+- `offload` - Ctrl+A C opens a tab with a canvas that offloads its
+  frames; its first frame must arrive as a DMA-BUF. Shoots the canvas,
+  red on top and blue below.
 
 ## The app under test
 
@@ -77,6 +84,8 @@ Its window shows a label and has these bindings:
 | Ctrl+A S                    | `NewSplit` to the right                   |
 | Ctrl+A L                    | reports the tab's surfaces                |
 | Ctrl+A H                    | moves the tab bar into the header bar     |
+| Ctrl+A M                    | shows pane headers                        |
+| Ctrl+A C                    | opens a tab with an offloading canvas     |
 | Ctrl+Alt+Shift+F9 (global)  | `NewTab`, with `--global` or `--setup`    |
 
 It writes to `LIVETEST_FIFO` and to standard error:
@@ -91,6 +100,9 @@ It writes to `LIVETEST_FIFO` and to standard error:
 | `surfaces K,...`          | the tab's surfaces, left to right, by the    |
 |                           | kind they opened as (`window`, `tab`, `split`) |
 | `header tabs`             | the tab bar moved into the header bar        |
+| `pane headers`            | every surface shows its pane header          |
+| `canvas dmabuf=BOOL`      | the canvas showed its first frame, as a      |
+|                           | DMA-BUF when BOOL is `true`                  |
 
 `--class ID` sets the window class (Wayland app id) the harness finds the
 window by; `--global` binds the global shortcut (cases with

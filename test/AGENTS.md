@@ -37,7 +37,8 @@ time, with `--threads 2` (`CRFLAGS`).
   written by mode `sway` (`ARGS=-u`). Modes share them; the shots hold
   the window only, client-side decorated and opaque (livetest composites
   KWin's translucent captures over black). The shots allow a difference
-  of 2 per channel for KDE's corner antialiasing.
+  of 2 per channel for KDE's corner antialiasing; `offload`'s allows 4,
+  as its bottom corners lie over saturated blue.
 - `shard.override.yml` - takes livetest from `../../livetest`; apprt is
   the parent directory (`path: ..`).
 - `bin/`, `lib/`, `out/`, `shard.lock` - generated, ignored.
@@ -64,8 +65,12 @@ time, with `--threads 2` (`CRFLAGS`).
 - Only `--global` (or `--setup`) binds the global shortcut: binding it in
   a nested sway would reach the real desktop's portal through the shared
   session bus.
-- `Report` (window), `ShowProgress` (split), `ReportSurfaces` (tab) and
-  `HeaderTabs` (app) are the app's own actions. `ReportSurfaces` names
+- `Report` (window), `ShowProgress` (split), `ReportSurfaces` (tab),
+  `HeaderTabs` and `PaneHeaders` (app) and `OpenCanvas` (window) are the
+  app's own actions. `OpenCanvas` makes the next surface a `Halves`
+  canvas (`offload: true`, red over blue in GL coordinates, so a flipped
+  frame shows in the shot) and opens a tab; the canvas reports
+  `canvas dmabuf=…` from its first `on_presented`. `ReportSurfaces` names
   each surface by the `SurfaceContext::Kind` it opened as, so a drop's
   new order shows.
   `Report` lines carry the active key tables, so `expect` proves which
@@ -75,7 +80,9 @@ time, with `--threads 2` (`CRFLAGS`).
   still over the drag handle; a first move that leaves the handle (as
   livetest's `drag` step does) starts nothing. `drag-drop` therefore
   presses with `down`, moves a few pixels along the handle, waits for the
-  drag to start and then moves to the drop point.
+  drag to start and then moves to the drop point. `header-drag` does
+  the same on the left pane header's title (y 58, below the 44-pixel
+  header bar).
 - `expect` skips other lines until the expected one, so a case cannot
   check that a binding did not fire; it checks that the wanted one did
   (Ctrl+A Ctrl+T reports `capture` only if the sequence took the key).

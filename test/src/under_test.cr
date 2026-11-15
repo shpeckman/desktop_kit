@@ -1,8 +1,8 @@
 # src/under_test.cr
 #
 # The apprt app the live tests run: one window of labels with key
-# sequences, a key table, progress, tab, split and header bindings, and
-# with --global the global Ctrl+Alt+Shift+F9, which opens a tab. It
+# sequences, a key table, progress, tab, split, header, pane header and
+# offloading canvas bindings, and with --global the global Ctrl+Alt+Shift+F9, which opens a tab. It
 # reports through LIVETEST_FIFO, and on standard error:
 #
 #   window                     its window is open
@@ -14,6 +14,9 @@
 #   surfaces K,...             the tab's surfaces from the left or top, by
 #                              the kind each was opened as
 #   header tabs                the tab bar moved into the header bar
+#   pane headers               every surface shows its pane header
+#   canvas dmabuf=BOOL         the canvas tab showed its first frame, as a
+#                              DMA-BUF when BOOL is true
 #
 #   apprt-under-test --class ID  runs under the harness with window class ID
 #   apprt-under-test --global    also binds the global shortcut
@@ -25,6 +28,18 @@ require "apprt"
 lib LibGtk
   fun gtk_label_new(text : UInt8*) : Void*
   fun gtk_native_get_surface(native : Void*) : Void*
+end
+
+@[Link("GL")]
+lib LibGL
+  COLOR_BUFFER_BIT = 0x4000_u32
+  SCISSOR_TEST     = 0x0C11_u32
+
+  fun glClearColor(red : Float32, green : Float32, blue : Float32, alpha : Float32)
+  fun glClear(mask : UInt32)
+  fun glEnable(cap : UInt32)
+  fun glDisable(cap : UInt32)
+  fun glScissor(x : Int32, y : Int32, width : Int32, height : Int32)
 end
 
 lib LibGdkWayland
@@ -51,6 +66,12 @@ module Apprt::Test
   # Moves the tab bar into the header bar.
   Apprt.action HeaderTabs, "header-tabs", scope: :app
 
+  # Shows a pane header on every surface.
+  Apprt.action PaneHeaders, "pane-headers", scope: :app
+
+  # Opens a tab whose content is an offloading `Halves` canvas.
+  Apprt.action OpenCanvas, "open-canvas", scope: :window
+
   # The window bindings under test. `ctrl+t` is a plain window shortcut
   # that `ctrl+a>ctrl+t` must win over while the sequence is pending.
   BINDINGS = {
@@ -65,6 +86,8 @@ module Apprt::Test
     "ctrl+a>s"       => Action::NewSplit.new(:right),
     "ctrl+a>l"       => ReportSurfaces.new,
     "ctrl+a>h"       => HeaderTabs.new,
+    "ctrl+a>m"       => PaneHeaders.new,
+    "ctrl+a>c"       => OpenCanvas.new,
   }
 
   # The key table `mode`.
@@ -73,11 +96,47 @@ module Apprt::Test
     "Escape" => Action::DeactivateKeyTable.new,
   }
 
+  # Reports *line* on standard error and to the harness's fifo.
+  def self.report(line : String) : Nil
+    STDERR.puts line
+    fifo = ENV["LIVETEST_FIFO"]? || return
+    File.open(fifo, "a", &.puts(line))
+  end
+
+  # Offloading canvas that clears its upper half red and its lower half
+  # blue, and reports how its first frame reached the screen.
+  class Halves < Apprt::Canvas
+    @reported = false
+
+    def initialize
+      super(offload: true)
+    end
+
+    protected def on_render : Nil
+      LibGL.glClearColor(1.0, 0.0, 0.0, 1.0)
+      LibGL.glClear(LibGL::COLOR_BUFFER_BIT)
+      LibGL.glEnable(LibGL::SCISSOR_TEST)
+      LibGL.glScissor(0, 0, width, height // 2)
+      LibGL.glClearColor(0.0, 0.0, 1.0, 1.0)
+      LibGL.glClear(LibGL::COLOR_BUFFER_BIT)
+      LibGL.glDisable(LibGL::SCISSOR_TEST)
+    end
+
+    protected def on_presented(timing : Apprt::FrameTiming) : Nil
+      return if @reported
+      @reported = true
+      Test.report "canvas dmabuf=#{dmabuf?}"
+    end
+  end
+
   class UnderTest < Apprt::App
     getter? failed = false
 
     # The kind each surface's content was opened as.
     @kinds = {} of Apprt::Content => String
+
+    # Whether the next surface is a `Halves` canvas.
+    @canvas = false
 
     # Runs with *window_class* as the Wayland app id of its window when
     # given; *global* binds the global shortcut; *setup* waits for the
@@ -130,6 +189,10 @@ module Apprt::Test
           quit
         end
       end
+      if @canvas
+        @canvas = false
+        return Halves.new
+      end
       text = @setup ? "Confirm the shortcut in the desktop's dialog, then press #{TRIGGER.label}." : context.kind.to_s
       content = Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
       @kinds[content] = context.kind.to_s.downcase
@@ -164,10 +227,19 @@ module Apprt::Test
       true
     end
 
+    protected def perform(target : Apprt::App, action : PaneHeaders) : Bool
+      self.window_style = Apprt::WindowStyle.new(pane_headers: true)
+      report "pane headers"
+      true
+    end
+
+    protected def perform(target : Apprt::Window, action : OpenCanvas) : Bool
+      @canvas = true
+      perform(target, Apprt::Action::NewTab.new)
+    end
+
     private def report(line : String) : Nil
-      STDERR.puts line
-      fifo = ENV["LIVETEST_FIFO"]? || return
-      File.open(fifo, "a", &.puts(line))
+      Test.report(line)
     end
   end
 end
