@@ -92,6 +92,8 @@ Hooks, all called on the GTK thread:
 | `on_reload`                | on `#reload` and SIGUSR2                            |
 | `on_binding_failed(binding, message)` | when the desktop does not bind a global binding |
 | `on_window(window)`        | with each new window, before it is shown            |
+| `on_window_suspended(window, suspended)` | when the desktop stops or resumes showing a window (another workspace, minimized) |
+| `on_user_idle(idle)`       | when the user turns idle after `#idle_timeout`, and when they return |
 | `on_shutdown`              | when quitting, while the windows still exist        |
 
 These methods are callable from any thread:
@@ -118,6 +120,28 @@ These methods are callable from any thread:
   does (see Bell).
 - `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
   the default), `Light` or `Dark`.
+- `#idle_timeout=` sets how long the user may leave the keyboard and
+  pointer alone before `on_user_idle(true)`; `nil`, the default, reports
+  nothing. The desktop decides (and may never tell); `#user_idle?` holds
+  the last report.
+
+On the GTK thread, two methods hook into its main loop and return an
+`Apprt::Source`, which `#cancel` stops; quitting cancels every source:
+
+- `#after(delay) { ... }` runs the block once *delay* passed.
+- `#watch(fd, conditions = :read) { |condition| ... }` calls the block
+  whenever the file descriptor (an `Int32` or an `IO::FileDescriptor`)
+  meets one of `Source::Condition` `Read`, `Priority` or `Write`. `Error`,
+  `HangUp` and `Invalid` are reported regardless; `Invalid` (a closed
+  descriptor) ends the watch. Read and write the descriptor without
+  blocking: the GTK thread runs the whole application.
+
+```crystal
+blink = app.after(500.milliseconds) { toggle_cursor }
+reader = app.watch(pty) { |condition| drain(pty) if condition.read? }
+# later
+reader.cancel
+```
 
 While `#run` runs, SIGINT and SIGTERM quit the application and SIGUSR2
 reloads it; the signals return to their default action afterwards.
@@ -168,6 +192,14 @@ elsewhere.
 | `Window#confirm(heading, body)`  | asks a yes/no question in a dialog and yields the answer          |
 | `Window#prompt(heading, body)`   | asks for a line of text in a dialog and yields it                 |
 | `Window#subtitle=`               | sets a second line under the window title; `nil` removes it       |
+| `Window#fullscreen=`, `#fullscreen?`, `#maximized=`, `#maximized?` | asks the desktop to (un)fullscreen or (un)maximize it, and its state |
+| `Window#resizable=`              | whether the user can resize it; a fixed window keeps its content's size |
+| `Window#app_id=`                 | the application id the desktop groups it under (icon, window rules); `nil` uses the application's |
+| `Window#idle_inhibited=`, `#set_idle_inhibited(on, reason)` | keeps the desktop from blanking or locking while it is open |
+| `Window#shortcuts_inhibited=`    | lets the desktop's own shortcuts reach it while focused; the desktop may ask or refuse |
+| `Window#activate(token)`         | raises and focuses it with an activation token from another application |
+| `Window#monitor_size`            | the logical size of its monitor, `nil` while not shown            |
+| `Window#suspended?`              | whether the desktop stopped showing it (`on_window_suspended`)    |
 | `Window#pack_start`, `#pack_end` | adds a widget, or a button performing an action, to the header bar |
 | `Surface#icon=`                  | sets a themed icon name for its pane header and, while active, its tab |
 | `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
@@ -199,14 +231,15 @@ the application id.
 
 #### Window style
 
-`App#window_style=` takes an `Apprt::WindowStyle`; every option is off by
-default, which gives GTK's plain look:
+`App#window_style=` takes an `Apprt::WindowStyle`; the defaults give GTK's
+plain look, with the header bar on and the other options off:
 
 | Option              | Effect                                                         |
 |---------------------|----------------------------------------------------------------|
 | `pane_headers`      | a header over each surface: its icon, its title and buttons to split right, split down, zoom and close it |
 | `cards`             | surfaces as rounded cards with gaps between them               |
 | `tabs_in_header`    | the tab bar in the header bar, beside the window title, always shown |
+| `header_bar`        | the header bar with the title, the tabs and their buttons; `false` leaves windows without a title bar of their own and passes libadwaita's tab keys (Ctrl+Tab, Ctrl+Page Up, Alt+1 …) to the content |
 | `opacity`           | opacity of the window background, 0 to 1; pair it with `Window#background_blur=` |
 | `unfocused_opacity` | opacity of the surfaces of a split other than the tab's active one, 0 to 1 |
 
@@ -344,25 +377,47 @@ class Scene < Apprt::Canvas
 end
 ```
 
-`.new(*, api, version, depth_buffer, stencil_buffer)` sets what GTK asks
-for: `api` is `Canvas::API::GL`, `GLES` or both (the default), `version`
-the least `{major, minor}`. The GL context is current in `#on_realize`,
+`.new(*, api, version, depth_buffer, stencil_buffer, input_purpose)` sets
+the GL context and framebuffer: `api` is `Canvas::API::GL`, `GLES` or both
+(the default), `version` the least `{major, minor}`, and the framebuffer
+gets a 24-bit depth and 8-bit stencil buffer when either is asked for. `input_purpose`
+(`Canvas::InputPurpose`, `FreeForm` by default; `Terminal` for keys that
+go to a program) tells input methods and on-screen keyboards what text
+the canvas takes. The GL context is current in `#on_realize`,
 `#on_render`, `#on_resize` and `#on_unrealize`; `#api` is the flavour
 GTK made, and `#error` the reason when it made none. Moving a canvas, such
 as into a split, unrealizes and realizes it again, so `#on_realize` must
-recreate GL objects. GTK draws on its own schedule: call `#queue_render`
-after a change.
+recreate GL objects. The canvas draws a frame when it is shown, resized
+or rescaled, and after `#queue_render`; call that after a change.
+
+Each frame goes to a framebuffer of exactly the canvas's size at the
+output's scale, fractional scales included (`#scale` is a `Float64` such
+as `1.5`), with the GL origin at the bottom left. The canvas keeps several
+framebuffers: `#buffer_age` tells, during `#on_render`, how many frames
+ago the bound one was last drawn, or 0 when its contents are undefined, so
+a canvas can redraw only what changed since then. `#frame` numbers the
+frame drawn last, and `#on_presented(timing)` reports when the display
+showed a frame: an `Apprt::FrameTiming` with `frame`, `presented` (a
+`Time::Span` on `CLOCK_MONOTONIC`) and `refresh_interval`, both `nil` when
+the compositor does not tell.
+
+`Apprt::GLContext.new(api:, version:)` makes a context for drawing off
+screen, for example into textures, with no canvas; it shares objects with
+every canvas of the display. `#make_current`, `#current?`, `#api` and
+`GLContext.clear_current` manage it; `Canvas#gl_context` is a canvas's
+own, `nil` while it is unrealized. Use both on the GTK thread.
 
 | Hook                               | Called                                                                 |
 |------------------------------------|------------------------------------------------------------------------|
 | `on_realize`, `on_unrealize`       | after the GL context is made, before it goes                           |
 | `on_render`                        | to draw a frame                                                        |
 | `on_resize(width, height)`         | when the framebuffer size changes                                      |
+| `on_presented(timing)`             | when the display showed a frame                                        |
 | `on_key(event) : Bool`             | for a key press or release; true when used, else GTK passes the key on |
 | `on_preedit(text)`, `on_commit(text)` | input method composition text (`nil` ends it), finished text        |
 | `on_focus(focused)`                | when the canvas gains or loses the keyboard focus                      |
 | `on_mouse_button(event)`           | for a button press or release; a press focuses the canvas              |
-| `on_mouse_motion(event)`, `on_mouse_leave` | while the pointer moves over the canvas, when it leaves        |
+| `on_mouse_enter(event)`, `on_mouse_motion(event)`, `on_mouse_leave` | when the pointer enters the canvas, while it moves over it, when it leaves |
 | `on_scroll(event)`                 | for a wheel step or a touchpad scroll                                  |
 
 Sizes and positions are framebuffer pixels: `#width`, `#height`, event
@@ -370,21 +425,77 @@ coordinates and precise scroll deltas are logical units times `#scale`.
 Call `#ime_cursor(x, y, width, height)` with the text cursor's rectangle
 in framebuffer pixels so the input method places its popup there.
 
-`Apprt::KeyEvent` holds `pressed?`, `keyval` (a GDK keysym), `keycode`,
-`key` (the physical key, an `Apprt::Key`),
+`Apprt::KeyEvent` holds `pressed?`, `repeat?` (a press of a key already
+down, as keyboard repeat sends), `keyval` (a GDK keysym), `keycode`,
+`key` (the physical key, an `Apprt::Key`), `layout` (the index of the
+keyboard layout in use),
 `mods` (the modifiers held, counting a modifier key in its own press but
 not in its release), `consumed_mods` (the modifiers the layout used to
 make the key), `text` (what a press types, `nil` for a release or a
-non-text key), `unshifted` (the character of the key without modifiers),
-`modifier?` and `composing?` (the input method is composing). A key the
+non-text key), `unshifted` and `shifted` (the characters of the key
+without modifiers and with Shift alone), `base` (its character without
+modifiers in the first layout, for bindings across layouts),
+`caps_lock?`, `num_lock?`, `modifier?` and `composing?` (the input method
+is composing). A key the
 input method uses for a composition reaches `#on_key` with
 `composing? = true`; text it finishes comes through `#on_commit`, or as
 the event's `text` when one key finishes it. Using a key while composing
 ends the composition. `Apprt::MouseButtonEvent` holds `pressed?`,
-`button` (`Left`, `Middle`, `Right`, `Back`, `Forward`), `x`, `y` and
-`mods`; `Apprt::MouseMotionEvent` holds `x`, `y` and `mods`;
+`button` (`Left`, `Middle`, `Right`, `Back`, `Forward`; other buttons keep
+their number), `x`, `y`, `mods` and `time` (milliseconds of the display's
+clock, for double clicks); `Apprt::MouseMotionEvent` holds `x`, `y`, `mods`
+and `time`;
 `Apprt::ScrollEvent` holds `dx`, `dy`, `precise?` (pixel deltas from a
 touchpad rather than wheel steps) and `mods`.
+
+#### Canvas drag and drop
+
+A canvas can take drags by MIME type and start its own. These hooks come
+on top of `Content#on_drop`, which still gets the drags the canvas
+refuses:
+
+| Hook                                       | Called                                                          |
+|--------------------------------------------|-----------------------------------------------------------------|
+| `on_drop_accept(drop) : Bool`              | when a drag enters; true takes part in it (default false)       |
+| `on_drop_motion(drop, x, y) : DragAction`  | as it enters and moves; the action a drop there would perform (default `Copy` when allowed) |
+| `on_drop_leave(drop)`                      | when it leaves without dropping                                 |
+| `on_drop(drop, x, y) : Bool`               | when it drops; true takes the drop (default false)              |
+| `on_drag_end(drag, action)`                | when a drag from `#drag` ends; `None` when cancelled            |
+
+An `Apprt::Drop` offers `mime_types`, `actions` (the `Apprt::DragAction`
+flags `Copy`, `Move`, `Link` its source allows) and `local?` (a drag from
+this application). Once `on_drop` returned true, `read(mime_type)
+{ |bytes| }` fetches the data (`nil` when it is not offered) and
+`finish(action)` ends the drop, `DragAction::None` reporting a failure.
+
+`#drag(mime_types, actions = :copy, icon = nil) { |request| }` starts a
+drag with the pointer; call it while a button is held. It returns the
+`Apprt::Drag` (its `mime_types` and the `action` the target under the
+pointer would perform), or `nil` while the canvas is not on screen. The
+data is produced on demand: the block gets an `Apprt::Drag::Request` for
+each MIME type a target asks for and answers it once with
+`reply(bytes)` or `fail`, now or later. An `Apprt::Drag::Icon` holds
+straight RGBA pixels and the pointer's spot on them.
+
+```crystal
+protected def on_drop_accept(drop : Apprt::Drop) : Bool
+  drop.mime_types.includes?("text/uri-list")
+end
+
+protected def on_drop(drop : Apprt::Drop, x : Float64, y : Float64) : Bool
+  drop.read("text/uri-list") do |bytes|
+    open_uris(String.new(bytes)) if bytes
+    drop.finish(bytes ? Apprt::DragAction::Copy : Apprt::DragAction::None)
+  end
+  true
+end
+
+protected def on_mouse_motion(event : Apprt::MouseMotionEvent) : Nil
+  return unless @pressed_on_link
+  drag(["text/uri-list", "text/plain;charset=utf-8"]) { |request| request.reply(@link.to_slice) }
+  @pressed_on_link = false
+end
+```
 
 `Apprt::Key` names a key by its position on a US keyboard, whatever the
 layout, with the W3C UI Events `code` names: `KeyA` is the key right of
@@ -410,6 +521,23 @@ clipboard; `.read(kind = :standard) { |text| }` yields its text later, or
 `nil` when it holds none. `kind` is `Standard` (copy and paste) or
 `Primary` (the selection, pasted by middle-click). Use them on the GTK
 thread only.
+
+Other data travels by MIME type:
+
+- `.write(items, kind = :standard)` puts `{mime_type, bytes}` pairs on a
+  clipboard; each reader picks the type it wants. Empty *items* clear it.
+- `.offered(kind = :standard)` returns the MIME types a clipboard offers.
+- `.read(mime_type, kind = :standard) { |bytes| }` yields the data of one
+  type later, or `nil` when the clipboard does not offer it.
+- `.items(kind = :standard)` returns the items this application last
+  wrote, while it still owns the clipboard; `nil` otherwise.
+
+```crystal
+Apprt::Clipboard.write([{"text/html", html.to_slice}, {"text/plain;charset=utf-8", text.to_slice}])
+if Apprt::Clipboard.offered.includes?("text/html")
+  Apprt::Clipboard.read("text/html") { |bytes| paste(bytes) if bytes }
+end
+```
 
 `Surface#confirm_clipboard(request, text) { |allowed| }` asks before a
 clipboard access: `Clipboard::Request::Paste` warns about pasting *text*,
@@ -604,6 +732,30 @@ Apprt::IPC.send("org.example.Hello", Apprt::Action::NewWindow.new)
 
 GApplication exports every `app` action on the session bus, so `ipc:`
 selects what `IPC.send` sends, not what other DBus clients can call.
+
+### D-Bus
+
+`Apprt::DBus` is a message bus connection: `DBus.session`, `DBus.system`
+or `App#dbus` (the running application's own, `nil` before it registers).
+Arguments and replies are tuple `Variant`s.
+
+| Method | Does |
+|--------|------|
+| `#call(destination, path, interface, method, args = nil, reply_type:, timeout:, auto_start:) { \|reply, error\| }` | calls a method; the block gets the reply tuple or a `GLibError`, on the calling thread's main loop |
+| `#call_sync(...)` | the same, waiting; returns the reply, raises `GLibError` |
+| `#emit(path, interface, member, args = nil, destination:)` | emits a signal |
+| `#subscribe(sender:, interface:, member:, path:, arg0:) { \|signal\| }` | yields each matching `DBus::Signal` (`sender`, `path`, `interface`, `member`, `args`) until `Subscription#cancel` |
+| `#unique_name` | the connection's unique name (`":1.42"`) |
+
+Use `#call` and `#subscribe` on the GTK thread; `#call_sync` and `#emit`
+work anywhere. Arguments that are not a tuple raise `ArgumentError`.
+
+```crystal
+bus = app.dbus.not_nil!
+bus.subscribe(interface: "org.freedesktop.Notifications", member: "ActionInvoked") do |signal|
+  puts "#{signal.args[0].get(UInt32)}: #{signal.args[1].get(String)}"
+end
+```
 
 ### Configuration reload
 

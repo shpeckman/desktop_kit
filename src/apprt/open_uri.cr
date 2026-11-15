@@ -44,15 +44,38 @@ module Apprt
     end
 
     # Runs `xdg-open` on *url* and logs its error output when it fails.
+    #
+    # GIO spawns and reaps the process, so the wait does not depend on
+    # Crystal's SIGCHLD handler, which applications may reset.
     def self.xdg_open(url : String) : Nil
-      process = Process.new("xdg-open", [url], output: :close, error: :pipe)
-      spawn(name: "xdg-open") do
-        message = process.error.gets_to_end.strip
-        status = process.wait
-        Log.warn { "xdg-open #{url}: #{message.presence || status}" } unless status.success?
-      end
-    rescue ex : IO::Error
+      argv = Native.strv({"xdg-open", url})
+      flags = C::GSubprocessFlags::StdoutSilence | C::GSubprocessFlags::StderrPipe
+      process = GLibError.check! { |error| C.g_subprocess_newv(argv.to_unsafe, flags, error) }
+      C.g_subprocess_communicate_utf8_async(process, nil, nil, EXITED, Handles.retain(url))
+    rescue ex : GLibError
       Log.error { "open url #{url}: #{ex.message}" }
+    end
+
+    private EXITED = ->(process : Void*, result : Void*, data : Void*) do
+      url = Handles.get(data, String)
+      Handles.release(data)
+      begin
+        message = ""
+        GLibError.check! do |error|
+          C.g_subprocess_communicate_utf8_finish(process, result, nil, out errors, error).tap do
+            message = Native.take_string?(errors).try(&.strip) || ""
+          end
+        end
+        unless C.g_subprocess_get_successful(process) != 0
+          status = C.g_subprocess_get_if_exited(process) != 0 ? "exit status #{C.g_subprocess_get_exit_status(process)}" : "signal #{C.g_subprocess_get_term_sig(process)}"
+          Log.warn { "xdg-open #{url}: #{message.presence || status}" }
+        end
+      rescue ex : GLibError
+        Log.warn { "xdg-open #{url}: #{ex.message}" }
+      ensure
+        C.g_object_unref(process)
+      end
+      nil
     end
 
     private def local?(url : String) : Bool

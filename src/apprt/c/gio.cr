@@ -13,6 +13,12 @@ module Apprt
       Urgent = 3
     end
 
+    @[Flags]
+    enum GOutputStreamSpliceFlags : UInt32
+      CloseSource = 1
+      CloseTarget = 2
+    end
+
     enum GBusType : Int32
       Starter = -1
       None    =  0
@@ -49,6 +55,19 @@ module Apprt
       DelayMessageProcessing        = 16
       AuthenticationRequireSameUser = 32
       CrossNamespace                = 64
+    end
+
+    @[Flags]
+    enum GSubprocessFlags : UInt32
+      StdinPipe          =   1
+      StdinInherit       =   2
+      StdoutPipe         =   4
+      StdoutSilence      =   8
+      StderrPipe         =  16
+      StderrSilence      =  32
+      StderrMerge        =  64
+      InheritFds         = 128
+      SearchPathFromEnvp = 256
     end
 
     @[Flags]
@@ -122,6 +141,11 @@ module Apprt
     fun g_cancellable_new : Void*
     fun g_cancellable_cancel(cancellable : Void*)
     fun g_async_result_get_source_object(res : Void*) : Void*
+    fun g_memory_output_stream_new_resizable : Void*
+    fun g_memory_output_stream_steal_as_bytes(ostream : Void*) : Void*
+    fun g_output_stream_splice_async(stream : Void*, source : Void*, flags : GOutputStreamSpliceFlags, io_priority : Int32, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun g_output_stream_splice_finish(stream : Void*, result : Void*, error : GError**) : LibC::SSizeT
+    fun g_input_stream_close(stream : Void*, cancellable : Void*, error : GError**) : Int32
     fun g_bus_get(bus_type : GBusType, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
     fun g_bus_get_finish(res : Void*, error : GError**) : Void*
     fun g_bus_get_sync(bus_type : GBusType, cancellable : Void*, error : GError**) : Void*
@@ -147,5 +171,19 @@ module Apprt
     fun g_dbus_method_invocation_get_sender(invocation : Void*) : UInt8*
     fun g_file_get_type : GType
     fun g_file_get_path(file : Void*) : UInt8*
+    fun g_task_new(source_object : Void*, cancellable : Void*, callback : GAsyncReadyCallback, callback_data : Void*) : Void*
+    fun g_task_return_boolean(task : Void*, result : Int32)
+    fun g_task_return_error(task : Void*, error : GError*)
+    fun g_task_propagate_boolean(task : Void*, error : GError**) : Int32
+    fun g_output_stream_write_all_async(stream : Void*, buffer : Void*, count : LibC::SizeT, io_priority : Int32, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun g_output_stream_write_all_finish(stream : Void*, result : Void*, bytes_written : LibC::SizeT*, error : GError**) : Int32
+    fun g_subprocess_get_type : GType
+    fun g_subprocess_newv(argv : UInt8**, flags : GSubprocessFlags, error : GError**) : Void*
+    fun g_subprocess_communicate_utf8_async(subprocess : Void*, stdin_buf : UInt8*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun g_subprocess_communicate_utf8_finish(subprocess : Void*, result : Void*, stdout_buf : UInt8**, stderr_buf : UInt8**, error : GError**) : Int32
+    fun g_subprocess_get_successful(subprocess : Void*) : Int32
+    fun g_subprocess_get_exit_status(subprocess : Void*) : Int32
+    fun g_subprocess_get_if_exited(subprocess : Void*) : Int32
+    fun g_subprocess_get_term_sig(subprocess : Void*) : Int32
   end
 end

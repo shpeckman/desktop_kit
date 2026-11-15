@@ -11,6 +11,8 @@ lib WindowStyleSpecLib
   fun gtk_widget_is_ancestor(widget : Void*, ancestor : Void*) : Int32
   fun gtk_button_get_type : UInt64
   fun adw_tab_bar_get_autohide(bar : Void*) : Int32
+  fun adw_toolbar_view_get_reveal_top_bars(view : Void*) : Int32
+  fun adw_tab_view_get_shortcuts(view : Void*) : UInt32
 end
 
 private def css_class?(widget : Apprt::Widget, name : String) : Bool
@@ -162,6 +164,23 @@ describe "window style" do
       settle
       inside?(tab_bar, window.@header).should be_false
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 1
+    end
+  end
+
+  it "hides the header bar and the tab keys without one" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 1
+      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq Apprt::C::AdwTabViewShortcuts::AllShortcuts.value
+      app.window_style = Apprt::WindowStyle.new(header_bar: false)
+      WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 0
+      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq 0
+      other = app.new_window
+      WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(other.@toolbar).should eq 0
+      app.window_style = Apprt::WindowStyle.new
+      WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 1
+      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq Apprt::C::AdwTabViewShortcuts::AllShortcuts.value
     end
   end
 

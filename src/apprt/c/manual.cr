@@ -22,6 +22,7 @@ module Apprt
     PRIORITY_DEFAULT                    =       0
     PRIORITY_DEFAULT_IDLE               =     200
     SOURCE_REMOVE                       =       0
+    SOURCE_CONTINUE                     =       1
     STYLE_PROVIDER_PRIORITY_APPLICATION = 600_u32
     STYLE_PROVIDER_PRIORITY_USER        = 800_u32
     PANGO_ELLIPSIZE_END                 =       3

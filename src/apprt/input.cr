@@ -5,6 +5,9 @@ module Apprt
     # Whether the key went down; `false` when it went up.
     getter? pressed : Bool
 
+    # Whether the key went down again while held, as keyboard repeat does.
+    getter? repeat : Bool
+
     # Returns the GDK key value the layout and the modifiers make of the key,
     # such as `0x41` for Shift+A.
     getter keyval : UInt32
@@ -16,6 +19,9 @@ module Apprt
     def key : Key
       Key.from_keycode(@keycode)
     end
+
+    # Returns the index of the keyboard layout in use, 0 for the first.
+    getter layout : UInt32
 
     # Returns the modifiers held. A modifier key going down counts itself; one
     # going up does not.
@@ -34,15 +40,31 @@ module Apprt
     # modifiers, or `nil` when it makes none.
     getter unshifted : Char?
 
+    # Returns the character the key makes in the current layout with Shift
+    # alone, or `nil` when it makes none.
+    getter shifted : Char?
+
+    # Returns the character the key makes without modifiers in the first
+    # layout, or `nil` when it makes none.
+    getter base : Char?
+
     # Whether the key is a modifier key, such as Shift or Caps Lock.
     getter? modifier : Bool
 
     # Whether an input method was composing text when the key arrived.
     getter? composing : Bool
 
+    # Whether Caps Lock was on.
+    getter? caps_lock : Bool
+
+    # Whether Num Lock was on.
+    getter? num_lock : Bool
+
     # :nodoc:
     def initialize(@pressed : Bool, @keyval : UInt32, @keycode : UInt32, @mods : Mods, @consumed_mods : Mods,
-                   @text : String?, @unshifted : Char?, @modifier : Bool, @composing : Bool)
+                   @text : String?, @unshifted : Char?, @modifier : Bool, @composing : Bool, *,
+                   @repeat : Bool = false, @layout : UInt32 = 0, @shifted : Char? = nil, @base : Char? = nil,
+                   @caps_lock : Bool = false, @num_lock : Bool = false)
     end
   end
 
@@ -70,8 +92,12 @@ module Apprt
 
     getter mods : Mods
 
+    # Returns when the button changed, in milliseconds of the display's
+    # clock.
+    getter time : UInt32
+
     # :nodoc:
-    def initialize(@pressed : Bool, @button : MouseButton, @x : Float64, @y : Float64, @mods : Mods)
+    def initialize(@pressed : Bool, @button : MouseButton, @x : Float64, @y : Float64, @mods : Mods, @time : UInt32 = 0)
     end
   end
 
@@ -85,8 +111,11 @@ module Apprt
 
     getter mods : Mods
 
+    # Returns when the pointer moved, in milliseconds of the display's clock.
+    getter time : UInt32
+
     # :nodoc:
-    def initialize(@x : Float64, @y : Float64, @mods : Mods)
+    def initialize(@x : Float64, @y : Float64, @mods : Mods, @time : UInt32 = 0)
     end
   end
 

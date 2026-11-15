@@ -16,6 +16,7 @@ adw_toolbar_view_new
 adw_toolbar_view_set_content
 adw_toolbar_view_add_top_bar
 adw_toolbar_view_set_top_bar_style
+adw_toolbar_view_set_reveal_top_bars
 adw_header_bar_new
 adw_header_bar_pack_start
 adw_header_bar_pack_end
@@ -33,6 +34,8 @@ adw_tab_bar_set_view
 adw_tab_bar_set_autohide
 AdwTabView
 adw_tab_view_new
+adw_tab_view_set_shortcuts
+AdwTabViewShortcuts
 adw_tab_view_insert
 adw_tab_view_append
 adw_tab_view_get_n_pages

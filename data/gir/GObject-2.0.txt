@@ -28,6 +28,8 @@ g_signal_emit_by_name
 # values (GValue itself is in c/manual.cr)
 g_value_init
 g_value_unset
+g_value_set_enum
+g_value_get_enum
 g_value_set_boolean
 g_value_set_int
 g_value_set_uint
@@ -45,6 +47,7 @@ g_value_get_variant
 
 # types
 g_type_name
+g_type_from_name
 g_type_is_a
 g_type_check_instance_is_a
 
@@ -52,3 +55,12 @@ g_type_check_instance_is_a
 g_value_get_boxed
 g_value_get_uint64
 g_value_set_uint64
+
+# subclasses
+GTypeQuery
+GTypeFlags
+GClassInitFunc
+GInstanceInitFunc
+g_type_query
+g_type_register_static_simple
+g_object_new_with_properties

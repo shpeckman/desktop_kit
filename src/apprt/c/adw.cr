@@ -20,6 +20,23 @@ module Apprt
       RaisedBorder = 2
     end
 
+    @[Flags]
+    enum AdwTabViewShortcuts : UInt32
+      ControlTab           =    1
+      ControlShiftTab      =    2
+      ControlPageUp        =    4
+      ControlPageDown      =    8
+      ControlHome          =   16
+      ControlEnd           =   32
+      ControlShiftPageUp   =   64
+      ControlShiftPageDown =  128
+      ControlShiftHome     =  256
+      ControlShiftEnd      =  512
+      AltDigits            = 1024
+      AltZero              = 2048
+      AllShortcuts         = 4095
+    end
+
     enum AdwResponseAppearance : Int32
       Default     = 0
       Suggested   = 1
@@ -38,6 +55,7 @@ module Apprt
     fun adw_toolbar_view_set_content(self_ : Void*, content : Void*)
     fun adw_toolbar_view_add_top_bar(self_ : Void*, widget : Void*)
     fun adw_toolbar_view_set_top_bar_style(self_ : Void*, style : AdwToolbarStyle)
+    fun adw_toolbar_view_set_reveal_top_bars(self_ : Void*, reveal : Int32)
     fun adw_header_bar_new : Void*
     fun adw_header_bar_pack_start(self_ : Void*, child : Void*)
     fun adw_header_bar_pack_end(self_ : Void*, child : Void*)
@@ -53,6 +71,7 @@ module Apprt
     fun adw_tab_bar_set_autohide(self_ : Void*, autohide : Int32)
     fun adw_tab_view_get_type : GType
     fun adw_tab_view_new : Void*
+    fun adw_tab_view_set_shortcuts(self_ : Void*, shortcuts : AdwTabViewShortcuts)
     fun adw_tab_view_insert(self_ : Void*, child : Void*, position : Int32) : Void*
     fun adw_tab_view_append(self_ : Void*, child : Void*) : Void*
     fun adw_tab_view_get_n_pages(self_ : Void*) : Int32

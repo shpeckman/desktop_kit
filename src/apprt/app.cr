@@ -109,6 +109,29 @@ module Apprt
       UIThread.post(&block)
     end
 
+    # Runs *block* on the GTK thread once *delay* passed and returns its
+    # `Source`. Raises `RuntimeError` off the GTK thread.
+    def after(delay : Time::Span, &block : ->) : Source
+      UIThread.assert!
+      Source.timer(delay, &block)
+    end
+
+    # Calls *block* on the GTK thread with the conditions of *fd* whenever
+    # one of *conditions* holds, until the returned `Source` is cancelled.
+    #
+    # Errors, hang-ups and a closed descriptor are reported whatever
+    # *conditions* holds; a closed descriptor also ends the watch. Raises
+    # `RuntimeError` off the GTK thread.
+    def watch(fd : Int32, conditions : Source::Condition = :read, &block : Source::Condition ->) : Source
+      UIThread.assert!
+      Source.watch(fd, conditions, &block)
+    end
+
+    # :ditto:
+    def watch(io : IO::FileDescriptor, conditions : Source::Condition = :read, &block : Source::Condition ->) : Source
+      watch(io.fd, conditions, &block)
+    end
+
     # Sets the application style sheet; parse errors are logged as warnings.
     def css=(css : String) : String
       @css = css
@@ -213,6 +236,13 @@ module Apprt
 
     # :showdoc:
     #
+    # Called when the desktop stops showing *window* (*suspended*), such as
+    # on another workspace or minimized, and when it shows it again.
+    protected def on_window_suspended(window : Window, suspended : Bool) : Nil
+    end
+
+    # :showdoc:
+    #
     # Called when the application quits, while its windows still exist.
     protected def on_shutdown : Nil
     end
@@ -258,6 +288,10 @@ module Apprt
       @windows << window
       on_window(window)
       window
+    end
+
+    protected def window_suspended(window : Window, suspended : Bool) : Nil
+      on_window_suspended(window, suspended)
     end
 
     protected def create_surface(kind : SurfaceContext::Kind, parent : Surface?) : Surface
@@ -329,6 +363,7 @@ module Apprt
       load_css
       apply_appearance
       apply_quit_delay
+      watch_user_idle
       @dark_handler = Signals.notify(C.adw_style_manager_get_default, "dark", -> { color_scheme_changed })
       on_startup
       color_scheme_changed
@@ -352,6 +387,8 @@ module Apprt
       @global_shortcuts.try(&.release)
       @global_shortcuts = nil
       release_open_uri
+      release_user_idle
+      Source.cancel_all
       undo_stack.clear
       stop_quit_timer
       @holding = false

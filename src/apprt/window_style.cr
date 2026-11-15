@@ -19,6 +19,12 @@ module Apprt
     # instead of in a row below it.
     getter? tabs_in_header : Bool
 
+    # Whether windows show a header bar with the title, the tabs and their
+    # buttons. Without one, a window has no title bar of its own and tabs
+    # change only through actions; libadwaita's own tab keys, such as
+    # Ctrl+Tab and Alt+1, reach the content.
+    getter? header_bar : Bool
+
     # Returns the opacity of the window background, from 0 to 1.
     getter opacity : Float64
 
@@ -29,7 +35,7 @@ module Apprt
     # Creates a style; the defaults give GTK's plain look. Raises
     # `ArgumentError` when an opacity lies outside 0..1.
     def initialize(*, @pane_headers : Bool = false, @cards : Bool = false, @tabs_in_header : Bool = false,
-                   @opacity : Float64 = 1.0, @unfocused_opacity : Float64 = 1.0)
+                   @header_bar : Bool = true, @opacity : Float64 = 1.0, @unfocused_opacity : Float64 = 1.0)
       {opacity: @opacity, unfocused_opacity: @unfocused_opacity}.each do |name, value|
         raise ArgumentError.new("#{name} #{value} outside 0..1") unless 0.0 <= value <= 1.0
       end

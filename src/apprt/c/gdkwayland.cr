@@ -9,7 +9,11 @@ module Apprt
     fun gdk_wayland_display_get_type : GType
     fun gdk_wayland_display_get_wl_display(display : Void*) : Void*
     fun gdk_wayland_display_get_wl_compositor(display : Void*) : Void*
+    fun gdk_wayland_seat_get_type : GType
+    fun gdk_wayland_seat_get_wl_seat(seat : Void*) : Void*
     fun gdk_wayland_surface_get_type : GType
     fun gdk_wayland_surface_get_wl_surface(surface : Void*) : Void*
+    fun gdk_wayland_toplevel_get_type : GType
+    fun gdk_wayland_toplevel_set_application_id(toplevel : Void*, application_id : UInt8*)
   end
 end

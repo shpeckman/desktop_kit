@@ -101,6 +101,57 @@ describe Apprt::App do
     message.should eq "an application is already running"
   end
 
+  it "fires timers once and watches file descriptors until cancelled" do
+    app = TestApp.new
+    fired = [] of String
+    conditions = [] of Apprt::Source::Condition
+    timer = nil.as(Apprt::Source?)
+    cancelled = nil.as(Apprt::Source?)
+    reader, writer = IO.pipe
+    run_steps(app) do |app|
+      timer = app.after(10.milliseconds) { fired << "timer" }
+      cancelled = app.after(10.milliseconds) { fired << "cancelled" }
+      cancelled.try(&.cancel)
+      watch = app.watch(reader) do |condition|
+        conditions << condition
+        reader.read_byte
+      end
+      writer.write_byte(1)
+      eventually { fired.size == 1 && conditions.size == 1 }.should be_true
+      watch.cancel
+      writer.write_byte(2)
+      settle 50.milliseconds
+      watch.active?.should be_false
+    end
+    fired.should eq ["timer"]
+    conditions.should eq [Apprt::Source::Condition::Read]
+    timer.try(&.active?).should be_false
+    cancelled.try(&.active?).should be_false
+  ensure
+    reader.try(&.close)
+    writer.try(&.close)
+  end
+
+  it "ends a watch when its descriptor reports invalid and cancels the rest when it quits" do
+    app = TestApp.new
+    reader, writer = IO.pipe
+    pending = nil.as(Apprt::Source?)
+    invalid = nil.as(Apprt::Source?)
+    seen = Apprt::Source::Condition::None
+    run_steps(app) do |app|
+      pending = app.after(1.hour) { }
+      invalid = app.watch(writer.fd, :write) { |condition| seen |= condition }
+      writer.close
+      eventually { !invalid.not_nil!.active? }.should be_true
+      pending.try(&.active?).should be_true
+    end
+    seen.invalid?.should be_true
+    pending.try(&.active?).should be_false
+  ensure
+    reader.try(&.close)
+    writer.try(&.close)
+  end
+
   it "guards the GTK thread" do
     expect_raises(RuntimeError, "GTK called outside the UI thread") { Apprt::UIThread.assert! }
     app = TestApp.new

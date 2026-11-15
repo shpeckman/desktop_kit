@@ -5,5 +5,11 @@ GdkWaylandDisplay
 gdk_wayland_display_get_wl_display
 gdk_wayland_display_get_wl_compositor
 
+GdkWaylandSeat
+gdk_wayland_seat_get_wl_seat
+
 GdkWaylandSurface
 gdk_wayland_surface_get_wl_surface
+
+GdkWaylandToplevel
+gdk_wayland_toplevel_set_application_id

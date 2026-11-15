@@ -49,6 +49,10 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   - `signals.cr` - `Signals` (`:nodoc:`): signal connections.
   - `idle.cr` - `Idle` (`:nodoc:`): one-shot idle and timeout callbacks,
     cancellable.
+  - `stream.cr` - `Stream` (`:nodoc:`): reads a `GInputStream` to its end
+    (spliced into a `GMemoryOutputStream`) and converts `GBytes`.
+- `src/apprt/source.cr` - `Source` (public): `App#after` timers and
+  `App#watch` file descriptor watches.
 - `src/apprt/types.cr` - value types: `ColorScheme`, `Appearance`,
   `Decoration`, `Direction`, `Mods` (public).
 - `src/apprt/key.cr` - `Key` (public): physical keys by evdev code;
@@ -84,8 +88,14 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   `WidgetContent`, `SurfaceContext` (public).
 - `src/apprt/input.cr` - `KeyEvent`, `MouseButton`, `MouseButtonEvent`,
   `MouseMotionEvent`, `ScrollEvent` (public; initializers `:nodoc:`).
-- `src/apprt/canvas.cr` - `Canvas` (public): the `GtkGLArea` content, its
-  event controllers and input method context.
+- `src/apprt/canvas.cr` - `Canvas` and `FrameTiming` (public): the
+  OpenGL content, its event controllers, input method context, drop
+  target and drags.
+- `src/apprt/gl.cr` - `GLContext` (public), `GL` and `CanvasBuffers`
+  (`:nodoc:`): GL contexts, the epoxy calls and the canvas's buffers.
+- `src/apprt/drag.cr` - `DragAction`, `Drop`, `Drag`, `Drag::Request`,
+  `Drag::Icon` (public); `DragContent` (`:nodoc:`), the lazy
+  `GdkContentProvider` subclass behind `Canvas#drag`.
 - `src/apprt/clipboard.cr` - `Clipboard` and `Clipboard::Request`
   (public): text clipboards.
 - `src/apprt/surface.cr` - `Surface` (public): host, drag handle, drop
@@ -118,6 +128,10 @@ on the host. Run one Crystal compile at a time, with `--threads 2`. When sandbox
   global bindings' portal session.
 - `src/apprt/open_uri.cr` - `OpenURI` (`:nodoc:`): `OpenUrl` through the
   OpenURI portal or `xdg-open`.
+- `src/apprt/dbus.cr` - `DBus` (public): GDBus connections, calls,
+  signals and subscriptions; reopens `App` with `dbus`.
+- `src/apprt/user_idle.cr` - reopens `App` with `idle_timeout`,
+  `user_idle?` and `on_user_idle` (ext-idle-notify-v1).
 - `examples/` - `hello.cr`, `canvas.cr`, `ipc.cr`, `workspace.cr`,
   `snake.cr`, `dialogs.cr` (`make examples`). They declare their own
   `lib LibGtk` / `lib LibGL` funs rather than use the `:nodoc:` `Apprt::C`.
@@ -229,6 +243,13 @@ Internal contracts of `src/apprt/glib/`:
   `Handles` and released when GObject drops the handler (disconnect or
   instance finalization). `Signals.notify(instance, "property", -> { })`
   watches a property.
+- `Source` wraps `g_timeout_add_full` and `g_unix_fd_add_full` on the
+  default context. The source object itself sits in `Handles`; the destroy
+  notify clears its id, so `active?` turns false when GLib drops it (a
+  timer that fired, a watch that saw `G_IO_NVAL`) as well as on `cancel`.
+  A class-level set (GTK thread only) holds the active sources;
+  `Source.cancel_all` runs at shutdown, because the default context
+  outlives the run and a later run would dispatch them.
 - `Variant` maps Crystal types to GVariant types at compile time
   (`Variant.signature(T)`); enums travel as snake-case strings. Its `hash`
   hashes the type string and the printed form because `g_variant_hash`
@@ -483,14 +504,44 @@ Internals of `window.cr`, `tab.cr`, `surface.cr`, `split_view.cr` and
 
 Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
 `src/apprt/gtk/class/surface.zig`:
-- The widget is a `GtkGLArea` (focusable, focus on click, expanding) with
-  `allowed-apis`, `required-version`, `has-depth-buffer` and
-  `has-stencil-buffer` from `.new`; `auto-render` stays on. Realize makes
-  the context current and sets the input method's client widget; a GL
-  error goes to `#error` and `Log.error "GL context: …"`. `#scale` is the
-  integer `gtk_widget_get_scale_factor`: the GL area's framebuffer uses it
-  even on fractional outputs (1.5 gives a scale of 2 and a framebuffer
-  twice the logical size).
+- No `GtkGLArea`: its integer scale factor gives a framebuffer twice the
+  logical size at 1.5 and it hides buffer reuse and frame timings. The
+  widget is a `GtkOverlay` (focusable, focus on click, expanding, the
+  controllers) around a `GtkDrawingArea` (`resize` stores the logical
+  size and queues a render) with a `GtkPicture` overlay (`can-target`
+  off, `can-shrink`, `ContentFit::Fill`, css `canvas-frame`, flipped by
+  `Surface::STYLE`'s `transform: scaleY(-1)`: GL rows start at the
+  bottom) that shows each frame as a `GdkGLTexture`.
+- Realize creates a `GLContext` (`gdk_display_create_gl_context`, shared
+  with GTK's own) and a `CanvasBuffers` pool (`gl.cr`), sets the input
+  method's client widget and watches the native `GdkSurface`'s
+  `notify::scale`; a GL error goes to `#error` and
+  `Log.error "GL context: …"`. Unrealize stops ticking, clears the
+  paintable and runs `#on_unrealize` and the pool's `release` with the
+  context current.
+- `#scale` is `gdk_surface_get_scale`; the frame is the logical size
+  times it, rounded. `queue_render` sets a flag and adds one
+  `gtk_widget_add_tick_callback`; `tick` renders (on_resize on a size
+  change, `acquire`, `on_render`, `texture`, `gtk_picture_set_paintable`)
+  and keeps ticking until every drawn frame's `GdkFrameTimings` is
+  complete, reporting each through `on_presented`. Presentation times are
+  GDK's `CLOCK_MONOTONIC` microseconds, 0 → `nil`.
+- `CanvasBuffers` (`:nodoc:`): textures (RGBA8, nearest) with their own
+  framebuffers and one shared `DEPTH24_STENCIL8` renderbuffer, all
+  recreated when the size changes. `acquire` takes the free buffer drawn
+  most recently (age = frames since then, 0 when new); a buffer is busy
+  until GTK drops its texture (`GDestroyNotify` → `Handles` →
+  `UIThread.dispatch`). `texture` adds a fence (GL 3.2 / GLES 3.0, via
+  `epoxy_gl_version`) and builds the texture as
+  `R8g8b8a8Premultiplied`. A buffer GTK still holds at `release` is
+  orphaned and deleted with its own context current once dropped.
+- `GL` (`:nodoc:`) calls GL through libepoxy's `epoxy_gl*` function
+  pointers (`$` globals), the dispatch GTK uses; `Proc#call` does not
+  autocast literals, so arguments carry their exact types (`0_u32`).
+- `spec/gtk/canvas_render_spec.cr` checks the orientation from a `grim`
+  shot of the headless output (red top, blue bottom), buffer ages,
+  frame timings, a fractional output (`swaymsg output HEADLESS-1 scale
+  1.5` on the harness's sway socket) and `GLContext`.
 - Controllers: key (with the `GtkIMMulticontext`), focus, click gesture
   (button 0, all buttons), motion and scroll (both axes). Ivars carry
   `@im_`/`_controller`/`_gesture` names: subclasses share the instance
@@ -501,8 +552,14 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
   input method filtered while composing (or ending a composition, or
   without committed text) reaches `#on_key` with `composing?`. Otherwise
   the text is `gdk_keyval_to_unicode` for a press (control characters
-  below 0x20 and DEL excluded). `unshifted` comes from
-  `gdk_display_map_keycode` at the event's layout, level 0. Modifier keys
+  below 0x20 and DEL excluded). `unshifted`, `shifted` and `base` come
+  from one `gdk_display_map_keycode` call: levels 0 and 1 at the event's
+  layout, level 0 of layout 0. `repeat?` is a press of a keycode in
+  `@held_keycodes` (GTK has no repeat flag); releases remove it and a
+  focus change clears the set. `caps_lock?`/`num_lock?` read the event's
+  device (`gdk_device_get_*_lock_state`): GDK 4 has no lock masks in its
+  state. Events emitted without a current GdkEvent (specs) take the
+  lowercased keyval as `unshifted`/`base`. Modifier keys
   adjust `mods` for themselves (`MODIFIER_KEYS`). When `#on_key` uses a key
   during a composition the context is reset and `#on_preedit(nil)` sent.
 - `KeyEvent#key` is `Key.from_keycode`: on Linux an X11/XKB keycode is the
@@ -520,6 +577,40 @@ Internals of `canvas.cr` and `input.cr`, ported from Ghostty's
 - `Clipboard.read` keeps the block in `Handles` until
   `gdk_clipboard_read_text_finish`; a read error logs a warning and yields
   `nil`.
+- `Clipboard.write(items)` sets a `gdk_content_provider_new_union` of one
+  `new_for_bytes` provider per item and keeps a copy of the items for
+  `.items`, which forgets them once `gdk_clipboard_is_local` turns false.
+  `.read(mime_type)` takes the `GInputStream` of `gdk_clipboard_read_async`
+  to `Stream.read_all`.
+- `input_purpose` sets the `GtkIMMulticontext`'s `input-purpose`
+  property through a `GValue` (no setter function); the enum's GType
+  comes from `g_type_from_name("GtkInputPurpose")`, as GIR lists no
+  `get_type` for it.
+- Drops: a `GtkDropTargetAsync` on the GL area. `accept` takes part only
+  with MIME types and `on_drop_accept`, so surface moves (a `uint64`
+  `GValue`, no MIME types) and refused drags bubble to the surface host's
+  targets. One `Drop` (`Wrapper` of the `GdkDrop`) per drag, made on its
+  first signal; `drag-enter`/`drag-motion` call `on_drop_motion` and
+  answer its first allowed action of Copy, Move, Link.
+- Drags: `Canvas#drag` calls `gdk_drag_begin` with the default seat's
+  pointer at the last pointer position (press or motion), translated to
+  the native and its surface transform. `DragContent` registers
+  `ApprtDragContent` (`GdkContentProvider` subclass, `g_type_register_static_simple`
+  with the parent's sizes from `g_type_query`); its class init writes
+  `ref_formats`, `write_mime_type_async` and `write_mime_type_finish`
+  at slots 3, 5 and 6 after the `GObjectClass` fields. The `Source`
+  (types and handler) sits in the provider's object data, not the `Drag`:
+  the `GdkDrag` holds the provider, so a `Drag` there would never be
+  collected. Each write makes a `GTask` and a `Drag::Request`; `reply`
+  writes with `g_output_stream_write_all_async`, `fail` returns a
+  `GError`. GIO's callback arrives as a bare pointer: rebuilt with a null
+  closure, or Crystal refuses to pass it on. `dnd-finished` and `cancel`
+  call `gdk_drag_drop_done` and `on_drag_end` once.
+- A local read of a failed request yields empty data, not an error: GDK
+  pipes local reads and only sees the closed stream. The drag content
+  spec reads it through the clipboard, as headless sway has no pointer to
+  drag with; the drop hooks have no spec (a `GdkDrop` comes only from a
+  real drag).
 - Specs drive the controllers by emitting their signals
   (`g_signal_emit_by_name` on `canvas.@key_controller` and friends), so
   they need no input devices.
@@ -570,6 +661,20 @@ Internals of `notifications.cr`, ported from Ghostty's
   thread waits for the timeout; `ipc_spec.cr` sends from an `Isolated`
   thread and polls a channel from the GTK thread.
 
+## D-Bus
+
+- `DBus` is a `Wrapper` of a `GDBusConnection`; `.session`/`.system` are
+  `g_bus_get_sync` (GIO's shared singletons), `App#dbus` is
+  `g_application_get_dbus_connection` via `from_raw?`.
+- `#call` retains a `Reply` (bus + block) in `Handles`; GIO runs the
+  callback on the thread-default main context of the caller, so calls and
+  subscriptions belong on the GTK thread. Subscriptions release their
+  block through `Handles::RELEASE` when GDBus drops the handler.
+- Non-tuple arguments raise before GIO's own `g_return_if_fail`.
+- `spec/gtk/dbus_spec.cr` calls the private bus daemon itself
+  (`ListNames`, `GetNameOwner`, an unowned name with `auto_start: false`)
+  and loops a signal back to its own subscription.
+
 ## Global shortcuts
 
 Ported from Ghostty's `src/apprt/gtk/class/global_shortcuts.zig` and
@@ -615,9 +720,12 @@ Ported from Ghostty's `src/apprt/gtk/portal/OpenURI.zig`, `openUrl` in
   id of GDK's app launch context (the XDG activation token on Wayland), so
   the opened app can take the focus.
 - Response 1 (`Portal::CANCELLED`) opens nothing; any other failure, call
-  errors included, runs `xdg-open`. `OpenURI.xdg_open` closes its output,
-  and a fiber in the default execution context (off the GTK thread) waits
-  for it and logs its error output on failure.
+  errors included, runs `xdg-open`. `OpenURI.xdg_open` spawns it as a
+  `GSubprocess` (stdout silenced, stderr piped) and logs the error output
+  from `g_subprocess_communicate_utf8_async` on failure. GIO reaps the
+  child itself, so the wait still ends when an application resets
+  `SIGCHLD` to `SIG_DFL`, as asekii does; Crystal's `Process#wait` would
+  hang there.
 - Ghostty's 30-second cleanup timer, which also falls back to `xdg-open`,
   is left out: it would open the URL twice while the portal still waits
   on the user's choice of app.
@@ -665,7 +773,8 @@ Wayland only (no X11):
 - No generated protocol code: `Wayland::PROTOCOL` describes the used
   interfaces (`wl_registry`, `wl_compositor`, `wl_region`,
   `xdg_activation_v1`/`_token_v1`, `ext_background_effect_manager_v1`/
-  `surface_v1`, `org_kde_kwin_server_decoration_manager`/`_decoration`)
+  `surface_v1`, `org_kde_kwin_server_decoration_manager`/`_decoration`,
+  `ext_idle_notifier_v1`/`ext_idle_notification_v1`)
   and builds `Wl::Interface` tables once. Requests go through
   `wl_proxy_marshal_array_flags`; events through
   `wl_proxy_add_dispatcher`, whose first callback argument is the
@@ -691,6 +800,31 @@ Wayland only (no X11):
   `notify::is-active` clears it; `Surface#ring_bell` on an unfocused
   surface sets it. Headless sway has no keyboard, so windows never become
   active in the specs.
+
+## Window state
+
+- `Window#fullscreen=`/`#maximized=`/`#resizable=` wrap the
+  `GtkWindow` calls; the toggle actions and `resize` reuse them.
+- `app_id=` validates with `g_application_id_is_valid` and is applied on
+  `realize` (and when set while realized) through
+  `gdk_wayland_toplevel_set_application_id`; `nil` sends the
+  GApplication's id. Non-Wayland surfaces are skipped.
+- `idle_inhibited=` holds a `gtk_application_inhibit(Idle)` cookie,
+  released on `destroy`. `shortcuts_inhibited=` calls
+  `gdk_toplevel_inhibit_system_shortcuts(surface, nil)` /
+  `restore_system_shortcuts`, reapplied on `realize`.
+- `activate(token)` is `gtk_window_set_startup_id` + `present`, which GDK
+  turns into `xdg_activation_v1.activate` on Wayland.
+- `suspended?` follows `GDK_TOPLEVEL_STATE_SUSPENDED` on the surface's
+  `notify::state`; changes reach `App#on_window_suspended` through the
+  protected `App#window_suspended` (implicit-receiver call, as `reload`).
+- User idle (`user_idle.cr`): `ext_idle_notifier_v1` version 1 (honours
+  idle inhibitors) is bound with the other globals;
+  `get_idle_notification(timeout ms, wl_seat)` on the default seat
+  (`gdk_wayland_seat_get_wl_seat`), `idled`/`resumed` → `on_user_idle`.
+  `idle_timeout=` recreates the notification (store + dispatch while
+  running), startup creates it, shutdown destroys it and reports the user
+  back. Headless sway has no input, so the spec turns idle at once.
 
 ## Window style
 
@@ -723,6 +857,10 @@ After Ghostty's split header bars (`surface.blp`) and
   the move. `pack_start`/`pack_end` add to `@header`.
 - `on_window` runs from `App#open_window`, so it covers `NewWindow`,
   tab drag-out and `MoveTabToNewWindow` too.
+- `header_bar: false` sets `reveal-top-bars` off on the toolbar view
+  (header bar and tab row) and clears the tab view's `shortcuts`:
+  libadwaita's capture-phase tab keys would otherwise take Ctrl+Tab and
+  Alt+digits before the content sees them.
 - `ToggleBackgroundOpacity` toggles the `opaque` class on the window;
   `Window::STYLE` (`:nodoc:`, loaded after `Surface::STYLE`) restores the
   window and `.surface` backgrounds with one class more specificity than

@@ -13,6 +13,9 @@ g_free
 g_strdup
 g_strfreev
 g_strv_length
+g_bytes_new
+g_bytes_get_data
+g_bytes_unref
 
 # lists
 GList
@@ -25,6 +28,9 @@ g_list_length
 g_idle_add_full
 g_timeout_add_full
 g_source_remove
+g_unix_fd_add_full
+GIOCondition
+GUnixFDSourceFunc
 g_main_context_default
 g_main_context_wakeup
 g_main_context_iteration

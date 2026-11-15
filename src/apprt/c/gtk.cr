@@ -11,6 +11,14 @@ module Apprt
       Vertical   = 1
     end
 
+    @[Flags]
+    enum GtkApplicationInhibitFlags : UInt32
+      Logout  = 1
+      Switch  = 2
+      Suspend = 4
+      Idle    = 8
+    end
+
     enum GtkPropagationPhase : Int32
       None    = 0
       Capture = 1
@@ -76,6 +84,28 @@ module Apprt
       WordChar = 3
     end
 
+    enum GtkInputPurpose : Int32
+      FreeForm =  0
+      Alpha    =  1
+      Digits   =  2
+      Number   =  3
+      Phone    =  4
+      Url      =  5
+      Email    =  6
+      Name     =  7
+      Password =  8
+      Pin      =  9
+      Terminal = 10
+    end
+
+    enum GtkContentFit : Int32
+      Fill      = 0
+      Contain   = 1
+      Cover     = 2
+      ScaleDown = 3
+    end
+
+    alias GtkTickCallback = Void*, Void*, Void* -> Int32
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
     fun gtk_widget_unparent(widget : Void*)
@@ -132,6 +162,10 @@ module Apprt
     fun gtk_window_fullscreen(window : Void*)
     fun gtk_window_unfullscreen(window : Void*)
     fun gtk_window_is_fullscreen(window : Void*) : Int32
+    fun gtk_window_get_resizable(window : Void*) : Int32
+    fun gtk_window_set_startup_id(window : Void*, startup_id : UInt8*)
+    fun gtk_application_inhibit(application : Void*, window : Void*, flags : GtkApplicationInhibitFlags, reason : UInt8*) : UInt32
+    fun gtk_application_uninhibit(application : Void*, cookie : UInt32)
     fun gtk_window_set_decorated(window : Void*, setting : Int32)
     fun gtk_window_get_decorated(window : Void*) : Int32
     fun gtk_window_get_focus(window : Void*) : Void*
@@ -186,6 +220,7 @@ module Apprt
     fun gtk_event_controller_get_widget(controller : Void*) : Void*
     fun gtk_event_controller_get_current_event(controller : Void*) : Void*
     fun gtk_event_controller_get_current_event_state(controller : Void*) : GdkModifierType
+    fun gtk_event_controller_get_current_event_time(controller : Void*) : UInt32
     fun gtk_event_controller_set_propagation_phase(controller : Void*, phase : GtkPropagationPhase)
     fun gtk_event_controller_key_new : Void*
     fun gtk_event_controller_key_set_im_context(controller : Void*, im_context : Void*)
@@ -300,5 +335,17 @@ module Apprt
     fun gtk_text_buffer_set_text(buffer : Void*, text : UInt8*, len : Int32)
     fun gtk_scrolled_window_set_min_content_width(scrolled_window : Void*, width : Int32)
     fun gtk_scrolled_window_set_min_content_height(scrolled_window : Void*, height : Int32)
+    fun gtk_drop_target_async_new(formats : Void*, actions : GdkDragAction) : Void*
+    fun gtk_drag_icon_set_from_paintable(drag : Void*, paintable : Void*, hot_x : Int32, hot_y : Int32)
+    fun gtk_event_controller_get_current_event_device(controller : Void*) : Void*
+    fun gtk_widget_translate_coordinates(src_widget : Void*, dest_widget : Void*, src_x : Float64, src_y : Float64, dest_x : Float64*, dest_y : Float64*) : Int32
+    fun gtk_widget_add_tick_callback(widget : Void*, callback : GtkTickCallback, user_data : Void*, notify : GDestroyNotify) : UInt32
+    fun gtk_widget_remove_tick_callback(widget : Void*, id : UInt32)
+    fun gtk_widget_get_frame_clock(widget : Void*) : Void*
+    fun gtk_picture_new : Void*
+    fun gtk_picture_set_paintable(self_ : Void*, paintable : Void*)
+    fun gtk_picture_set_can_shrink(self_ : Void*, can_shrink : Int32)
+    fun gtk_picture_set_content_fit(self_ : Void*, content_fit : GtkContentFit)
+    fun gtk_drawing_area_new : Void*
   end
 end

@@ -58,6 +58,7 @@ module Apprt
       }
       .surface-drag-handle:hover { opacity: 1; }
       .surface-drop-indicator { opacity: 0; }
+      .canvas-frame { transform: scaleY(-1); }
       .surface-drop-indicator.drop-left { opacity: 1; background: linear-gradient(to right, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-right { opacity: 1; background: linear-gradient(to left, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-up { opacity: 1; background: linear-gradient(to bottom, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }

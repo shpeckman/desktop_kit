@@ -60,6 +60,12 @@ gtk_window_is_maximized
 gtk_window_fullscreen
 gtk_window_unfullscreen
 gtk_window_is_fullscreen
+gtk_window_get_resizable
+gtk_window_set_startup_id
+# window inhibitors
+GtkApplicationInhibitFlags
+gtk_application_inhibit
+gtk_application_uninhibit
 gtk_window_set_decorated
 gtk_window_get_decorated
 gtk_window_get_focus
@@ -122,6 +128,7 @@ gtk_gl_area_set_has_stencil_buffer
 gtk_event_controller_get_widget
 gtk_event_controller_get_current_event
 gtk_event_controller_get_current_event_state
+gtk_event_controller_get_current_event_time
 gtk_event_controller_set_propagation_phase
 gtk_event_controller_key_new
 gtk_event_controller_key_set_im_context
@@ -258,3 +265,24 @@ gtk_text_view_set_right_margin
 gtk_text_buffer_set_text
 gtk_scrolled_window_set_min_content_width
 gtk_scrolled_window_set_min_content_height
+
+# canvas drops and drags
+gtk_drop_target_async_new
+gtk_drag_icon_set_from_paintable
+gtk_event_controller_get_current_event_device
+gtk_widget_translate_coordinates
+
+# input purpose
+GtkInputPurpose
+
+# canvas rendering
+GtkTickCallback
+gtk_widget_add_tick_callback
+gtk_widget_remove_tick_callback
+gtk_widget_get_frame_clock
+gtk_picture_new
+gtk_picture_set_paintable
+gtk_picture_set_can_shrink
+GtkContentFit
+gtk_picture_set_content_fit
+gtk_drawing_area_new

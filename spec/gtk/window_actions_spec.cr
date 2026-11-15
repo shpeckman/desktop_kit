@@ -92,4 +92,71 @@ describe "window actions" do
       css_class?(surface.@host, "read-only").should be_false
     end
   end
+
+  it "reports and changes the window state" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      window.monitor_size.should eq({1280, 800})
+      window.fullscreen = true
+      eventually { window.fullscreen? }.should be_true
+      window.fullscreen = false
+      eventually { !window.fullscreen? }.should be_true
+      window.resizable = false
+      window.resizable?.should be_false
+      window.resizable = true
+      window.suspended?.should be_false
+    end
+  end
+
+  it "sets the window's application id" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      window.app_id = "org.example.Other"
+      window.app_id.should eq("org.example.Other")
+      expect_raises(ArgumentError) { window.app_id = "not an id" }
+      window.app_id = nil
+      window.app_id.should be_nil
+    end
+  end
+
+  it "inhibits idling and the desktop's shortcuts" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      window.set_idle_inhibited(true, "testing")
+      window.idle_inhibited?.should be_true
+      window.idle_inhibited = false
+      window.idle_inhibited?.should be_false
+      window.shortcuts_inhibited = true
+      settle
+      window.shortcuts_inhibited?.should be_true
+      window.shortcuts_inhibited = false
+    end
+  end
+
+  it "reports the user idle" do
+    app = IdleApp.new
+    run_steps(app) do
+      app.new_window
+      app.idle_timeout = 300.milliseconds
+      eventually { app.user_idle? }.should be_true
+      app.idles.should eq([true])
+      app.idle_timeout = nil
+      app.user_idle?.should be_false
+      app.idles.should eq([true, false])
+    end
+  end
+end
+
+class IdleApp < TestApp
+  getter idles = [] of Bool
+
+  protected def on_user_idle(idle : Bool) : Nil
+    @idles << idle
+  end
 end

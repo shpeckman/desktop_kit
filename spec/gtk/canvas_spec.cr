@@ -56,6 +56,10 @@ class TestCanvas < Apprt::Canvas
     @motions << event
   end
 
+  protected def on_mouse_enter(event : Apprt::MouseMotionEvent) : Nil
+    @events << "enter #{event.x} #{event.y}"
+  end
+
   protected def on_mouse_leave : Nil
     @events << "leave"
   end
@@ -84,9 +88,10 @@ end
 
 # Emits *signal* of a key controller as a key press or release does and
 # returns the signal's result.
-private def key(canvas : TestCanvas, signal : String, keyval : UInt32, state : Apprt::C::GdkModifierType = :none) : Bool
+private def key(canvas : TestCanvas, signal : String, keyval : UInt32, state : Apprt::C::GdkModifierType = :none,
+                keycode : UInt32 = 0_u32) : Bool
   result = 0
-  Apprt::C.g_signal_emit_by_name(canvas.@key_controller, signal, keyval, 0_u32, state.value, pointerof(result))
+  Apprt::C.g_signal_emit_by_name(canvas.@key_controller, signal, keyval, keycode, state.value, pointerof(result))
   result != 0
 end
 
@@ -154,6 +159,24 @@ describe Apprt::Canvas do
     end
   end
 
+  it "marks a press of a held key as a repeat until the key goes up" do
+    run_steps(canvas_app) do |app|
+      canvas = drawn_canvas(app)
+      key(canvas, "key-pressed", 0x61_u32, keycode: 38_u32)
+      canvas.keys.last.repeat?.should be_false
+      canvas.keys.last.base.should eq 'a'
+      key(canvas, "key-pressed", 0x61_u32, keycode: 38_u32)
+      canvas.keys.last.repeat?.should be_true
+      canvas.keys.last.text.should eq "a"
+      key(canvas, "key-pressed", 0x62_u32, keycode: 56_u32)
+      canvas.keys.last.repeat?.should be_false
+      key(canvas, "key-released", 0x61_u32, keycode: 38_u32)
+      canvas.keys.last.repeat?.should be_false
+      key(canvas, "key-pressed", 0x61_u32, keycode: 38_u32)
+      canvas.keys.last.repeat?.should be_false
+    end
+  end
+
   it "counts a modifier key in its own press but not in its release" do
     run_steps(canvas_app) do |app|
       canvas = drawn_canvas(app)
@@ -163,6 +186,20 @@ describe Apprt::Canvas do
       canvas.keys.last.text.should be_nil
       key(canvas, "key-released", 0xffe3_u32, :control_mask)
       canvas.keys.last.mods.should eq Apprt::Mods::None
+    end
+  end
+
+  it "tells the input method its input purpose" do
+    run_steps(TestApp.new) do |app|
+      app.new_window
+      purpose = ->(canvas : TestCanvas) do
+        value = Apprt::C::GValue.new
+        Apprt::C.g_value_init(pointerof(value), Apprt::C.g_type_from_name("GtkInputPurpose"))
+        Apprt::C.g_object_get_property(canvas.@im_context, "input-purpose", pointerof(value))
+        Apprt::C.g_value_get_enum(pointerof(value)).tap { Apprt::C.g_value_unset(pointerof(value)) }
+      end
+      purpose.call(TestCanvas.new).should eq Apprt::C::GtkInputPurpose::FreeForm.value
+      purpose.call(TestCanvas.new(input_purpose: :terminal)).should eq Apprt::C::GtkInputPurpose::Terminal.value
     end
   end
 
@@ -199,6 +236,8 @@ describe Apprt::Canvas do
       Apprt::C.g_signal_emit_by_name(canvas.@click_gesture, "released", 1, 11.0, 21.0)
       canvas.buttons.map { |event| {event.pressed?, event.x, event.y} }.should eq [{true, 10.5, 20.0}, {false, 11.0, 21.0}]
 
+      Apprt::C.g_signal_emit_by_name(canvas.@motion_controller, "enter", 1.0, 2.0)
+      canvas.events.last.should eq "enter 1.0 2.0"
       Apprt::C.g_signal_emit_by_name(canvas.@motion_controller, "motion", 3.0, 4.0)
       {canvas.motions.last.x, canvas.motions.last.y}.should eq({3.0, 4.0})
       Apprt::C.g_signal_emit_by_name(canvas.@motion_controller, "leave")
@@ -292,8 +331,64 @@ describe Apprt::Clipboard do
     end
   end
 
+  it "offers and reads back items by MIME type" do
+    run_steps(TestApp.new) do |app|
+      app.new_window
+      items = [{"text/html", "<b>hi</b>".to_slice}, {"text/plain;charset=utf-8", "hi".to_slice}]
+      Apprt::Clipboard.write(items)
+      Apprt::Clipboard.offered.should eq ["text/html", "text/plain;charset=utf-8"]
+      Apprt::Clipboard.items.should eq items
+      reads = [] of String?
+      Apprt::Clipboard.read("text/html") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      Apprt::Clipboard.read("image/png") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      eventually { reads.size == 2 }.should be_true
+      reads.sort_by(&.to_s).should eq [nil, "<b>hi</b>"]
+      Apprt::Clipboard.write("plain")
+      Apprt::Clipboard.items.should be_nil
+      Apprt::Clipboard.write([] of {String, Bytes})
+      Apprt::Clipboard.offered.should be_empty
+      expect_raises(ArgumentError, "repeated MIME type") { Apprt::Clipboard.write([items[0], items[0]]) }
+    end
+  end
+
   it "raises off the GTK thread" do
     expect_raises(RuntimeError, "GTK called outside the UI thread") { Apprt::Clipboard.write("x") }
+  end
+end
+
+describe "Apprt::Drag" do
+  before_all { GtkHarness.start }
+
+  # A drag's content answers clipboard reads too, which exercises it
+  # without a pointer to drag with.
+  it "produces its data on request" do
+    run_steps(TestApp.new) do |app|
+      app.new_window
+      requests = [] of String
+      source = Apprt::DragContent::Source.new(["text/uri-list", "text/plain"], ->(request : Apprt::Drag::Request) {
+        requests << request.mime_type
+        request.mime_type == "text/plain" ? request.reply("dragged".to_slice) : request.fail
+        request.reply("again".to_slice)
+        nil
+      })
+      provider = Apprt::DragContent.new(source)
+      Apprt::C.gdk_clipboard_set_content(Apprt::C.gdk_display_get_clipboard(Apprt::C.gdk_display_get_default), provider)
+      Apprt::C.g_object_unref(provider)
+      Apprt::Clipboard.offered.should eq ["text/uri-list", "text/plain"]
+      reads = [] of String?
+      Apprt::Clipboard.read("text/plain") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      eventually { reads.size == 1 }.should be_true
+      Apprt::Clipboard.read("text/uri-list") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      eventually { reads.size == 2 }.should be_true
+      # A local read of a failed request ends with no data, not an error.
+      reads.should eq ["dragged", ""]
+      requests.should eq ["text/plain", "text/uri-list"]
+    end
+  end
+
+  it "maps actions to GDK" do
+    Apprt::DragAction.from_gdk(Apprt::C::GdkDragAction::Move | Apprt::C::GdkDragAction::Ask).should eq Apprt::DragAction::Move
+    (Apprt::DragAction::Copy | Apprt::DragAction::Link).to_gdk.should eq Apprt::C::GdkDragAction::Copy | Apprt::C::GdkDragAction::Link
   end
 end
 

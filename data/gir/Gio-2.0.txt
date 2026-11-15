@@ -55,6 +55,14 @@ g_cancellable_new
 g_cancellable_cancel
 g_async_result_get_source_object
 
+# streams
+GOutputStreamSpliceFlags
+g_memory_output_stream_new_resizable
+g_memory_output_stream_steal_as_bytes
+g_output_stream_splice_async
+g_output_stream_splice_finish
+g_input_stream_close
+
 # dbus
 g_bus_get
 g_bus_get_finish
@@ -85,3 +93,22 @@ g_dbus_method_invocation_get_sender
 # dropped files
 GFile
 g_file_get_path
+
+# content provider tasks
+g_task_new
+g_task_return_boolean
+g_task_return_error
+g_task_propagate_boolean
+g_output_stream_write_all_async
+g_output_stream_write_all_finish
+
+# subprocesses (OpenURI.xdg_open)
+GSubprocess
+GSubprocessFlags
+g_subprocess_newv
+g_subprocess_communicate_utf8_async
+g_subprocess_communicate_utf8_finish
+g_subprocess_get_successful
+g_subprocess_get_exit_status
+g_subprocess_get_if_exited
+g_subprocess_get_term_sig

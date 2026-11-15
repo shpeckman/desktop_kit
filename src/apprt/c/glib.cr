@@ -8,6 +8,16 @@ module Apprt
   lib C
     alias GType = LibC::SizeT
 
+    @[Flags]
+    enum GIOCondition : UInt32
+      In   =  1
+      Out  =  4
+      Pri  =  2
+      Err  =  8
+      Hup  = 16
+      Nval = 32
+    end
+
     enum GVariantClass : Int32
       Boolean    =  98
       Byte       = 121
@@ -31,6 +41,7 @@ module Apprt
 
     alias GSourceFunc = Void* -> Int32
     alias GDestroyNotify = Void* -> Void
+    alias GUnixFDSourceFunc = Int32, GIOCondition, Void* -> Int32
 
     struct GError
       domain : UInt32
@@ -57,12 +68,16 @@ module Apprt
     fun g_strdup(str : UInt8*) : UInt8*
     fun g_strfreev(str_array : UInt8**)
     fun g_strv_length(str_array : UInt8**) : UInt32
+    fun g_bytes_new(data : Void*, size : LibC::SizeT) : Void*
+    fun g_bytes_get_data(bytes : Void*, size : LibC::SizeT*) : Void*
+    fun g_bytes_unref(bytes : Void*)
     fun g_slist_free(list : GSList*)
     fun g_list_free(list : GList*)
     fun g_list_length(list : GList*) : UInt32
     fun g_idle_add_full(priority : Int32, function : GSourceFunc, data : Void*, notify : GDestroyNotify) : UInt32
     fun g_timeout_add_full(priority : Int32, interval : UInt32, function : GSourceFunc, data : Void*, notify : GDestroyNotify) : UInt32
     fun g_source_remove(tag : UInt32) : Int32
+    fun g_unix_fd_add_full(priority : Int32, fd : Int32, condition : GIOCondition, function : GUnixFDSourceFunc, user_data : Void*, notify : GDestroyNotify) : UInt32
     fun g_main_context_default : Void*
     fun g_main_context_wakeup(context : Void*)
     fun g_main_context_iteration(context : Void*, may_block : Int32) : Int32

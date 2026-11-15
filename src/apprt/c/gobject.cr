@@ -19,9 +19,27 @@ module Apprt
       Swapped = 2
     end
 
+    @[Flags]
+    enum GTypeFlags : UInt32
+      Abstract      =  16
+      ValueAbstract =  32
+      Final         =  64
+      Deprecated    = 128
+    end
+
     alias GWeakNotify = Void*, Void* -> Void
     alias GCallback = -> Void
     alias GClosureNotify = Void*, Void* -> Void
+    alias GClassInitFunc = Void*, Void* -> Void
+    alias GInstanceInitFunc = Void*, Void* -> Void
+
+    struct GTypeQuery
+      type_ : GType
+      type_name : UInt8*
+      class_size : UInt32
+      instance_size : UInt32
+    end
+
     fun g_object_get_type : GType
     fun g_object_ref(object : Void*) : Void*
     fun g_object_unref(object : Void*)
@@ -44,6 +62,8 @@ module Apprt
     fun g_signal_emit_by_name(instance : Void*, detailed_signal : UInt8*, ...)
     fun g_value_init(value : Void*, g_type : GType) : Void*
     fun g_value_unset(value : Void*)
+    fun g_value_set_enum(value : Void*, v_enum : Int32)
+    fun g_value_get_enum(value : Void*) : Int32
     fun g_value_set_boolean(value : Void*, v_boolean : Int32)
     fun g_value_set_int(value : Void*, v_int : Int32)
     fun g_value_set_uint(value : Void*, v_uint : UInt32)
@@ -59,10 +79,13 @@ module Apprt
     fun g_value_get_object(value : Void*) : Void*
     fun g_value_get_variant(value : Void*) : Void*
     fun g_type_name(type_ : GType) : UInt8*
+    fun g_type_from_name(name : UInt8*) : GType
     fun g_type_is_a(type_ : GType, is_a_type : GType) : Int32
     fun g_type_check_instance_is_a(instance : Void*, iface_type : GType) : Int32
     fun g_value_get_boxed(value : Void*) : Void*
     fun g_value_get_uint64(value : Void*) : UInt64
     fun g_value_set_uint64(value : Void*, v_uint64 : UInt64)
+    fun g_type_query(type_ : GType, query : GTypeQuery*)
+    fun g_type_register_static_simple(parent_type : GType, type_name : UInt8*, class_size : UInt32, class_init : GClassInitFunc, instance_size : UInt32, instance_init : GInstanceInitFunc, flags : GTypeFlags) : GType
   end
 end

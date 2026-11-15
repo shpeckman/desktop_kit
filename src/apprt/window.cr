@@ -67,6 +67,10 @@ module Apprt
     @opaque = false
     @tabs_in_header = false
     @subtitle : String?
+    @app_id : String?
+    @idle_cookie = 0_u32
+    @shortcuts_inhibited = false
+    @suspended = false
 
     protected def initialize(@app : App)
       @widget = Widget.new(C.adw_application_window_new(@app))
@@ -120,8 +124,13 @@ module Apprt
       C.adw_header_bar_pack_end(@header, button(icon, tooltip, action))
     end
 
-    # Moves the tab bar between the header bar and the row below it.
+    # Shows or hides the top bars and moves the tab bar between the header
+    # bar and the row below it.
     protected def apply_style(style : WindowStyle) : Nil
+      header = style.header_bar?
+      C.adw_toolbar_view_set_reveal_top_bars(@toolbar, header ? 1 : 0)
+      shortcuts = header ? C::AdwTabViewShortcuts::AllShortcuts : C::AdwTabViewShortcuts.new(0)
+      C.adw_tab_view_set_shortcuts(@tab_view, shortcuts)
       inside = style.tabs_in_header?
       return if inside == @tabs_in_header
       @tabs_in_header = inside
@@ -188,6 +197,117 @@ module Apprt
     def active? : Bool
       C.gtk_window_is_active(@widget) != 0
     end
+
+    # Returns whether the window fills its monitor without decorations.
+    def fullscreen? : Bool
+      C.gtk_window_is_fullscreen(@widget) != 0
+    end
+
+    # Asks the desktop to show the window fullscreen, or to leave
+    # fullscreen; the desktop may refuse.
+    def fullscreen=(fullscreen : Bool) : Bool
+      fullscreen ? C.gtk_window_fullscreen(@widget) : C.gtk_window_unfullscreen(@widget)
+      fullscreen
+    end
+
+    # Returns whether the window is maximized.
+    def maximized? : Bool
+      C.gtk_window_is_maximized(@widget) != 0
+    end
+
+    # Asks the desktop to maximize the window, or to restore its size; the
+    # desktop may refuse.
+    def maximized=(maximized : Bool) : Bool
+      maximized ? C.gtk_window_maximize(@widget) : C.gtk_window_unmaximize(@widget)
+      maximized
+    end
+
+    # Returns whether the user can resize the window.
+    def resizable? : Bool
+      C.gtk_window_get_resizable(@widget) != 0
+    end
+
+    # Sets whether the user can resize the window. A window that is not
+    # resizable keeps the size its content asks for.
+    def resizable=(resizable : Bool) : Bool
+      C.gtk_window_set_resizable(@widget, resizable ? 1 : 0)
+      resizable
+    end
+
+    # Returns the application id the desktop groups this window under, or
+    # `nil` for the application's own.
+    getter app_id : String?
+
+    # Sets the application id the desktop groups this window under, for its
+    # icon and window rules; `nil` restores the application's own. Raises
+    # `ArgumentError` when *app_id* is not a valid application id.
+    def app_id=(app_id : String?) : String?
+      if app_id && C.g_application_id_is_valid(app_id) == 0
+        raise ArgumentError.new("invalid application id: #{app_id.inspect}")
+      end
+      @app_id = app_id
+      sync_app_id
+      app_id
+    end
+
+    # Returns whether the window keeps the desktop from going idle.
+    def idle_inhibited? : Bool
+      @idle_cookie != 0
+    end
+
+    # Sets whether the window keeps the desktop from going idle (blanking
+    # the screen or locking) while it is open; *reason* tells the user why.
+    def idle_inhibited=(inhibited : Bool) : Bool
+      set_idle_inhibited(inhibited)
+    end
+
+    # :ditto:
+    def set_idle_inhibited(inhibited : Bool, reason : String? = nil) : Bool
+      return inhibited if inhibited == idle_inhibited?
+      if inhibited
+        @idle_cookie = C.gtk_application_inhibit(@app, @widget, C::GtkApplicationInhibitFlags::Idle, reason)
+      else
+        release_idle
+      end
+      inhibited
+    end
+
+    # Returns whether the window asked to receive the desktop's own
+    # keyboard shortcuts.
+    getter? shortcuts_inhibited = false
+
+    # Sets whether the desktop's own keyboard shortcuts reach the window
+    # instead of the desktop while it has the focus; the desktop may ask
+    # the user first, or refuse.
+    def shortcuts_inhibited=(inhibited : Bool) : Bool
+      @shortcuts_inhibited = inhibited
+      sync_shortcuts
+      inhibited
+    end
+
+    # Brings the window to the front and gives it the focus with *token*,
+    # an activation token another application passed on (such as
+    # `XDG_ACTIVATION_TOKEN`), so the desktop does not refuse it.
+    def activate(token : String) : Nil
+      C.gtk_window_set_startup_id(@widget, token)
+      C.gtk_window_present(@widget)
+    end
+
+    # Returns the size of the monitor that shows most of the window, in
+    # logical pixels, or `nil` while the window is not shown.
+    def monitor_size : {Int32, Int32}?
+      surface = C.gtk_native_get_surface(@widget)
+      return if surface.null?
+      monitor = C.gdk_display_get_monitor_at_surface(C.gtk_widget_get_display(@widget), surface)
+      return if monitor.null?
+      C.gdk_monitor_get_geometry(monitor, out geometry)
+      {geometry.width, geometry.height}
+    end
+
+    # Returns whether the desktop stopped showing the window, such as on
+    # another workspace or minimized; `App#on_window_suspended` reports
+    # changes.
+    getter? suspended = false
 
     # Asks the user *heading*, explained by *body*, in a dialog over the
     # window and yields whether they picked *confirm* rather than *cancel*.
@@ -373,19 +493,11 @@ module Apprt
     end
 
     protected def toggle_maximized : Nil
-      if C.gtk_window_is_maximized(@widget) != 0
-        C.gtk_window_unmaximize(@widget)
-      else
-        C.gtk_window_maximize(@widget)
-      end
+      self.maximized = !maximized?
     end
 
     protected def toggle_fullscreen : Nil
-      if C.gtk_window_is_fullscreen(@widget) != 0
-        C.gtk_window_unfullscreen(@widget)
-      else
-        C.gtk_window_fullscreen(@widget)
-      end
+      self.fullscreen = !fullscreen?
     end
 
     # Hides the decorations, or restores the ones they replaced.
@@ -432,7 +544,7 @@ module Apprt
     # Resizes to the initial size, unless the window is maximized or
     # fullscreen.
     protected def reset_size : Bool
-      return false if C.gtk_window_is_maximized(@widget) != 0 || C.gtk_window_is_fullscreen(@widget) != 0
+      return false if maximized? || fullscreen?
       default_size(*@initial_size)
       true
     end
@@ -493,7 +605,7 @@ module Apprt
     # *height* pixels. Does nothing while the window is maximized or
     # fullscreen, or shows more than one surface.
     protected def resize(width : Int32, height : Int32) : Bool
-      return false if C.gtk_window_is_maximized(@widget) != 0 || C.gtk_window_is_fullscreen(@widget) != 0
+      return false if maximized? || fullscreen?
       return false unless page_count == 1
       surfaces = tabs.first?.try(&.surfaces) || return false
       return false unless surfaces.size == 1
@@ -673,7 +785,48 @@ module Apprt
         Signals.notify(surface, "state", -> { sync_blur })
         winproto.urgent = true if @urgent
       end
+      surface = C.gtk_native_get_surface(@widget)
+      Signals.notify(surface, "state", -> { sync_suspended })
+      sync_app_id
+      sync_shortcuts
       sync_decoration
+    end
+
+    private def toplevel_state : C::GdkToplevelState
+      surface = C.gtk_native_get_surface(@widget)
+      surface.null? ? C::GdkToplevelState::None : C.gdk_toplevel_get_state(surface)
+    end
+
+    private def sync_suspended : Nil
+      suspended = toplevel_state.suspended?
+      return if suspended == @suspended
+      @suspended = suspended
+      @app.window_suspended(self, suspended)
+    end
+
+    private def sync_app_id : Nil
+      surface = C.gtk_native_get_surface(@widget)
+      return if surface.null?
+      return unless C.g_type_check_instance_is_a(surface, C.gdk_wayland_toplevel_get_type) != 0
+      id = @app_id || Native.string?(C.g_application_get_application_id(@app))
+      C.gdk_wayland_toplevel_set_application_id(surface, id) if id
+    end
+
+    private def sync_shortcuts : Nil
+      surface = C.gtk_native_get_surface(@widget)
+      return if surface.null?
+      if @shortcuts_inhibited
+        C.gdk_toplevel_inhibit_system_shortcuts(surface, nil)
+      else
+        C.gdk_toplevel_restore_system_shortcuts(surface)
+      end
+    end
+
+    private def release_idle : Nil
+      cookie = @idle_cookie
+      return if cookie == 0
+      @idle_cookie = 0_u32
+      C.gtk_application_uninhibit(@app, cookie)
     end
 
     private def unrealized : Nil
@@ -742,6 +895,7 @@ module Apprt
     end
 
     private def destroyed : Nil
+      release_idle
       forget unless @closed
       @app.unregister(self)
     end
