@@ -128,7 +128,7 @@ describe "Canvas rendering" do
     end
   end
 
-  it "offloads its frames as DMA-BUFs the right way up" do
+  it "offloads its frames as DMA-BUFs the right way up", tags: "gpu" do
     run_steps(halves_app(offload: true)) do |app|
       canvas = halves(app)
       eventually { canvas.dmabuf? }.should be_true
@@ -158,7 +158,7 @@ describe "Canvas rendering" do
     end
   end
 
-  it "offloads frames of a threaded canvas" do
+  it "offloads frames of a threaded canvas", tags: "gpu" do
     run_steps(halves_app(offload: true, threaded: true)) do |app|
       canvas = halves(app)
       eventually { canvas.dmabuf? }.should be_true

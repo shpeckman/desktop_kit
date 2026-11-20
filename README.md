@@ -4,7 +4,7 @@ Native application runtime for Crystal programs on Linux: GTK 4 and
 libadwaita windows, tabs, splits and surfaces driven by typed actions, with
 desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
-Status: early. This release holds the application lifecycle with command
+This release holds the application lifecycle with command
 line and file arguments, windows with tabs and splits of surfaces, menus,
 file, color, font and about dialogs, an OpenGL drawing canvas (optionally
 on its own thread) with keyboard, input method and pointer input, the
@@ -27,7 +27,7 @@ the runtime builds on.
 
 ## Requirements
 
-- Crystal ≥ 1.23
+- Crystal ≥ 1.22.3
 - GTK ≥ 4.18, libadwaita ≥ 1.7, gtk4-layer-shell ≥ 1.0 and wayland-client
   (development packages, found with `pkg-config`)
 
@@ -39,6 +39,7 @@ Add the dependency to your `shard.yml`:
 dependencies:
   desktop_kit:
     github: shpeckman/desktop_kit
+    version: "~> 1.0"
 ```
 
 Run `shards install`, then:

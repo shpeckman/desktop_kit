@@ -1,5 +1,5 @@
 name: desktop_kit
-version: 0.1.0
+version: 1.0.0
 
 authors:
   - shpeckman
@@ -10,7 +10,7 @@ description: |
   with desktop notifications, global shortcuts, DBus IPC and systemd
   integration.
 
-crystal: ">= 1.23.0"
+crystal: ">= 1.22.3"
 
 libraries:
   libadwaita-1: ">= 1.7"
