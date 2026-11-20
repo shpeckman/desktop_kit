@@ -76,6 +76,22 @@ means every case passed.
 - `panel-dock` - Ctrl+A B opens a 160 px bottom dock and a left probe
   panel that keeps clear of reserved space; the probe must lose exactly
   the dock's height. Panels close with the window.
+- `header-menu` - opens the header bar's main menu, shoots it and opens a
+  tab from its New Tab item.
+- `translation` - the same menu with Dutch texts from `Apprt.translator`
+  (`dutch: true`).
+- `context-menu` - right-clicks the label, shoots its context menu and
+  picks its Report item.
+- `shortcuts-dialog` - Ctrl+A K opens the keyboard shortcuts dialog;
+  shoots it, searches for "progress" and closes it.
+- `about` - Ctrl+A I opens the about dialog. Shoots it.
+- `sequence-timeout` - Ctrl+A W sets a 300 ms sequence timeout; a quick
+  Ctrl+A N still fires, but after a pause Ctrl+T reaches the window
+  shortcut.
+- `threaded-canvas` - Ctrl+A G opens a canvas rendering on its own thread.
+  Shoots its first frame.
+- `tray` - Ctrl+A Y shows a tray icon and checks the desktop's
+  StatusNotifierWatcher registered it. `kde` only.
 
 ## The app under test
 
@@ -96,6 +112,11 @@ Its window shows a label and has these bindings:
 | Ctrl+A H                    | moves the tab bar into the header bar     |
 | Ctrl+A M                    | shows pane headers                        |
 | Ctrl+A C                    | opens a tab with an offloading canvas     |
+| Ctrl+A G                    | opens a tab with a threaded canvas        |
+| Ctrl+A W                    | sets a 300 ms sequence timeout            |
+| Ctrl+A K                    | opens the keyboard shortcuts dialog       |
+| Ctrl+A I                    | opens the about dialog                    |
+| Ctrl+A Y                    | shows a tray icon                         |
 | Ctrl+A F                    | opens the search bar (three matches)      |
 | Ctrl+A Q                    | opens the quick panel, or toggles it      |
 | Ctrl+A V                    | reports whether the quick panel is shown  |
@@ -117,6 +138,10 @@ It writes to `LIVETEST_FIFO` and to standard error:
 | `pane headers`            | every surface shows its pane header          |
 | `canvas dmabuf=BOOL`      | the canvas showed its first frame, as a      |
 |                           | DMA-BUF when BOOL is `true`                  |
+| `canvas threaded`         | the threaded canvas showed its first frame   |
+| `timeout MS`              | the sequence timeout was set                 |
+| `tray registered=BOOL`    | whether the watcher lists the tray icon      |
+| `context tables=T,...`    | the context menu's Report item was picked    |
 | `search TEXT` / `search end` | the search text changed / the bar closed  |
 | `navigate next\|previous` | Return / Shift+Return in the search bar      |
 | `panel shown=BOOL`        | the quick panel opened or toggled, or was    |

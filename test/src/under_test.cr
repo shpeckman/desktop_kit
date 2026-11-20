@@ -2,9 +2,12 @@
 #
 # The apprt app the live tests run: one window of labels with key
 # sequences, a key table, progress, tab, split, header, pane header,
-# offloading canvas, search and panel bindings, and with --global the
-# global Ctrl+Alt+Shift+F9, which opens a tab. Closing the window closes
-# its panels. It reports through LIVETEST_FIFO, and on standard error:
+# offloading and threaded canvas, search, panel, shortcuts dialog, about
+# dialog, sequence timeout and tray bindings, a context menu on every
+# label, and with --global the global Ctrl+Alt+Shift+F9, which opens a
+# tab. With --dutch the built-in texts the header menu shows are in Dutch.
+# Closing the window closes its panels. It reports through LIVETEST_FIFO,
+# and on standard error:
 #
 #   window                     its window is open
 #   tab                        a tab opened
@@ -18,6 +21,10 @@
 #   pane headers               every surface shows its pane header
 #   canvas dmabuf=BOOL         the canvas tab showed its first frame, as a
 #                              DMA-BUF when BOOL is true
+#   canvas threaded            the threaded canvas tab showed its first frame
+#   timeout MS                 pending key sequences now expire after MS
+#   tray registered=BOOL       the tray icon is shown; BOOL is true when the
+#                              desktop's StatusNotifierWatcher lists it
 #   search NEEDLE              the search text changed to NEEDLE; every
 #                              label matches three times
 #   navigate next|previous     the search moved to the next or previous match
@@ -30,6 +37,7 @@
 #
 #   apprt-under-test --class ID  runs under the harness with window class ID
 #   apprt-under-test --global    also binds the global shortcut
+#   apprt-under-test --dutch     shows the header menu's texts in Dutch
 #   apprt-under-test --setup     installs the app's desktop file and binds the
 #                                shortcut once, which the desktop confirms
 require "option_parser"
@@ -81,8 +89,18 @@ module Apprt::Test
   # Shows a pane header on every surface.
   Apprt.action PaneHeaders, "pane-headers", scope: :app
 
-  # Opens a tab whose content is an offloading `Halves` canvas.
-  Apprt.action OpenCanvas, "open-canvas", scope: :window
+  # Opens a tab whose content is a `Halves` canvas: rendering on its own
+  # thread when *threaded*, else offloading.
+  Apprt.action OpenCanvas, "open-canvas", scope: :window, payload: {threaded: Bool}
+
+  # Lets pending key sequences expire after `SEQUENCE_TIMEOUT`.
+  Apprt.action SequenceTimeout, "sequence-timeout", scope: :app
+
+  # Shows the about dialog.
+  Apprt.action ShowAbout, "show-about", scope: :window
+
+  # Shows the tray icon and reports whether the desktop registered it.
+  Apprt.action ShowTray, "show-tray", scope: :app
 
   # Opens the quick panel the first time, toggles it after that.
   Apprt.action QuickPanel, "quick-panel", scope: :app
@@ -118,7 +136,12 @@ module Apprt::Test
     "ctrl+a>l"       => ReportSurfaces.new,
     "ctrl+a>h"       => HeaderTabs.new,
     "ctrl+a>m"       => PaneHeaders.new,
-    "ctrl+a>c"       => OpenCanvas.new,
+    "ctrl+a>c"       => OpenCanvas.new(false),
+    "ctrl+a>g"       => OpenCanvas.new(true),
+    "ctrl+a>w"       => SequenceTimeout.new,
+    "ctrl+a>k"       => Action::ShowShortcuts.new,
+    "ctrl+a>i"       => ShowAbout.new,
+    "ctrl+a>y"       => ShowTray.new,
     "ctrl+a>f"       => Action::StartSearch.new,
     "ctrl+a>q"       => QuickPanel.new,
     "ctrl+a>v"       => ReportPanel.new,
@@ -131,6 +154,40 @@ module Apprt::Test
     "Escape" => Action::DeactivateKeyTable.new,
   }
 
+  # How long a pending key sequence waits once `SequenceTimeout` ran.
+  SEQUENCE_TIMEOUT = 300.milliseconds
+
+  # The about dialog `ShowAbout` shows.
+  ABOUT = Apprt::About.new("apprt live test", version: "1.0", icon: "applications-system-symbolic",
+    developer: "apprt", comments: "The app the apprt live tests run", license: :mit)
+
+  # The tray icon `ShowTray` shows; its menu opens a window.
+  TRAY = Apprt::Tray.new(icon: "applications-system-symbolic", title: "apprt live test",
+    menu: Apprt::Menu.build { |menu| menu.item "New Window", Action::NewWindow.new })
+
+  # The Dutch texts of the header menu, for `--dutch`.
+  DUTCH = {
+    "Main Menu"            => "Hoofdmenu",
+    "New Window"           => "Nieuw venster",
+    "New Tab"              => "Nieuw tabblad",
+    "Split Up"             => "Boven splitsen",
+    "Split Down"           => "Onder splitsen",
+    "Split Left"           => "Links splitsen",
+    "Split Right"          => "Rechts splitsen",
+    "Change Title…"        => "Titel wijzigen…",
+    "Change Tab Title…"    => "Tabbladtitel wijzigen…",
+    "Change Window Title…" => "Venstertitel wijzigen…",
+    "Close Tab"            => "Tabblad sluiten",
+    "Close Window"         => "Venster sluiten",
+    "Keyboard Shortcuts"   => "Sneltoetsen",
+  }
+
+  # The context menu of every label.
+  CONTEXT_MENU = Apprt::Menu.build do |menu|
+    menu.item "Report", Report.new("context")
+    menu.item "Split Right", Action::NewSplit.new(:right)
+  end
+
   # Reports *line* on standard error and to the harness's fifo.
   def self.report(line : String) : Nil
     STDERR.puts line
@@ -138,13 +195,14 @@ module Apprt::Test
     File.open(fifo, "a", &.puts(line))
   end
 
-  # Offloading canvas that clears its upper half red and its lower half
-  # blue, and reports how its first frame reached the screen.
+  # Canvas that clears its upper half red and its lower half blue, and
+  # reports how its first frame reached the screen. It renders on its own
+  # thread when *threaded*, else it offloads.
   class Halves < Apprt::Canvas
     @reported = false
 
-    def initialize
-      super(offload: true)
+    def initialize(@threaded : Bool)
+      super(offload: !threaded, threaded: threaded)
     end
 
     protected def on_render : Nil
@@ -160,7 +218,7 @@ module Apprt::Test
     protected def on_presented(timing : Apprt::FrameTiming) : Nil
       return if @reported
       @reported = true
-      Test.report "canvas dmabuf=#{dmabuf?}"
+      Test.report(@threaded ? "canvas threaded" : "canvas dmabuf=#{dmabuf?}")
     end
   end
 
@@ -172,6 +230,10 @@ module Apprt::Test
 
     def initialize(text : String)
       super(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
+    end
+
+    protected def context_menu(x : Float64, y : Float64) : Apprt::Menu?
+      CONTEXT_MENU
     end
 
     protected def on_search(needle : String) : Nil
@@ -198,8 +260,10 @@ module Apprt::Test
     # The kind each surface's content was opened as.
     @kinds = {} of Apprt::Content => String
 
-    # Whether the next surface is a `Halves` canvas.
+    # Whether the next surface is a `Halves` canvas, and whether it renders
+    # on its own thread.
     @canvas = false
+    @threaded = false
 
     # The quick panel once `QuickPanel` opened it.
     @quick : Apprt::Window?
@@ -260,7 +324,7 @@ module Apprt::Test
       end
       if @canvas
         @canvas = false
-        return Halves.new
+        return Halves.new(@threaded)
       end
       text = @setup ? "Confirm the shortcut in the desktop's dialog, then press #{TRIGGER.label}." : context.kind.to_s
       content = Label.new(text)
@@ -304,7 +368,27 @@ module Apprt::Test
 
     protected def perform(target : Apprt::Window, action : OpenCanvas) : Bool
       @canvas = true
+      @threaded = action.threaded
       perform(target, Apprt::Action::NewTab.new)
+    end
+
+    protected def perform(target : Apprt::App, action : SequenceTimeout) : Bool
+      self.sequence_timeout = SEQUENCE_TIMEOUT
+      report "timeout #{SEQUENCE_TIMEOUT.total_milliseconds.to_i}"
+      true
+    end
+
+    protected def perform(target : Apprt::Window, action : ShowAbout) : Bool
+      target.show_about(ABOUT)
+      true
+    end
+
+    # Shows the tray, then asks the watcher after a second, when the
+    # registration had time to arrive.
+    protected def perform(target : Apprt::App, action : ShowTray) : Bool
+      self.tray = TRAY
+      after(1.second) { report_tray }
+      true
     end
 
     protected def perform(target : Apprt::App, action : QuickPanel) : Bool
@@ -344,6 +428,15 @@ module Apprt::Test
       end
     end
 
+    private def report_tray : Nil
+      bus = dbus || return report "tray registered=false"
+      args = Apprt::Variant.new({"org.kde.StatusNotifierWatcher", "RegisteredStatusNotifierItems"})
+      bus.call("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties", "Get", args) do |reply, _error|
+        items = reply.try(&.[0].get(Apprt::Variant).get(Array(String))) || [] of String
+        report "tray registered=#{items.any?(&.starts_with?(bus.unique_name))}"
+      end
+    end
+
     private def report_panel : Nil
       report "panel shown=#{@quick.try(&.widget.visible?) || false}"
     end
@@ -356,11 +449,13 @@ end
 
 window_class = nil.as(String?)
 global = false
+dutch = false
 setup = false
 OptionParser.parse do |parser|
   parser.banner = "Usage: apprt-under-test [--class ID] [--global] | --setup"
   parser.on("--class ID", "Runs under the harness with window class ID") { |id| window_class = id }
   parser.on("--global", "Also binds the global shortcut") { global = true }
+  parser.on("--dutch", "Shows the header menu's texts in Dutch") { dutch = true }
   parser.on("--setup", "Installs the desktop file and binds the shortcut once") { setup = true }
   parser.invalid_option do |flag|
     STDERR.puts "apprt-under-test: unknown option #{flag}\n#{parser}"
@@ -372,6 +467,7 @@ if setup
   STDERR.puts "Installed #{Apprt::Test::UnderTest.install_desktop_file}."
   STDERR.puts "Confirm the shortcut in the desktop's dialog, then press #{Apprt::Test::TRIGGER.label}."
 end
+Apprt.translator = ->(text : String) { Apprt::Test::DUTCH.fetch(text, text) } if dutch
 app = Apprt::Test::UnderTest.new(window_class, global, setup)
 status = app.run
 exit(app.failed? ? 1 : status)

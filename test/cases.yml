@@ -222,3 +222,115 @@ panel-dock:
     - key ctrl+a b
     - expect dock clear=true
     - close
+
+# The header bar's main menu opens on a click and shows the default
+# sections; its New Tab item opens a tab.
+header-menu:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - move 677 21
+    - click
+    - settle
+    - shoot menu tolerance=2
+    - move 607 93
+    - click
+    - expect tab
+    - close
+
+# The same menu with Dutch texts from `Apprt.translator`.
+translation:
+  modes: [kde, sway]
+  dutch: true
+  steps:
+    - expect window
+    - move 677 21
+    - click
+    - settle
+    - shoot menu tolerance=2
+    - key Escape
+    - close
+
+# A right click on a label opens its context menu; its Report item
+# reports through the window.
+context-menu:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - move 400 300
+    - click right
+    - settle
+    - shoot menu tolerance=2
+    - move 430 315
+    - click
+    - expect context tables=
+    - close
+
+# Ctrl+A K opens the keyboard shortcuts dialog; typing searches it. The
+# first Escape leaves the search, the second closes the dialog.
+shortcuts-dialog:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a k
+    - settle
+    - shoot dialog tolerance=2
+    - type progress
+    - settle
+    - shoot search tolerance=2
+    - key Escape
+    - settle
+    - key Escape
+    - settle
+    - shoot closed tolerance=2
+    - close
+
+# Ctrl+A I opens the about dialog.
+about:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a i
+    - settle
+    - shoot dialog tolerance=2
+    - key Escape
+    - close
+
+# With a sequence timeout a quick Ctrl+A N still fires, but after a pause
+# the pending Ctrl+A is gone and Ctrl+T reaches the plain window shortcut.
+sequence-timeout:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a w
+    - expect timeout 300
+    - key ctrl+a n
+    - expect sequence tables=
+    - key ctrl+a
+    - sleep 800
+    - key ctrl+t
+    - expect accel tables=
+    - close
+
+# A canvas rendering on its own thread shows its first frame the right
+# way up (red top, blue bottom).
+threaded-canvas:
+  modes: [kde, sway]
+  steps:
+    - expect window
+    - key ctrl+a g
+    - expect canvas threaded
+    - settle
+    - shoot canvas tolerance=4
+    - close
+
+# The tray icon registers with the desktop's StatusNotifierWatcher. Only
+# kde: the nested sway shares the session bus, so it would show in the
+# desktop's tray.
+tray:
+  modes: [kde]
+  steps:
+    - expect window
+    - key ctrl+a y
+    - expect tray registered=true
+    - close

@@ -260,7 +260,7 @@ module Apprt
       @error = nil
       @context = context
       if @threaded
-        start_renderer(context)
+        start_renderer(context, GLContext.new(api: @api, version: @version))
       else
         context.make_current
         @buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
@@ -394,13 +394,16 @@ module Apprt
     end
 
     # Starts the render thread, which realizes the canvas with *context*.
-    # Jobs never block the GTK thread: one frame is drawn at a time and the
-    # queue holds it and the close.
-    private def start_renderer(context : GLContext) : Nil
+    # Its textures name *owner*, a context of the GTK thread: GSK's Vulkan
+    # renderer exports a GL texture as a DMA-BUF through the texture's
+    # context on the GTK thread, which corrupts the driver's heap while the
+    # render thread has that context current. Jobs never block the GTK thread: one frame is
+    # drawn at a time and the queue holds it and the close.
+    private def start_renderer(context : GLContext, owner : GLContext) : Nil
       jobs = Channel(Job).new(2)
       @jobs = jobs
       @rendering = false
-      @renderer = Fiber::ExecutionContext::Isolated.new("canvas") { run_renderer(context, jobs) }
+      @renderer = Fiber::ExecutionContext::Isolated.new("canvas") { run_renderer(context, owner, jobs) }
     end
 
     # Closes the job queue and waits until the render thread unrealized the
@@ -418,9 +421,9 @@ module Apprt
       end
     end
 
-    private def run_renderer(context : GLContext, jobs : Channel(Job)) : Nil
+    private def run_renderer(context : GLContext, owner : GLContext, jobs : Channel(Job)) : Nil
       context.make_current
-      buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
+      buffers = CanvasBuffers.new(context, @depth_stencil, @offload, owner)
       @buffers = buffers
       logged { on_realize }
       while job = jobs.receive?

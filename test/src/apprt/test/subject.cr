@@ -4,24 +4,30 @@ require "livetest"
 module Apprt::Test
   # :nodoc:
   # Starts `apprt-under-test` with the case's app id as its window class,
-  # and with `--global` for cases that set `global: true`.
+  # with `--global` for cases that set `global: true` and with `--dutch`
+  # for cases that set `dutch: true`.
   class Subject < Livetest::Subject
+    # Case keys that pass the option of the same name when true.
+    private FLAGS = ["global", "dutch"]
+
     def name : String
       "apprt-under-test"
     end
 
     def keys : Array(String)
-      ["global"]
+      FLAGS
     end
 
     def check(test : Livetest::Case) : Nil
-      field = test.field?("global") || return
-      raise field.error("global must be true or false") unless field.text.in?("true", "false")
+      FLAGS.each do |key|
+        field = test.field?(key) || next
+        raise field.error("#{key} must be true or false") unless field.text.in?("true", "false")
+      end
     end
 
     def arguments(test : Livetest::Case, app_id : String) : Array(String)
       arguments = ["--class", app_id]
-      arguments << "--global" if test.field?("global").try(&.text) == "true"
+      FLAGS.each { |key| arguments << "--#{key}" if test.field?(key).try(&.text) == "true" }
       arguments
     end
   end

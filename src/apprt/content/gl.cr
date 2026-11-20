@@ -259,8 +259,9 @@ module Apprt
 
     # With *offload*, buffers are exported as DMA-BUFs when the context
     # supports it (EGL with `EGL_MESA_image_dma_buf_export`); the context
-    # must be current.
-    def initialize(@context : GLContext, @depth_stencil : Bool, offload : Bool)
+    # must be current. GL textures name *owner* as their context, which GSK
+    # uses on the GTK thread.
+    def initialize(@context : GLContext, @depth_stencil : Bool, offload : Bool, @owner : GLContext = context)
       @offload = offload && Dmabuf.supported?
     end
 
@@ -298,7 +299,7 @@ module Apprt
       buffer.sync = fences? ? GL.epoxy_glFenceSync.call(GL::SYNC_GPU_COMMANDS_COMPLETE, 0_u32) : Pointer(Void).null
       GL.epoxy_glFlush.call
       builder = C.gdk_gl_texture_builder_new
-      C.gdk_gl_texture_builder_set_context(builder, @context)
+      C.gdk_gl_texture_builder_set_context(builder, @owner)
       C.gdk_gl_texture_builder_set_id(builder, buffer.texture)
       C.gdk_gl_texture_builder_set_width(builder, buffer.width)
       C.gdk_gl_texture_builder_set_height(builder, buffer.height)
