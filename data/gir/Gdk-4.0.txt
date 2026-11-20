@@ -134,3 +134,6 @@ gdk_dmabuf_texture_builder_set_fd
 gdk_dmabuf_texture_builder_set_stride
 gdk_dmabuf_texture_builder_set_offset
 gdk_dmabuf_texture_builder_build
+
+# color chooser
+gdk_rgba_free

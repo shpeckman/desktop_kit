@@ -159,5 +159,16 @@ module Apprt
     fun adw_combo_row_set_model(self_ : Void*, model : Void*)
     fun adw_combo_row_get_selected(self_ : Void*) : UInt32
     fun adw_combo_row_set_selected(self_ : Void*, position : UInt32)
+    fun adw_about_dialog_new : Void*
+    fun adw_about_dialog_set_application_name(self_ : Void*, application_name : UInt8*)
+    fun adw_about_dialog_set_application_icon(self_ : Void*, application_icon : UInt8*)
+    fun adw_about_dialog_set_version(self_ : Void*, version : UInt8*)
+    fun adw_about_dialog_set_developer_name(self_ : Void*, developer_name : UInt8*)
+    fun adw_about_dialog_set_developers(self_ : Void*, developers : UInt8**)
+    fun adw_about_dialog_set_comments(self_ : Void*, comments : UInt8*)
+    fun adw_about_dialog_set_website(self_ : Void*, website : UInt8*)
+    fun adw_about_dialog_set_issue_url(self_ : Void*, issue_url : UInt8*)
+    fun adw_about_dialog_set_copyright(self_ : Void*, copyright : UInt8*)
+    fun adw_about_dialog_set_license_type(self_ : Void*, license_type : GtkLicense)
   end
 end

@@ -15,6 +15,10 @@ module Apprt
     @hover_right = Widget.new(C.gtk_label_new(""))
     @hover_motion = {C.gtk_event_controller_motion_new, C.gtk_event_controller_motion_new}
     @search : SearchOverlay?
+    @context_click = C.gtk_gesture_click_new
+    # The open context menu's popover, parented to the overlay; null when
+    # closed.
+    @context_popover = Pointer(Void).null
 
     # Returns the text shown at the bottom of the surface, such as the
     # target of a hovered link.
@@ -115,6 +119,40 @@ module Apprt
         label.add_controller(motion)
         C.gtk_overlay_add_overlay(overlay, label)
       end
+      C.gtk_gesture_single_set_button(@context_click, 3)
+      C.gtk_event_controller_set_propagation_phase(@context_click, C::GtkPropagationPhase::Capture)
+      Signals.connect(@context_click, "pressed", ->(_count : Int32, x : Float64, y : Float64) { show_context_menu(x, y) })
+      Widget.new(overlay).add_controller(@context_click)
+    end
+
+    # Pops up the content's context menu at *x*, *y*, claiming the click,
+    # after focusing the surface so split actions act on it.
+    private def show_context_menu(x : Float64, y : Float64) : Nil
+      return if @closed
+      menu = @content.context_menu_at(x, y) || return
+      C.gtk_gesture_set_state(@context_click, C::GtkEventSequenceState::Claimed)
+      focus
+      close_context_menu
+      model = menu.to_model
+      popover = C.gtk_popover_menu_new_from_model(model)
+      C.g_object_unref(model)
+      @context_popover = popover
+      C.gtk_popover_set_has_arrow(popover, 0)
+      C.gtk_widget_set_halign(popover, C::GtkAlign::Start)
+      C.gtk_widget_set_parent(popover, @overlay)
+      rect = C::GdkRectangle.new(x: x.to_i32, y: y.to_i32, width: 1, height: 1)
+      C.gtk_popover_set_pointing_to(popover, pointerof(rect))
+      # Unparenting waits for an idle: GTK may close the menu while it
+      # activates the chosen item.
+      Signals.connect(popover, "closed", -> { UIThread.post { close_context_menu(popover) } })
+      C.gtk_popover_popup(popover)
+    end
+
+    # Unparents the context menu *popover*, the open one by default.
+    private def close_context_menu(popover : Void* = @context_popover) : Nil
+      return if popover.null? || popover != @context_popover
+      @context_popover = Pointer(Void).null
+      C.gtk_widget_unparent(popover)
     end
 
     # Moves the hover text away from the pointer: to the right when it
@@ -128,6 +166,7 @@ module Apprt
     private def release_overlays : Nil
       Idle.cancel(@size_timer) unless @size_timer == 0
       @size_timer = 0_u32
+      close_context_menu
     end
   end
 end

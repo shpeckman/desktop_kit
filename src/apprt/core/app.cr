@@ -63,17 +63,27 @@ module Apprt
     # Runs the application until `#quit` or until `#quit_delay` after its last
     # window closes, and returns its exit status.
     #
+    # *arguments*, without the program name, go to `#on_command_line`: of
+    # this process, or of the instance already running when the application
+    # is a single instance. In the latter case `#run` returns the exit status
+    # that instance's `#on_command_line` returned.
+    #
     # Blocks the calling fiber. Until it returns, SIGINT and SIGTERM call
     # `#quit` and SIGUSR2 calls `#reload`. Raises `RuntimeError` when an
     # application is already running.
-    def run : Int32
+    #
+    # ```
+    # exit Editor.new("org.example.Editor").run(ARGV)
+    # ```
+    def run(arguments : Enumerable(String) = [] of String) : Int32
       raise RuntimeError.new("an application is already running") unless @@current.compare_and_set(nil, self)[1]
       status = 0
       begin
         Signal::INT.trap { quit }
         Signal::TERM.trap { quit }
         Signal::USR2.trap { reload }
-        Fiber::ExecutionContext::Isolated.new("gtk") { status = UIThread.enter { run_application } }.wait
+        arguments = arguments.to_a
+        Fiber::ExecutionContext::Isolated.new("gtk") { status = UIThread.enter { run_application(arguments) } }.wait
       ensure
         {Signal::INT, Signal::TERM, Signal::USR2}.each(&.reset)
         @@current.set(nil)
@@ -209,9 +219,30 @@ module Apprt
 
     # :showdoc:
     #
-    # Called when the application is launched, and again whenever it is
-    # launched while running as a single instance.
+    # Called when the application is launched without files, and again
+    # whenever it is launched so while running as a single instance.
     protected def on_activate : Nil
+    end
+
+    # :showdoc:
+    #
+    # Called on each launch with its *command_line*, the arguments `#run`
+    # received, and returns the launch's exit status.
+    #
+    # By default it opens the arguments as files with `#on_open`, or calls
+    # `#on_activate` when there are none.
+    protected def on_command_line(command_line : CommandLine) : Int32
+      files = command_line.arguments.map { |argument| command_line.path(argument) }
+      files.empty? ? activate : on_open(files)
+      0
+    end
+
+    # :showdoc:
+    #
+    # Called with *files* to open, from `#on_command_line` or from the
+    # desktop; calls `#on_activate` by default.
+    protected def on_open(files : Array(Path)) : Nil
+      on_activate
     end
 
     # :showdoc:
@@ -331,17 +362,24 @@ module Apprt
       true
     end
 
-    private def run_application : Int32
-      flags = single_instance? ? C::GApplicationFlags::None : C::GApplicationFlags::NonUnique
+    @exit_status : Int32? = nil
+
+    private def run_application(arguments : Array(String)) : Int32
+      flags = C::GApplicationFlags::HandlesOpen | C::GApplicationFlags::HandlesCommandLine
+      flags |= C::GApplicationFlags::NonUnique unless single_instance?
       @application = C.adw_application_new(@id, flags)
       Signals.connect(@application, "startup", -> { startup })
       Signals.connect(@application, "activate", -> { activate })
+      Signals.connect(@application, "command-line", ->(command_line : Void*) : Int32 { command_line(command_line) })
+      Signals.connect(@application, "open", ->(files : Void*, count : Int32, _hint : String?) { open(files, count) })
       Signals.connect(@application, "shutdown", -> { shutdown })
-      # GApplication rejects file arguments without HANDLES_OPEN, so it only
-      # sees the program name.
-      argv = [PROGRAM_NAME.to_unsafe, Pointer(UInt8).null]
+      # Without main options GApplication passes unknown options through to
+      # the command line handler.
+      argv = Native.strv([PROGRAM_NAME].concat(arguments))
       register_with_portal
-      C.g_application_run(@application, 1, argv.to_unsafe)
+      @exit_status = nil
+      status = C.g_application_run(@application, argv.size - 1, argv.to_unsafe)
+      @exit_status || status
     ensure
       C.g_object_unref(@application) unless @application.null?
       @application = Pointer(Void).null
@@ -372,11 +410,40 @@ module Apprt
     private def activate : Nil
       on_activate
     ensure
-      unless @ready
-        @ready = true
-        Systemd.ready
-        sync_config_errors
+      became_ready
+    end
+
+    # Returns the launch's exit status; a remote launch gets it through
+    # *command_line*. GApplication drops a local launch's status once its
+    # main loop runs, so `#run_application` returns `@exit_status`.
+    private def command_line(command_line : Void*) : Int32
+      launch = CommandLine.from(command_line)
+      on_command_line(launch).tap do |status|
+        C.g_application_command_line_set_exit_status(command_line, status)
+        @exit_status = status unless launch.remote?
       end
+    ensure
+      became_ready
+    end
+
+    # Opens the `GFile`s the desktop asked for; files without a local path
+    # are skipped.
+    private def open(files : Void*, count : Int32) : Nil
+      paths = Slice.new(files.as(Void**), count).compact_map do |file|
+        Native.take_string?(C.g_file_get_path(file)).try { |path| Path[path] }
+      end
+      on_open(paths)
+    ensure
+      became_ready
+    end
+
+    # Marks the end of the first launch: systemd hears the application is
+    # ready and the configuration errors show.
+    private def became_ready : Nil
+      return if @ready
+      @ready = true
+      Systemd.ready
+      sync_config_errors
     end
 
     private def shutdown : Nil

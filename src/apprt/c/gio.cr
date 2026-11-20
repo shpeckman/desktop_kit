@@ -190,5 +190,12 @@ module Apprt
     fun g_list_model_get_type : GType
     fun g_list_model_get_n_items(list : Void*) : UInt32
     fun g_list_model_get_item(list : Void*, position : UInt32) : Void*
+    fun g_application_command_line_get_arguments(cmdline : Void*, argc : Int32*) : UInt8**
+    fun g_application_command_line_get_cwd(cmdline : Void*) : UInt8*
+    fun g_application_command_line_get_is_remote(cmdline : Void*) : Int32
+    fun g_application_command_line_set_exit_status(cmdline : Void*, exit_status : Int32)
+    fun g_list_store_new(item_type : GType) : Void*
+    fun g_list_store_append(store : Void*, item : Void*)
+    fun g_menu_append_submenu(menu : Void*, label : UInt8*, submenu : Void*)
   end
 end

@@ -110,6 +110,34 @@ module Apprt
       Disabled = 1
     end
 
+    enum GtkEventSequenceState : Int32
+      None    = 0
+      Claimed = 1
+      Denied  = 2
+    end
+
+    enum GtkLicense : Int32
+      Unknown    =  0
+      Custom     =  1
+      Gpl20      =  2
+      Gpl30      =  3
+      Lgpl21     =  4
+      Lgpl30     =  5
+      Bsd        =  6
+      MitX11     =  7
+      Artistic   =  8
+      Gpl20Only  =  9
+      Gpl30Only  = 10
+      Lgpl21Only = 11
+      Lgpl30Only = 12
+      Agpl30     = 13
+      Agpl30Only = 14
+      Bsd3       = 15
+      Apache20   = 16
+      Mpl20      = 17
+      N0bsd      = 18
+    end
+
     alias GtkTickCallback = Void*, Void*, Void* -> Int32
     fun gtk_widget_get_type : GType
     fun gtk_widget_get_parent(widget : Void*) : Void*
@@ -366,5 +394,41 @@ module Apprt
     fun gtk_widget_get_valign(widget : Void*) : GtkAlign
     fun gtk_widget_queue_resize(widget : Void*)
     fun gtk_editable_set_width_chars(editable : Void*, n_chars : Int32)
+    fun gtk_file_dialog_new : Void*
+    fun gtk_file_dialog_set_title(self_ : Void*, title : UInt8*)
+    fun gtk_file_dialog_set_accept_label(self_ : Void*, accept_label : UInt8*)
+    fun gtk_file_dialog_set_filters(self_ : Void*, filters : Void*)
+    fun gtk_file_dialog_set_initial_folder(self_ : Void*, folder : Void*)
+    fun gtk_file_dialog_set_initial_name(self_ : Void*, name : UInt8*)
+    fun gtk_file_dialog_open(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun gtk_file_dialog_open_finish(self_ : Void*, result : Void*, error : GError**) : Void*
+    fun gtk_file_dialog_open_multiple(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun gtk_file_dialog_open_multiple_finish(self_ : Void*, result : Void*, error : GError**) : Void*
+    fun gtk_file_dialog_save(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun gtk_file_dialog_save_finish(self_ : Void*, result : Void*, error : GError**) : Void*
+    fun gtk_file_dialog_select_folder(self_ : Void*, parent : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun gtk_file_dialog_select_folder_finish(self_ : Void*, result : Void*, error : GError**) : Void*
+    fun gtk_file_filter_new : Void*
+    fun gtk_file_filter_set_name(filter : Void*, name : UInt8*)
+    fun gtk_file_filter_add_pattern(filter : Void*, pattern : UInt8*)
+    fun gtk_file_filter_add_mime_type(filter : Void*, mime_type : UInt8*)
+    fun gtk_file_filter_get_type : GType
+    fun gtk_color_dialog_new : Void*
+    fun gtk_color_dialog_set_title(self_ : Void*, title : UInt8*)
+    fun gtk_color_dialog_set_with_alpha(self_ : Void*, with_alpha : Int32)
+    fun gtk_color_dialog_choose_rgba(self_ : Void*, parent : Void*, initial_color : GdkRGBA*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun gtk_color_dialog_choose_rgba_finish(self_ : Void*, result : Void*, error : GError**) : GdkRGBA*
+    fun gtk_font_dialog_new : Void*
+    fun gtk_font_dialog_set_title(self_ : Void*, title : UInt8*)
+    fun gtk_font_dialog_choose_font(self_ : Void*, parent : Void*, initial_value : Void*, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
+    fun gtk_font_dialog_choose_font_finish(self_ : Void*, result : Void*, error : GError**) : Void*
+    fun gtk_popover_menu_new_from_model(model : Void*) : Void*
+    fun gtk_popover_menu_set_menu_model(popover : Void*, model : Void*)
+    fun gtk_popover_set_pointing_to(popover : Void*, rect : GdkRectangle*)
+    fun gtk_popover_set_has_arrow(popover : Void*, has_arrow : Int32)
+    fun gtk_popover_popup(popover : Void*)
+    fun gtk_popover_popdown(popover : Void*)
+    fun gtk_widget_set_parent(widget : Void*, parent : Void*)
+    fun gtk_gesture_set_state(gesture : Void*, state : GtkEventSequenceState) : Int32
   end
 end

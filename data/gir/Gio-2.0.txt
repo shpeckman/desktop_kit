@@ -120,3 +120,12 @@ g_file_icon_new
 GListModel
 g_list_model_get_n_items
 g_list_model_get_item
+
+# command lines and opened files
+g_application_command_line_get_arguments
+g_application_command_line_get_cwd
+g_application_command_line_get_is_remote
+g_application_command_line_set_exit_status
+g_list_store_new
+g_list_store_append
+g_menu_append_submenu

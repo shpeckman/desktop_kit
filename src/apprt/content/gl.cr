@@ -123,8 +123,8 @@ module Apprt
   # An OpenGL context on the application's display, for drawing off screen.
   #
   # Every context shares its objects (textures, buffers, programs) with
-  # the others of the display, a canvas's too. Use it on the GTK thread
-  # only, while the application runs.
+  # the others of the display, a canvas's too. Create it on the GTK thread,
+  # while the application runs; it is current on one thread at a time.
   class GLContext < Wrapper
     # Creates and realizes a context of one of *api*'s flavours that offers
     # at least *version* (`{major, minor}`). Raises `GLibError` when the
@@ -163,11 +163,14 @@ module Apprt
   # :nodoc:
   # The color buffers a `Canvas` draws into and hands GTK as textures, with
   # one depth and stencil renderbuffer shared by all of them. A buffer is
-  # busy from `#acquire` until GTK drops its texture; GTK may still hold
-  # it after `#release`, so a released pool deletes it then, from the
+  # busy from `#acquire` until GTK drops its texture. GTK drops textures on
+  # any thread, so returned buffers wait in a locked list until the thread
+  # drawing with the pool collects them. GTK may still hold a buffer after
+  # `#release`; a released pool deletes it then, on the GTK thread, from the
   # context it was made with.
   class CanvasBuffers
     class Buffer
+      getter pool : CanvasBuffers
       getter texture = 0_u32
       getter framebuffer = 0_u32
       getter width : Int32
@@ -180,7 +183,7 @@ module Apprt
       # The texture's DMA-BUF export, when offloading.
       getter dmabuf : Dmabuf?
 
-      def initialize(@context : GLContext, @width : Int32, @height : Int32, depth : UInt32, offload : Bool)
+      def initialize(@pool : CanvasBuffers, @context : GLContext, @width : Int32, @height : Int32, depth : UInt32, offload : Bool)
         GL.epoxy_glGenTextures.call(1, pointerof(@texture))
         GL.epoxy_glBindTexture.call(GL::TEXTURE_2D, @texture)
         GL.epoxy_glTexParameteri.call(GL::TEXTURE_2D, GL::TEXTURE_MIN_FILTER, GL::NEAREST)
@@ -205,19 +208,21 @@ module Apprt
         @dmabuf = nil
       end
 
-      # Called when GTK drops the buffer's texture.
-      def released : Nil
-        @busy = false
-        delete_later if @orphaned
-      end
-
       # Deletes the GL objects with the buffer's own context current, then
-      # restores the context that was current.
+      # restores the context that was current. GDK's thread may hold the
+      # only reference to that context, dropped when another one becomes
+      # current, so it is referenced meanwhile.
       def delete_later : Nil
         previous = C.gdk_gl_context_get_current
+        C.g_object_ref(previous) unless previous.null?
         @context.make_current
         delete
-        previous.null? ? GLContext.clear_current : C.gdk_gl_context_make_current(previous)
+        if previous.null?
+          GLContext.clear_current
+        else
+          C.gdk_gl_context_make_current(previous)
+          C.g_object_unref(previous)
+        end
       end
 
       # Deletes the GL objects; the buffer's context must be current.
@@ -233,7 +238,7 @@ module Apprt
     private RELEASED = ->(data : Void*) do
       buffer = Handles.get(data, Buffer)
       Handles.release(data)
-      UIThread.dispatch { buffer.released }
+      buffer.pool.returned(buffer)
       nil
     end
 
@@ -243,6 +248,11 @@ module Apprt
     @height = 0
     # Frames drawn since the pool was made.
     @frames = 0_i64
+    # Buffers whose textures GTK dropped, and whether `#release` closed the
+    # pool; both guarded by @lock.
+    @returned = [] of Buffer
+    @closed = false
+    @lock = Mutex.new
 
     # Returns whether the last texture was a `GdkDmabufTexture`.
     getter? dmabuf = false
@@ -258,9 +268,10 @@ module Apprt
     # framebuffer, and its age: how many frames ago it was last drawn, 0
     # when its contents are undefined. The context must be current.
     def acquire(width : Int32, height : Int32) : {Buffer, Int32}
+      collect
       resize(width, height) unless width == @width && height == @height
       free = @buffers.reject(&.busy?)
-      buffer = free.max_by?(&.drawn) || Buffer.new(@context, width, height, @depth, @offload).tap { |made| @buffers << made }
+      buffer = free.max_by?(&.drawn) || Buffer.new(self, @context, width, height, @depth, @offload).tap { |made| @buffers << made }
       age = buffer.drawn == 0 ? 0 : (@frames + 1 - buffer.drawn).to_i32
       buffer.busy = true
       @frames += 1
@@ -329,10 +340,35 @@ module Apprt
       Pointer(Void).null
     end
 
+    # Called, on any thread, when GTK drops *buffer*'s texture.
+    def returned(buffer : Buffer) : Nil
+      closed = @lock.synchronize do
+        @returned << buffer unless @closed
+        @closed
+      end
+      UIThread.dispatch { buffer.delete_later } if closed
+    end
+
     # Deletes the free buffers and the renderbuffer and leaves the busy
     # buffers to be deleted once GTK drops them. The context must be
     # current.
     def release : Nil
+      discard
+      returned = @lock.synchronize do
+        @closed = true
+        @returned.dup.tap { @returned.clear }
+      end
+      returned.each(&.delete)
+    end
+
+    # Frees the buffers GTK returned, deleting those `#discard` orphaned.
+    private def collect : Nil
+      returned = @lock.synchronize { @returned.dup.tap { @returned.clear } }
+      returned.each { |buffer| buffer.orphaned? ? buffer.delete : (buffer.busy = false) }
+    end
+
+    private def discard : Nil
+      collect
       @buffers.each { |buffer| buffer.busy? ? buffer.orphaned = true : buffer.delete }
       @buffers.clear
       GL.epoxy_glDeleteRenderbuffers.call(1, pointerof(@depth)) unless @depth == 0
@@ -340,7 +376,7 @@ module Apprt
     end
 
     private def resize(width : Int32, height : Int32) : Nil
-      release
+      discard
       @width = width
       @height = height
       return unless @depth_stencil

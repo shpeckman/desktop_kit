@@ -261,5 +261,6 @@ module Apprt
     fun gdk_dmabuf_texture_builder_set_stride(self_ : Void*, plane : UInt32, stride : UInt32)
     fun gdk_dmabuf_texture_builder_set_offset(self_ : Void*, plane : UInt32, offset : UInt32)
     fun gdk_dmabuf_texture_builder_build(self_ : Void*, destroy : GDestroyNotify, data : Void*, error : GError**) : Void*
+    fun gdk_rgba_free(rgba : GdkRGBA*)
   end
 end

@@ -1,5 +1,13 @@
 # src/apprt/content/canvas.cr
 module Apprt
+  # When the display showed a frame of a `Canvas`.
+  #
+  # *frame* is the frame clock's number of the frame (`Canvas#frame`).
+  # *presented* is when it reached the screen, on the clock of
+  # `CLOCK_MONOTONIC`, and *refresh_interval* the display's refresh period;
+  # either is `nil` when the compositor does not tell.
+  record FrameTiming, frame : Int64, presented : Time::Span?, refresh_interval : Time::Span?
+
   # Content drawn with OpenGL that takes the keyboard, the mouse and input
   # method text.
   #
@@ -15,7 +23,7 @@ module Apprt
   # The framebuffer matches the display's pixels, fractional scales too.
   # Positions and sizes are in framebuffer pixels: logical pixels times
   # `#scale`. Use a canvas on the GTK thread only; `App#post` reaches it from
-  # other threads.
+  # other threads. A *threaded* canvas (see `.new`) is the exception.
   #
   # ```
   # class Clear < Apprt::Canvas
@@ -25,14 +33,6 @@ module Apprt
   #   end
   # end
   # ```
-  # When the display showed a frame of a `Canvas`.
-  #
-  # *frame* is the frame clock's number of the frame (`Canvas#frame`).
-  # *presented* is when it reached the screen, on the clock of
-  # `CLOCK_MONOTONIC`, and *refresh_interval* the display's refresh period;
-  # either is `nil` when the compositor does not tell.
-  record FrameTiming, frame : Int64, presented : Time::Span?, refresh_interval : Time::Span?
-
   abstract class Canvas < Content
     # OpenGL flavours.
     @[Flags]
@@ -105,8 +105,19 @@ module Apprt
     @scale_handler = 0_u64
     @scale_surface = Pointer(Void).null
     @presenting = [] of Int64
+    @threaded : Bool
+    # The render thread's job queue and the thread, while a threaded canvas
+    # is realized.
+    @jobs : Channel(Job)?
+    @renderer : Fiber::ExecutionContext::Isolated?
+    @rendering = false
+    # A frame the render thread finished, shown at the next tick.
+    @finished = Pointer(Void).null
 
     @widget_destroyed = false
+
+    # A frame for the render thread to draw at *width* × *height*.
+    private record Job, width : Int32, height : Int32
 
     private RENDER_TICK = ->(_widget : Void*, clock : Void*, data : Void*) do
       Handles.get(data, Canvas).tick(clock) ? 1 : 0
@@ -120,10 +131,18 @@ module Apprt
     # With *offload*, frames go to GTK as DMA-BUFs where the driver can
     # export them, and the compositor may show them on a subsurface without
     # GTK copying them; `#dmabuf?` tells whether the last frame went so.
+    #
+    # A *threaded* canvas draws on a thread of its own: `#on_realize`,
+    # `#on_unrealize`, `#on_resize` and `#on_render` run there, never on the
+    # GTK thread, and must not call GTK. `#queue_render` may be called from
+    # either thread. GTK keeps showing the previous frame until the thread
+    # finishes the next; one frame is drawn at a time.
     def initialize(*, api : API = API::All, version : {Int32, Int32}? = nil,
                    depth_buffer : Bool = false, stencil_buffer : Bool = false,
-                   input_purpose : InputPurpose = InputPurpose::FreeForm, offload : Bool = false)
+                   input_purpose : InputPurpose = InputPurpose::FreeForm, offload : Bool = false,
+                   threaded : Bool = false)
       @api = api
+      @threaded = threaded
       @version = version
       @depth_stencil = depth_buffer || stencil_buffer
       @offload = offload
@@ -183,8 +202,15 @@ module Apprt
 
     # Asks for `#on_render` before the next frame.
     def queue_render : Nil
-      @render_queued = true
-      start_ticking
+      UIThread.dispatch do
+        @render_queued = true
+        start_ticking
+      end
+    end
+
+    # Returns whether the canvas draws on a thread of its own.
+    def threaded? : Bool
+      @threaded
     end
 
     # :showdoc:
@@ -233,9 +259,13 @@ module Apprt
       context = GLContext.new(api: @api, version: @version)
       @error = nil
       @context = context
-      context.make_current
-      @buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
-      on_realize
+      if @threaded
+        start_renderer(context)
+      else
+        context.make_current
+        @buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
+        on_realize
+      end
       queue_render
     rescue ex : GLibError
       @error = message = ex.message
@@ -245,7 +275,9 @@ module Apprt
     private def unrealize : Nil
       stop_ticking
       C.gtk_picture_set_paintable(@picture, nil)
-      if context = @context
+      if renderer = @renderer
+        stop_renderer(renderer)
+      elsif context = @context
         context.make_current
         begin
           on_unrealize
@@ -306,24 +338,40 @@ module Apprt
     # Draws the queued frame and reports the shown ones; returns whether
     # the canvas needs further ticks.
     protected def tick(clock : Void*) : Bool
-      if @render_queued
+      unless @finished.null?
+        present(@finished, clock)
+        @finished = Pointer(Void).null
+      end
+      if @render_queued && !@rendering
         @render_queued = false
         render(clock)
       end
       report_presented(clock)
-      keep = @render_queued || !@presenting.empty?
+      keep = @render_queued || @rendering || !@presenting.empty?
       @tick = 0_u32 unless keep
       keep
     end
 
     private def render(clock : Void*) : Nil
       context = @context || return
-      buffers = @buffers || return
       scale = self.scale
       width = (@logical_width * scale).round.to_i32
       height = (@logical_height * scale).round.to_i32
       return if width <= 0 || height <= 0
-      context.make_current
+      if jobs = @jobs
+        @rendering = true
+        jobs.send(Job.new(width, height))
+      else
+        buffers = @buffers || return
+        context.make_current
+        draw(buffers, width, height) { |texture| present(texture, clock) }
+      end
+    end
+
+    # Draws a frame of *width* × *height* pixels with the context current
+    # and yields its texture, which the block owns, even when `#on_render`
+    # raises.
+    private def draw(buffers : CanvasBuffers, width : Int32, height : Int32, & : Void* ->) : Nil
       unless width == @width && height == @height
         @width = width
         @height = height
@@ -333,12 +381,75 @@ module Apprt
       begin
         on_render
       ensure
-        texture = buffers.texture(buffer)
-        C.gtk_picture_set_paintable(@picture, texture)
-        C.g_object_unref(texture)
-        @frame = C.gdk_frame_clock_get_frame_counter(clock)
-        @presenting << @frame
+        yield buffers.texture(buffer)
       end
+    end
+
+    # Shows *texture* from the frame *clock* is drawing and drops it.
+    private def present(texture : Void*, clock : Void*) : Nil
+      C.gtk_picture_set_paintable(@picture, texture)
+      C.g_object_unref(texture)
+      @frame = C.gdk_frame_clock_get_frame_counter(clock)
+      @presenting << @frame
+    end
+
+    # Starts the render thread, which realizes the canvas with *context*.
+    # Jobs never block the GTK thread: one frame is drawn at a time and the
+    # queue holds it and the close.
+    private def start_renderer(context : GLContext) : Nil
+      jobs = Channel(Job).new(2)
+      @jobs = jobs
+      @rendering = false
+      @renderer = Fiber::ExecutionContext::Isolated.new("canvas") { run_renderer(context, jobs) }
+    end
+
+    # Closes the job queue and waits until the render thread unrealized the
+    # canvas.
+    private def stop_renderer(renderer : Fiber::ExecutionContext::Isolated) : Nil
+      @jobs.try(&.close)
+      renderer.wait
+    ensure
+      @jobs = nil
+      @renderer = nil
+      @rendering = false
+      unless @finished.null?
+        C.g_object_unref(@finished)
+        @finished = Pointer(Void).null
+      end
+    end
+
+    private def run_renderer(context : GLContext, jobs : Channel(Job)) : Nil
+      context.make_current
+      buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
+      @buffers = buffers
+      logged { on_realize }
+      while job = jobs.receive?
+        texture = Pointer(Void).null
+        logged { draw(buffers, job.width, job.height) { |drawn| texture = drawn } }
+        UIThread.post { finished(jobs, texture) }
+      end
+      logged { on_unrealize }
+      buffers.release
+      GLContext.clear_current
+    end
+
+    # Takes the frame the render thread drew for *jobs*, null if it failed,
+    # and shows it at the next tick; a frame of a stopped thread is dropped.
+    private def finished(jobs : Channel(Job), texture : Void*) : Nil
+      unless jobs.same?(@jobs)
+        C.g_object_unref(texture) unless texture.null?
+        return
+      end
+      @rendering = false
+      @finished = texture
+      start_ticking if !texture.null? || @render_queued
+    end
+
+    # Runs a hook on the render thread, logging what it raises.
+    private def logged(&) : Nil
+      yield
+    rescue ex
+      Log.error(exception: ex) { "canvas render thread" }
     end
 
     private def report_presented(clock : Void*) : Nil

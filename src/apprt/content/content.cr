@@ -69,6 +69,21 @@ module Apprt
     protected def on_search_end : Nil
     end
 
+    # :showdoc:
+    #
+    # Returns the menu shown when the surface is right-clicked at *x*, *y*
+    # (logical pixels from the content's top left), or `nil` to pass the
+    # click on to the content. Split actions in the menu act on this
+    # content's surface.
+    protected def context_menu(x : Float64, y : Float64) : Menu?
+    end
+
+    # Calls `#context_menu` with an implicit receiver, which reaches
+    # overrides defined outside `Apprt`.
+    protected def context_menu_at(x : Float64, y : Float64) : Menu?
+      context_menu(x, y)
+    end
+
     # Calls the search hooks with an implicit receiver, which reaches
     # overrides defined outside `Apprt`.
     protected def search(needle : String) : Nil

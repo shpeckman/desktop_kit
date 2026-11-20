@@ -158,14 +158,15 @@ class TestApp < Apprt::App
   end
 end
 
-# Runs *app* and quits it when it still runs after *timeout*.
-def run_app(app : TestApp, timeout : Time::Span = 10.seconds) : Int32
+# Runs *app* with *arguments* and quits it when it still runs after
+# *timeout*.
+def run_app(app : TestApp, timeout : Time::Span = 10.seconds, arguments : Array(String) = [] of String) : Int32
   done = Atomic(Bool).new(false)
   spawn do
     sleep timeout
     app.quit unless done.get
   end
-  app.run.tap { done.set(true) }
+  app.run(arguments).tap { done.set(true) }
 end
 
 # Runs *block* once *app* activates, then quits it; re-raises what *block*

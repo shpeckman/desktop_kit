@@ -19,8 +19,10 @@ end
 class HalvesCanvas < Apprt::Canvas
   getter ages = [] of Int32
   getter timings = [] of Apprt::FrameTiming
+  getter threads = [] of String?
 
   protected def on_render : Nil
+    @threads << Thread.current.name
     @ages << buffer_age
     LibSpecGL.glClearColor(1.0, 0.0, 0.0, 1.0)
     LibSpecGL.glClear(LibSpecGL::COLOR_BUFFER_BIT)
@@ -36,9 +38,9 @@ class HalvesCanvas < Apprt::Canvas
   end
 end
 
-private def halves_app(offload : Bool = false) : TestApp
+private def halves_app(offload : Bool = false, threaded : Bool = false) : TestApp
   TestApp.new.tap do |app|
-    app.make_content = ->(context : Apprt::SurfaceContext) { HalvesCanvas.new(offload: offload).as(Apprt::Content) }
+    app.make_content = ->(context : Apprt::SurfaceContext) { HalvesCanvas.new(offload: offload, threaded: threaded).as(Apprt::Content) }
   end
 end
 
@@ -134,6 +136,44 @@ describe "Canvas rendering" do
       eventually { settle(50.milliseconds); !(rows = red_and_blue_rows).nil? }.should be_true
       red, blue = rows.not_nil!
       red.should be < blue
+    end
+  end
+
+  it "renders on its own thread when threaded" do
+    run_steps(halves_app(threaded: true)) do |app|
+      canvas = halves(app)
+      canvas.threaded?.should be_true
+      rows = nil.as({Float64, Float64}?)
+      eventually { settle(50.milliseconds); !(rows = red_and_blue_rows).nil? }.should be_true
+      red, blue = rows.not_nil!
+      red.should be < blue
+      3.times do
+        count = canvas.ages.size
+        canvas.queue_render
+        eventually { canvas.ages.size > count }.should be_true
+      end
+      canvas.threads.uniq.should eq ["canvas"]
+      canvas.ages.last.should be > 0
+      eventually { canvas.timings.size > 0 }.should be_true
+    end
+  end
+
+  it "offloads frames of a threaded canvas" do
+    run_steps(halves_app(offload: true, threaded: true)) do |app|
+      canvas = halves(app)
+      eventually { canvas.dmabuf? }.should be_true
+    end
+  end
+
+  it "stops the render thread when the canvas goes" do
+    run_steps(halves_app(threaded: true)) do |app|
+      window = app.new_window
+      canvas = window.active_surface.not_nil!.content.as(HalvesCanvas)
+      eventually { canvas.ages.size > 0 }.should be_true
+      window.close
+      eventually { window.closed? }.should be_true
+      settle
+      canvas.gl_context.should be_nil
     end
   end
 

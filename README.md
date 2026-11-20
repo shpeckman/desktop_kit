@@ -5,11 +5,13 @@ Native application runtime for Crystal programs on Linux, ported from
 libadwaita windows, tabs, splits and surfaces driven by typed actions, with
 desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
-Status: early. This release holds the application lifecycle, windows with
-tabs and splits of surfaces, an OpenGL drawing canvas with keyboard, input
-method and pointer input, the clipboard, actions with local and global key
-bindings, desktop notifications, opening URLs, IPC, configuration reload
-and the GLib layer the runtime builds on.
+Status: early. This release holds the application lifecycle with command
+line and file arguments, windows with tabs and splits of surfaces, menus,
+file, color, font and about dialogs, an OpenGL drawing canvas (optionally
+on its own thread) with keyboard, input method and pointer input, the
+clipboard, actions with local and global key bindings, desktop
+notifications, opening URLs, IPC, configuration reload and the GLib layer
+the runtime builds on.
 
 `examples/` holds runnable programs; `make examples` builds them into
 `bin/`:
@@ -73,7 +75,7 @@ class Hello < Apprt::App
   end
 end
 
-exit Hello.new("org.example.Hello").run
+exit Hello.new("org.example.Hello").run(ARGV)
 ```
 
 `#run` drives GTK on a thread of its own and blocks the calling fiber until
@@ -81,14 +83,17 @@ exit Hello.new("org.example.Hello").run
 `#quit_delay=`); it returns the exit status. One application runs at a time. The application id must be a
 valid reverse-DNS name (`ArgumentError` otherwise). With
 `single_instance: true`, the default, launching the program again
-activates the running instance.
+hands its arguments to the running instance and exits with the status
+that instance returns.
 
 Hooks, all called on the GTK thread:
 
 | Hook                       | Called                                              |
 |----------------------------|-----------------------------------------------------|
 | `on_startup`               | once GTK is initialized                             |
-| `on_activate`              | at launch, and on each relaunch of a single instance |
+| `on_command_line(command_line)` | on each launch, with the arguments given to `#run`; returns the exit status |
+| `on_open(files)`           | with files to open, from `on_command_line` or the desktop |
+| `on_activate`              | at a launch without files, and on each such relaunch of a single instance |
 | `on_color_scheme(scheme)`  | after `on_startup`, then whenever light/dark changes |
 | `on_reload`                | on `#reload` and SIGUSR2                            |
 | `on_binding_failed(binding, message)` | when the desktop does not bind a global binding |
@@ -96,6 +101,24 @@ Hooks, all called on the GTK thread:
 | `on_window_suspended(window, suspended)` | when the desktop stops or resumes showing a window (another workspace, minimized) |
 | `on_user_idle(idle)`       | when the user turns idle after `#idle_timeout`, and when they return |
 | `on_shutdown`              | when quitting, while the windows still exist        |
+
+`on_command_line` receives an `Apprt::CommandLine`: `#arguments` (without
+the program name), `#directory` (the launching process's working
+directory) and `#remote?` (launched by another process). `#path(argument)`
+resolves a file argument against `#directory`, or from a `file://` URI. By
+default the hook calls `on_open` with the arguments as files, or
+`on_activate` when there are none, and returns 0; `on_open` calls
+`on_activate`. Override `on_command_line` to parse options:
+
+```crystal
+protected def on_command_line(command_line : Apprt::CommandLine) : Int32
+  if command_line.arguments.first? == "--version"
+    puts "1.0"
+    return 0
+  end
+  super
+end
+```
 
 These methods are callable from any thread:
 
@@ -192,6 +215,9 @@ elsewhere.
 | `Window#urgent=`, `#active?`     | asks for the user's attention while inactive, whether it is active |
 | `Window#confirm(heading, body)`  | asks a yes/no question in a dialog and yields the answer          |
 | `Window#prompt(heading, body)`   | asks for a line of text in a dialog and yields it                 |
+| `Window#open_file`, `#open_files`, `#save_file`, `#choose_folder` | asks for files or a folder in a file dialog and yields the paths (see Dialogs) |
+| `Window#choose_color`, `#choose_font` | asks for a color or a font and yields it                     |
+| `Window#show_about(about)`       | shows the application's about dialog                              |
 | `Window#subtitle=`               | sets a second line under the window title; `nil` removes it       |
 | `Window#fullscreen=`, `#fullscreen?`, `#maximized=`, `#maximized?` | asks the desktop to (un)fullscreen or (un)maximize it, and its state |
 | `Window#resizable=`              | whether the user can resize it; a fixed window keeps its content's size |
@@ -212,7 +238,7 @@ elsewhere.
 | `Surface#search_total=`, `#search_selected=` | the match count and the current match (from 0) the search bar shows |
 
 A window has a header bar with a new tab button, a tab overview button and
-a menu with the window, tab, split and title actions; the tab bar shows
+a menu, `App#window_menu` (see Menus); the tab bar shows
 while there is more than one tab. Closing the last surface of a tab closes
 the tab, and closing the last tab closes the window. Once closed,
 `#closed?` is true, `Window#new_tab` and `Surface#split` raise
@@ -233,6 +259,65 @@ a loading indicator on the tab, and sends the mean of all surfaces'
 progress to the taskbar through `com.canonical.Unity.LauncherEntry`,
 which KDE Plasma and Ubuntu's dock read for the desktop file named after
 the application id.
+
+#### Dialogs
+
+The file, color and font dialogs show over the window; inside a sandbox
+the desktop portal shows them. Each yields its result to the block on the
+GTK thread, `nil` (or no paths) when the user cancels, and never when the
+window closed first. Keyword arguments, all optional:
+
+| Method           | Arguments                                   | Yields         |
+|------------------|---------------------------------------------|----------------|
+| `#open_file`     | `title`, `folder`, `filters`                | `Path?`        |
+| `#open_files`    | `title`, `folder`, `filters`                | `Array(Path)`  |
+| `#save_file`     | `title`, `folder`, `name`, `filters`        | `Path?`        |
+| `#choose_folder` | `title`, `folder`                           | `Path?`        |
+| `#choose_color`  | `title`, `color`, `alpha` (default `true`)  | `Apprt::Color?` |
+| `#choose_font`   | `title`, `font`                             | `String?`      |
+
+`Apprt::FileFilter.new(name, patterns, mime_types)` lists files matching
+any glob or MIME type under *name*. `Apprt::Color` holds `red`, `green`,
+`blue` and `alpha` from 0.0 to 1.0. Fonts are Pango descriptions such as
+`"Monospace Bold 12"`. The save dialog asks before replacing a file.
+
+```crystal
+window.open_file(filters: [Apprt::FileFilter.new("Images", mime_types: ["image/*"])]) do |path|
+  viewer.load(path) if path
+end
+window.show_about(Apprt::About.new("Viewer", version: "1.0",
+  developers: ["Ann <ann@example.org>"], website: "https://example.org", license: :gpl30))
+```
+
+`Apprt::About` takes the application `name` and optionally `version`,
+`icon` (an icon name), `developer`, `developers`, `comments`, `website`,
+`issue_url`, `copyright` and `license` (`About::License`).
+
+#### Menus
+
+An `Apprt::Menu` holds sections of items; each item has a label and
+either an action to perform or a submenu. `Menu.build` fills one;
+`#section` starts a new section below a separator:
+
+```crystal
+app.window_menu = Apprt::Menu.build do |menu|
+  menu.item "New Window", Apprt::Action::NewWindow.new
+  menu.section
+  menu.submenu "Split" do |split|
+    split.item "Right", Apprt::Action::NewSplit.new(:right)
+    split.item "Down", Apprt::Action::NewSplit.new(:down)
+  end
+  menu.item "Settings", OpenSettings.new
+end
+```
+
+`App#window_menu=` replaces the header menu of every window, open ones
+too; `Menu.window`, the default, holds the window, tab, split, title and
+close actions. A content's context menu comes from its
+`Content#context_menu(x, y)` hook, called on a right click at *x*, *y*
+(logical pixels from its top left): return a menu to show it there, or
+`nil`, the default, to pass the click on. The surface is focused first,
+so tab and split actions act on it.
 
 #### Window style
 
@@ -498,7 +583,7 @@ class Scene < Apprt::Canvas
 end
 ```
 
-`.new(*, api, version, depth_buffer, stencil_buffer, input_purpose, offload)` sets
+`.new(*, api, version, depth_buffer, stencil_buffer, input_purpose, offload, threaded)` sets
 the GL context and framebuffer: `api` is `Canvas::API::GL`, `GLES` or both
 (the default), `version` the least `{major, minor}`, and the framebuffer
 gets a 24-bit depth and 8-bit stencil buffer when either is asked for. `input_purpose`
@@ -518,6 +603,15 @@ on a subsurface without GTK copying it. Elsewhere, or when GTK refuses the
 buffer's format, frames go as GL textures, as without the option.
 `#dmabuf?` tells whether the last frame went as a DMA-BUF.
 
+`threaded: true` draws on a thread of the canvas's own, so a slow frame
+never stalls the GTK thread: `#on_realize`, `#on_resize`, `#on_render` and
+`#on_unrealize` run there and must not call GTK; `#queue_render` may be
+called from either thread, and `#threaded?` tells the mode. The thread
+draws one frame at a time; GTK keeps showing the previous frame until it
+finishes. Share state between the hooks and the input hooks (still on
+the GTK thread) under a lock, or hand it over with `App#post` and a
+`Channel`.
+
 Each frame goes to a framebuffer of exactly the canvas's size at the
 output's scale, fractional scales included (`#scale` is a `Float64` such
 as `1.5`), with the GL origin at the bottom left. The canvas keeps several
@@ -533,7 +627,8 @@ the compositor does not tell.
 screen, for example into textures, with no canvas; it shares objects with
 every canvas of the display. `#make_current`, `#current?`, `#api` and
 `GLContext.clear_current` manage it; `Canvas#gl_context` is a canvas's
-own, `nil` while it is unrealized. Use both on the GTK thread.
+own, `nil` while it is unrealized. Make contexts on the GTK thread; a
+context is current on one thread at a time.
 
 | Hook                               | Called                                                                 |
 |------------------------------------|------------------------------------------------------------------------|

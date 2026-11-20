@@ -9,31 +9,12 @@ module Apprt
   # actions on its selected tab and split actions on that tab's active
   # surface. Use it on the GTK thread only.
   class Window
-    private record Item, label : String, action : Action
-
     # :nodoc:
     STYLE = <<-CSS
       .key-state { margin: 12px; padding: 6px 12px; border-radius: 8px; font-feature-settings: "tnum"; }
       window.apprt-window.opaque { background-color: @window_bg_color; }
       window.apprt-window.opaque .surface { background-color: @view_bg_color; }
       CSS
-
-    # Sections of the window menu.
-    private MENU = [
-      [Item.new("New Window", Action::NewWindow.new), Item.new("New Tab", Action::NewTab.new)],
-      [
-        Item.new("Split Up", Action::NewSplit.new(:up)),
-        Item.new("Split Down", Action::NewSplit.new(:down)),
-        Item.new("Split Left", Action::NewSplit.new(:left)),
-        Item.new("Split Right", Action::NewSplit.new(:right)),
-      ],
-      [
-        Item.new("Change Title…", Action::PromptTitle.new(:surface)),
-        Item.new("Change Tab Title…", Action::PromptTitle.new(:tab)),
-        Item.new("Change Window Title…", Action::PromptTitle.new(:window)),
-      ],
-      [Item.new("Close Tab", Action::CloseTab.new(:this)), Item.new("Close Window", Action::CloseWindow.new)],
-    ]
 
     # The title the user chose; shown instead of the tab titles while set.
     getter title_override : String?
@@ -518,13 +499,10 @@ module Apprt
       C.gtk_box_append(@title_box, @title_widget)
       C.adw_header_bar_set_title_widget(header, @title_box)
       C.adw_header_bar_pack_start(header, button("tab-new-symbolic", "New Tab", Action::NewTab.new))
-      menu = C.gtk_menu_button_new
-      C.gtk_menu_button_set_icon_name(menu, "open-menu-symbolic")
-      model = menu_model
-      C.gtk_menu_button_set_menu_model(menu, model)
-      C.g_object_unref(model)
-      Widget.new(menu).tooltip = "Main Menu"
-      C.adw_header_bar_pack_end(header, menu)
+      C.gtk_menu_button_set_icon_name(@menu_button, "open-menu-symbolic")
+      self.menu = @app.window_menu
+      @menu_button.tooltip = "Main Menu"
+      C.adw_header_bar_pack_end(header, @menu_button)
       C.adw_header_bar_pack_end(header, button("view-grid-symbolic", "View Open Tabs", Action::ToggleTabOverview.new))
 
       tab_bar = @tab_bar
@@ -559,17 +537,6 @@ module Apprt
       C.gtk_actionable_set_detailed_action_name(button, action.detailed_name)
       Widget.new(button).tooltip = tooltip
       button
-    end
-
-    private def menu_model : Void*
-      menu = C.g_menu_new
-      MENU.each do |items|
-        section = C.g_menu_new
-        items.each { |item| C.g_menu_append(section, item.label, item.action.detailed_name) }
-        C.g_menu_append_section(menu, nil, section)
-        C.g_object_unref(section)
-      end
-      menu
     end
 
     # Window actions act on the window; the tab and split groups act on the
