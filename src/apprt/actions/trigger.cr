@@ -165,6 +165,7 @@ module Apprt
     # GTK accepts the trigger as an accelerator and parses its name back to
     # the same key.
     private def accelerator? : Bool
+      # Round trip rejects keys without an accelerator name, such as emoji.
       return false if C.gtk_accelerator_valid(@keyval, gdk_mods) == 0
       name = Native.take_string?(C.gtk_accelerator_name(@keyval, gdk_mods))
       return false unless name

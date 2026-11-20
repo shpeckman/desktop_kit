@@ -389,6 +389,8 @@ describe Apprt::Tab do
       root = host(first).parent.not_nil!
       second = first.split(:right)
       settle
+      # A split view rebuild replaces every `GtkPaned`: look panes up again
+      # after each change.
       outer = host(first).parent.not_nil!
       paned?(outer).should be_true
       outer.parent.should eq root

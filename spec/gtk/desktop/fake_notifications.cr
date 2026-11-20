@@ -80,6 +80,10 @@ class FakeNotifications
     begin
       yield fake
     ensure
+      # GLib 2.84.4 (unfixed on main): the freedesktop backend's
+      # `name_vanished_handler_cb` frees its list before clearing it, so the
+      # final unref double-frees (stack overflow), and an unsettled vanish
+      # idle runs in a later run.
       settle
       app.windows.each(&.close)
       settle
@@ -99,6 +103,8 @@ class FakeNotifications
     @registration = Apprt::GLibError.check! do |error|
       Apprt::C.g_dbus_connection_register_object(@connection, PATH, interface, @vtable, @handle, nil, error)
     end
+    # Exported on the app's own connection; `DO_NOT_QUEUE` must make us the
+    # primary owner (1) at once.
     owner = bus_call("RequestName", Apprt::Variant.new({NAME, DO_NOT_QUEUE}))[0].get(UInt32)
     raise "FakeNotifications: #{NAME} is taken" unless owner == PRIMARY_OWNER
   end

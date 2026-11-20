@@ -36,6 +36,7 @@ module Apprt
     end
 
     private REMOVED = ->(data : Void*) do
+      # Destroy notify: GLib dropped the source, so `active?` turns false.
       Handles.get(data, Source).removed
       Handles.release(data)
     end
@@ -61,6 +62,8 @@ module Apprt
 
     # Cancels every active source; the application calls it when it quits.
     protected def self.cancel_all : Nil
+      # Default GMainContext outlives the run: leftovers would fire in a
+      # later App#run.
       @@active.dup.each(&.cancel)
     end
 

@@ -140,6 +140,7 @@ module Apprt
       end
 
       private def connect(row : Void*) : Nil
+        # `notify::text`, not `changed`: `changed` fires twice on `set_text`.
         Signals.notify(row, "text", -> {
           @value = Native.string?(C.gtk_editable_get_text(row)) || ""
           @on_change.call(@value)

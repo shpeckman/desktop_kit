@@ -54,6 +54,10 @@ module Apprt
     # tell from a host process. Must precede every other portal call on
     # *connection*.
     def self.register(connection : Void*, app_id : String) : Nil
+      # Registry takes Register only before any other portal call on the
+      # connection; GTK calls the settings portal in startup, so `App#run`
+      # sends it before `g_application_run`. Needed outside Flatpak/systemd
+      # app scopes only: failures just logged at debug.
       send(connection, OBJECT_PATH, "org.freedesktop.host.portal.Registry", "Register",
         Variant.new({app_id, {} of String => Variant}))
     end
@@ -115,6 +119,7 @@ module Apprt
         error = Pointer(C::GError).null
         reply = C.g_dbus_connection_call_finish(source, result, pointerof(error))
         if error.null?
+          # Reply = request path; ignored, always the predicted one since xdg-desktop-portal 0.9.
           C.g_variant_unref(reply)
         else
           finish(nil, GLibError.take(error).message || "the call failed")

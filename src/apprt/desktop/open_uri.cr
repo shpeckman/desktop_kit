@@ -50,6 +50,8 @@ module Apprt
     # application that resets SIGCHLD to the default or ignores it gets a
     # `GSubprocess`, which GIO reaps, as `Process#wait` would hang there.
     def self.xdg_open(url : String) : Nil
+      # Crystal's reaper does `waitpid(-1)`: GSubprocess waits then fail
+      # "waitid … No child processes". SIG_DFL/SIG_IGN apps: e.g. asekii.
       crystal_reaps? ? process_open(url) : gio_open(url)
     end
 

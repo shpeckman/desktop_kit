@@ -86,6 +86,8 @@ module Apprt
         Signal::TERM.trap { quit }
         Signal::USR2.trap { reload }
         arguments = arguments.to_a
+        # New "gtk" thread per run; GTK and the default GMainContext survive
+        # across runs.
         Fiber::ExecutionContext::Isolated.new("gtk") { status = UIThread.enter { run_application(arguments) } }.wait
       ensure
         {Signal::INT, Signal::TERM, Signal::USR2}.each(&.reset)
@@ -104,6 +106,8 @@ module Apprt
     # iteration; `#run` then returns 0. Does nothing unless the application
     # is running.
     def quit : Nil
+      # Always post, even on the UI thread: inline from `new_surface` it
+      # destroyed the window mid-`Window#open_tab` (ADW_IS_TAB_VIEW assertion).
       UIThread.post { quit_now } if running?
     end
 
@@ -313,6 +317,9 @@ module Apprt
 
     # Calls `#perform`, so that the overloads of subclasses apply.
     protected def dispatch(target, action : Action) : Bool
+      # Other Apprt types can't call protected `perform` of a user subclass
+      # defined outside Apprt ("protected method 'perform' called for Hello"):
+      # they call this wrapper, which uses an implicit receiver.
       perform(target, action)
     end
 
@@ -329,6 +336,7 @@ module Apprt
     end
 
     protected def window_suspended(window : Window, suspended : Bool) : Nil
+      # Protected wrapper: Window can't call the user's protected hook.
       on_window_suspended(window, suspended)
     end
 
@@ -386,6 +394,8 @@ module Apprt
       # the command line handler.
       argv = Native.strv([PROGRAM_NAME].concat(arguments))
       register_with_portal
+      # GLib 2.84 g_application_run resets status = 0 each loop iteration:
+      # a local launch's status comes back through @exit_status.
       @exit_status = nil
       status = C.g_application_run(@application, argv.size - 1, argv.to_unsafe)
       @exit_status || status
@@ -403,6 +413,7 @@ module Apprt
       @runtime_style = C.gtk_css_provider_new
       load_runtime_style
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_APPLICATION)
+      # Before load_css/apply_appearance: mutators act only while running.
       @running.set(true)
       @actions = C.g_simple_action_group_new
       Action.install(@actions, :app) { |action| perform(self, action) }
@@ -414,6 +425,7 @@ module Apprt
       apply_appearance
       apply_quit_delay
       watch_user_idle
+      # Appearance applied before connecting: no double on_color_scheme.
       @dark_handler = Signals.notify(C.adw_style_manager_get_default, "dark", -> { color_scheme_changed })
       on_startup
       sync_tray
@@ -462,6 +474,7 @@ module Apprt
     end
 
     private def shutdown : Nil
+      # First: mutators called from now on only store.
       @running.set(false)
       Systemd.stopping
       on_shutdown
@@ -473,6 +486,7 @@ module Apprt
       release_logout_inhibit
       release_tray
       Source.cancel_all
+      # before the registries: releasing closed surfaces unregisters them
       undo_stack.clear
       stop_quit_timer
       @holding = false

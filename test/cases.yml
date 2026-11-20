@@ -6,7 +6,8 @@
 # The global binding fires through the desktop's global shortcuts portal
 # while the window has the focus. Global bindings have no window shortcut,
 # so the tab can only come from the portal's Activated signal. The sleep
-# lets the portal bind the shortcut first.
+# lets the portal bind the shortcut first: apprt has no hook for a
+# successful bind.
 global-shortcut:
   modes: [kde]
   global: true
@@ -20,6 +21,8 @@ global-shortcut:
 # Key sequences on a real keyboard. ctrl+t is also a plain window shortcut:
 # after ctrl+a the sequence must take it, so `capture` reports and `accel`
 # does not. The shot shows the pending sequence in the key state overlay.
+# `expect` skips lines until the expected one, so it can't check that a
+# binding did not fire: `capture` itself is the proof.
 sequences:
   modes: [kde, sway]
   steps:
@@ -119,7 +122,8 @@ drag-drop:
 # Dragging a surface by its pane header instead of the drag handle: pane
 # headers on, the window's surface split, then the pointer drags the left
 # header's title onto the right edge of the split. As with drag-drop, the
-# first moves stay on the header. The shot shows both pane headers.
+# first moves stay on the header (y 58, below the 44 px header bar). The
+# shot shows both pane headers.
 header-drag:
   modes: [kde, sway]
   steps:
@@ -267,7 +271,9 @@ context-menu:
     - close
 
 # Ctrl+A K opens the keyboard shortcuts dialog; typing searches it. The
-# first Escape leaves the search, the second closes the dialog.
+# first Escape leaves the search, the second closes the dialog. One Escape
+# per step with a settle between: two in one `key` step left the dialog
+# open and `close` hung.
 shortcuts-dialog:
   modes: [kde, sway]
   steps:
@@ -313,7 +319,8 @@ sequence-timeout:
     - close
 
 # A canvas rendering on its own thread shows its first frame the right
-# way up (red top, blue bottom).
+# way up (red top, blue bottom). The live app uses GSK's Vulkan renderer,
+# unlike the specs (ngl): this case caught a Vulkan-only crash.
 threaded-canvas:
   modes: [kde, sway]
   steps:

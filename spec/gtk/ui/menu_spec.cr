@@ -36,6 +36,8 @@ end
 
 # Returns how many context menus the surface's overlay holds.
 private def popovers(surface : Apprt::Surface) : Int32
+  # Counts children rather than comparing pointers: a freed popover's
+  # address is reused.
   count = 0
   child = MenuSpecLib.gtk_widget_get_first_child(surface.@overlay)
   until child.null?

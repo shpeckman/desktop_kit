@@ -9,6 +9,7 @@ module Apprt
     # runs.
     @sequence_timer = 0_u32
     @sequence_keys = Pointer(Void).null
+    # Key table stack lives per window, not per surface as in Ghostty.
     @key_tables = [] of {String, Bool}
 
     # Returns the names of the active key tables, the innermost last.
@@ -48,11 +49,14 @@ module Apprt
     # taken, one that completes it performs its action, and any other key
     # while one is pending ends it and is dropped.
     private def sequence_key(keyval : UInt32, state : UInt32) : Bool
+      # Fast path: nothing pending, no table, no sequences.
       return false if @sequence.empty? && @key_tables.empty? && !@app.sequences?
       event = C.gtk_event_controller_get_current_event(@sequence_keys)
       return false if !event.null? && C.gdk_key_event_is_modifier(event) != 0
       mods = Mods.from_gdk(C::GdkModifierType.new(state))
       consumed = event.null? ? Mods::None : Mods.from_gdk(C.gdk_key_event_get_consumed_modifiers(event))
+      # Held mods first, then without consumed ones: `shift+>` arrives as
+      # `>` + Shift.
       {mods, mods & ~consumed}.each do |held|
         trigger = Trigger.new?(keyval, held) || next
         keys = @sequence + [trigger]
@@ -60,6 +64,7 @@ module Apprt
         when Tuple
           action, table = match
           end_sequence
+          # A `once` table pops only when it matched while innermost.
           @key_tables.pop if table && @key_tables.last? == {table, true}
           sync_key_state
           Log.warn { "binding #{keys.join('>')}: action #{action.detailed_name} not handled" } unless @app.perform_in(self, action)

@@ -174,6 +174,7 @@ module Apprt
         old = @view.tree.locate(surface) || return
         @view.tree = @view.tree.split(at, direction, surface).remove(old)
       else
+        # Release widgets first: GTK rejects a host that still has a parent.
         source.detach(surface, release_widgets: true)
         surface.tab = self
         # Detaching closes no surface of this tab, so *at* stays valid.
@@ -191,6 +192,7 @@ module Apprt
       surface.tab = nil
       @view.release_widgets if release_widgets
       unless tree.split?
+        # Last surface: close the tab without releasing the surface.
         @view.tree = SplitTree(Surface).new
         self.active = nil
         return close_now

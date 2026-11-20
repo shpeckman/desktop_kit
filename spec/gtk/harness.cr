@@ -5,6 +5,11 @@ require "../spec_helper"
 # Private display and session bus for the GTK specs: a headless sway is the
 # Wayland compositor, and a dbus-daemon of its own keeps GApplication off the
 # user's session bus.
+#
+# Specs drive controllers by emitting their signals (`g_signal_emit_by_name`)
+# rather than through input devices: headless sway has no keyboard or
+# pointer, so windows never become active, no real drag happens (drop hooks
+# are unspecced) and the user is idle at once.
 module GtkHarness
   # Windows float at their own size instead of tiling.
   private SWAY_CONFIG = <<-SWAY
@@ -42,6 +47,8 @@ module GtkHarness
     @@dir = dir
     File.write("#{dir}/sway.conf", SWAY_CONFIG)
     File.write("#{dir}/bus.conf", bus_config(dir))
+    # A real compositor, not broadway: the canvas needs GL, and a process
+    # gets only one GDK backend.
     sway_env = {
       "XDG_RUNTIME_DIR"         => dir,
       "WLR_BACKENDS"            => "headless",
@@ -60,6 +67,9 @@ module GtkHarness
     end
     raise "GtkHarness: sway or dbus-daemon did not start" unless display && File.exists?("#{dir}/bus")
     ENV.delete("DISPLAY")
+    # `gtk_init` calls `setlocale`, hence no `LANGUAGE` and `LC_ALL` C.UTF-8
+    # below: translated accelerator labels leaked into later pure `Trigger`
+    # specs.
     ENV.delete("LANGUAGE")
     {
       "LC_ALL"                   => "C.UTF-8",
@@ -67,15 +77,24 @@ module GtkHarness
       "WAYLAND_DISPLAY"          => display,
       "DBUS_SESSION_BUS_ADDRESS" => "unix:path=#{dir}/bus",
       "GDK_BACKEND"              => "wayland",
-      "GSK_RENDERER"             => "ngl",
-      "GDK_DISABLE"              => "vulkan",
-      "GNOTIFICATION_BACKEND"    => "freedesktop",
-      "ADW_DISABLE_PORTAL"       => "1",
-      "GDK_DEBUG"                => "no-portals",
-      "GTK_A11Y"                 => "none",
-      "GTK_MEDIA"                => "none",
-      "GSETTINGS_BACKEND"        => "memory",
-      "XDG_CONFIG_HOME"          => "#{dir}/config",
+      # GL renderer only: the threaded canvas crash that only GSK's Vulkan
+      # renderer triggers is covered by the live `threaded-canvas` case.
+      "GSK_RENDERER" => "ngl",
+      "GDK_DISABLE"  => "vulkan",
+      # GIO notifications go to `FakeNotifications`.
+      "GNOTIFICATION_BACKEND" => "freedesktop",
+      "ADW_DISABLE_PORTAL"    => "1",
+      # Without portals GTK inhibits logout through
+      # `org.gnome.SessionManager` (faked in `logout_inhibit_spec.cr`). GDK
+      # caches portal versions per process, so this must hold for all specs.
+      "GDK_DEBUG" => "no-portals",
+      "GTK_A11Y"  => "none",
+      # GStreamer's GL display outlives the stream and floods "Failed to flush
+      # Wayland connection" once sway stops; bell sounds therefore fail and
+      # specs check only the warning.
+      "GTK_MEDIA"         => "none",
+      "GSETTINGS_BACKEND" => "memory",
+      "XDG_CONFIG_HOME"   => "#{dir}/config",
     }.each { |name, value| ENV[name] = value }
   end
 

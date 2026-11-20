@@ -1,6 +1,0 @@
-# .gitignore
-/bin/
-/docs/
-/lib/
-/out/
-shard.lock

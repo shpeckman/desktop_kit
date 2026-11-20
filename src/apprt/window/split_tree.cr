@@ -44,6 +44,7 @@ module Apprt
 
     # Inner node: *ratio* is the share of the left (or top) child.
     record Split, layout : Layout, ratio : Float64, left : Int32, right : Int32 do
+      # `ratio` Float64; Ghostty uses `f16`.
       def child(side : Side) : Int32
         side.left? ? left : right
       end
@@ -185,6 +186,7 @@ module Apprt
       other = insert.is_a?(SplitTree(V)) ? insert : SplitTree(V).new(insert)
       raise ArgumentError.new("cannot insert an empty split tree") if other.empty?
 
+      # Existing handles stay valid except *at*: its view moves to the end.
       offset = @nodes.size
       nodes = Array(V | Split).new(offset + other.node_count + 1)
       nodes.concat(@nodes)
@@ -208,6 +210,7 @@ module Apprt
     def remove(at : Int32) : SplitTree(V)
       check(at)
       return SplitTree(V).new if at == ROOT
+      # Renumbers nodes: callers re-`locate` their handles.
       nodes = Array(V | Split).new(@nodes.size)
       zoomed = prune(nodes, ROOT, at)
       SplitTree(V).new(nodes, zoomed)
@@ -249,6 +252,7 @@ module Apprt
       split = self[at]
       raise ArgumentError.new("split tree node #{at} is a leaf") unless split.is_a?(Split)
       check_ratio(ratio)
+      # Replaces Ghostty's in-place `resizeInPlace` (trees immutable).
       nodes = @nodes.dup
       nodes[at] = split.copy_with(ratio: ratio)
       SplitTree(V).new(nodes, @zoomed)
@@ -364,6 +368,7 @@ module Apprt
       slots.each_with_index do |slot, handle|
         next if handle == from || @nodes.unsafe_fetch(handle).is_a?(Split)
         next unless beyond?(slot, target, direction)
+        # Euclidean between origins; strict `<` = ties go to lowest handle.
         distance = Math.hypot(slot.x - target.x, slot.y - target.y)
         next unless distance < best_distance
         best = handle
@@ -467,6 +472,7 @@ module Apprt
     # Rounds a diagram edge to the nearest cell. Edges are rounded rather
     # than sizes so neighbouring boxes always meet.
     private def cell(value : Float64) : Int32
+      # Ghostty floors; diagrams differ only where its `f16` ratios differ.
       (value + 0.5 + EPSILON).floor.to_i
     end
 

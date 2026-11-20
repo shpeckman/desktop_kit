@@ -207,6 +207,7 @@ module Apprt
     end
 
     private def run(command : Command?) : Nil
+      # Close (force) before performing.
       close
       return unless command
       Log.warn { "command #{command.title}: action #{command.action.detailed_name} not handled" } unless @app.perform_in(@window, command.action)

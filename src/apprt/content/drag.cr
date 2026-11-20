@@ -114,6 +114,8 @@ module Apprt
 
       # Tells the target that the data is unavailable.
       def fail(message : String = "no data") : Nil
+        # A local (same-process) read of a failed request yields empty
+        # data, not an error.
         return if done!
         DragContent.fail(@stream, @task, message)
       end
@@ -218,6 +220,8 @@ module Apprt
 
     # Returns a new provider of *source*; the caller owns it.
     def self.new(source : Source) : Void*
+      # Source lives on the provider, not the `Drag`: there it was never
+      # collected.
       provider = C.g_object_new_with_properties(type, 0, nil, nil)
       C.g_object_set_data_full(provider, KEY, Handles.retain(source), Handles::RELEASE)
       provider

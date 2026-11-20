@@ -50,6 +50,8 @@ module Apprt
     end
 
     protected def self.drain : Nil
+      # Cleared before taking the batch: a post during the drain schedules
+      # the next one.
       @@scheduled.set(false)
       batch = @@queue.lock do |queue|
         taken = queue.dup

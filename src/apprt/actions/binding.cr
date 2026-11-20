@@ -111,6 +111,8 @@ module Apprt
   abstract class App
     @bindings = [] of Binding
     @accelerated = [] of String
+    # Typed explicitly: inferred from Keymap::EMPTY it widened to
+    # `App | Keymap` in subclasses.
     @binding_keymap : Keymap = Keymap::EMPTY
     @key_tables = {} of String => Array(Binding)
     @key_table_maps = {} of String => Keymap

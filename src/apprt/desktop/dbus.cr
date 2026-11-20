@@ -148,6 +148,7 @@ module Apprt
 
     private def check_tuple(args : Variant?) : Nil
       return unless args
+      # Raise first: GIO only `g_return_if_fail`s (critical, call dropped) on a non-tuple.
       raise ArgumentError.new("D-Bus arguments must be a tuple, not #{args.type_string}") unless args.type_string.starts_with?('(')
     end
 

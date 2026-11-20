@@ -69,6 +69,13 @@ end
 module Apprt::Test
   # The application id, also the basename of the desktop file the portal
   # and the taskbar need to know the app.
+  #
+  # Fixed rather than livetest's `livetest-<pid>-<n>` class: a GApplication
+  # id needs a dot, and the portal and kglobalaccel need a stable id. The
+  # portal accepts `Registry.Register` only for an id naming an installed
+  # desktop file; without one xdg-desktop-portal-kde names the kglobalaccel
+  # component after the session token (`token_apprt_<hex>` in
+  # `~/.config/kglobalshortcutsrc`), new each run, and asks again each time.
   APP_ID = "org.example.ApprtLive"
 
   # The global binding under test.
@@ -167,7 +174,7 @@ module Apprt::Test
 
   # The Dutch texts of the header menu, for `--dutch`. The longest label
   # keeps the menu an even number of pixels wide: KWin and sway round a
-  # centered popup's half pixel apart.
+  # centered popup's half pixel apart (208 px; odd widths fail in kde).
   DUTCH = {
     "Main Menu"            => "Hoofdmenu",
     "New Window"           => "Nieuw venster",
@@ -208,6 +215,8 @@ module Apprt::Test
     end
 
     protected def on_render : Nil
+      # Red over blue in GL coordinates (rows start at the bottom), so a
+      # frame shown unflipped is caught.
       LibGL.glClearColor(1.0, 0.0, 0.0, 1.0)
       LibGL.glClear(LibGL::COLOR_BUFFER_BIT)
       LibGL.glEnable(LibGL::SCISSOR_TEST)
@@ -227,6 +236,9 @@ module Apprt::Test
   # A label that reports its search and matches every needle three times.
   class Label < Apprt::WidgetContent
     MATCHES = 3
+
+    # Labels are not focusable: the window's first button keeps the focus,
+    # and its focus ring is part of the shots.
 
     @selected = 0
 
@@ -259,7 +271,8 @@ module Apprt::Test
   class UnderTest < Apprt::App
     getter? failed = false
 
-    # The kind each surface's content was opened as.
+    # The kind each surface's content was opened as: `ReportSurfaces` names
+    # surfaces by it, so a drop's new order shows.
     @kinds = {} of Apprt::Content => String
 
     # Whether the next surface is a `Halves` canvas, and whether it renders
@@ -300,6 +313,11 @@ module Apprt::Test
       # A blinking caret would make shots of the search bar differ.
       LibGtk.g_object_set(LibGtk.gtk_settings_get_default, "gtk-cursor-blink", 0, Pointer(Void).null)
       bindings = BINDINGS.map { |keys, action| Apprt::Binding.new(keys, action) }
+      # Only --global and --setup bind: a nested sway shares the session bus
+      # and would reach the real desktop's portal. Plasma 6.4+ asks in a
+      # dialog for unbound shortcuts, so --setup binds once; still every
+      # start calls `BindShortcuts`, which xdg-desktop-portal-kde 6.7.4+
+      # needs to activate the stored shortcut.
       bindings << Apprt::Binding.new(TRIGGER, Apprt::Action::NewTab.new, global: true) if @global || @setup
       self.bindings = bindings
       self.key_tables = {"mode" => MODE.map { |keys, action| Apprt::Binding.new(keys, action) }}
@@ -341,6 +359,8 @@ module Apprt::Test
     end
 
     protected def perform(target : Apprt::Window, action : Report) : Bool
+      # The active key tables ride along, so `expect` proves both the
+      # binding and the table it came from.
       report "#{action.line} tables=#{target.key_tables.join(',')}"
       true
     end
@@ -469,6 +489,7 @@ if setup
   STDERR.puts "Installed #{Apprt::Test::UnderTest.install_desktop_file}."
   STDERR.puts "Confirm the shortcut in the desktop's dialog, then press #{Apprt::Test::TRIGGER.label}."
 end
+# Before `App.new`: built-in defaults (`Menu.window`) translate at init.
 Apprt.translator = ->(text : String) { Apprt::Test::DUTCH.fetch(text, text) } if dutch
 app = Apprt::Test::UnderTest.new(window_class, global, setup)
 status = app.run

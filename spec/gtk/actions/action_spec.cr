@@ -7,6 +7,7 @@ module GtkActionSpecs
   Apprt.action Ignored, "spec-gtk-ignored", payload: {text: String}
 
   Apprt.action Pick, "spec-gtk-pick", payload: {color: Color} do
+    # Not file-private: the `Variant` macro expansion must see it.
     enum Color
       Red
       Green

@@ -146,6 +146,10 @@ module Apprt
       @version = version
       @depth_stencil = depth_buffer || stencil_buffer
       @offload = offload
+      # No GtkGLArea: integer scale only (2x buffer at 1.5), hides buffer
+      # reuse and frame timings. Frames go as textures into a GtkPicture;
+      # `canvas-frame` flips it with CSS `scaleY(-1)` (Surface::STYLE), as GL
+      # rows start at the bottom.
       @widget = Widget.new(C.gtk_overlay_new)
       @area = Widget.new(C.gtk_drawing_area_new)
       @picture = Widget.new(C.gtk_picture_new)
@@ -399,6 +403,12 @@ module Apprt
     # context on the GTK thread, which corrupts the driver's heap while the
     # render thread has that context current. Jobs never block the GTK thread: one frame is
     # drawn at a time and the queue holds it and the close.
+    #
+    # Owner detail: `gskvulkanframe.c` calls `gdk_gl_context_export_dmabuf`
+    # on the texture's context; with the render context current elsewhere
+    # Mesa iris died with `malloc(): unaligned tcache chunk detected` in
+    # `glFenceSync`. GTK specs force `ngl` (`GDK_DISABLE=vulkan`): only the
+    # live `threaded-canvas` case covers this.
     private def start_renderer(context : GLContext, owner : GLContext) : Nil
       jobs = Channel(Job).new(2)
       @jobs = jobs

@@ -1,5 +1,0 @@
-# shard.override.yml
-# Local checkouts of the workspace instead of the pushed shards.
-dependencies:
-  livetest:
-    path: ../../livetest

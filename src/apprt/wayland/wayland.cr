@@ -260,6 +260,9 @@ module Apprt
           next unless opcode == REGISTRY_GLOBAL
           offered[String.new(args[1].s)] = {args[0].u, args[2].u}
         end
+        # Roundtrip 1: registry `global` events. Roundtrip 2: first events of
+        # the bound globals (blur capabilities, default decoration mode).
+        # Then proxies move to GTK's default queue.
         Wl.wl_display_roundtrip_queue(@wl_display, queue)
         bound = GLOBALS.compact_map { |iface| bind(registry, offered, iface) }
         Wl.wl_display_roundtrip_queue(@wl_display, queue)

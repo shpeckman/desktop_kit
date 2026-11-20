@@ -10,6 +10,8 @@ module Apprt
   # surface. Use it on the GTK thread only.
   class Window
     # :nodoc:
+    # `.opaque` rules carry one class more than `WindowStyle#to_css` so they
+    # win and restore opaque backgrounds.
     STYLE = <<-CSS
       .key-state { margin: 12px; padding: 6px 12px; border-radius: 8px; font-feature-settings: "tnum"; }
       window.apprt-window.opaque { background-color: @window_bg_color; }
@@ -110,6 +112,8 @@ module Apprt
       header = style.header_bar?
       @header.visible = !@panel
       C.adw_toolbar_view_set_reveal_top_bars(@toolbar, header ? 1 : 0)
+      # No header bar: clear the tab view shortcuts too, else libadwaita's
+      # capture-phase keys eat Ctrl+Tab/Alt+digits.
       shortcuts = header ? C::AdwTabViewShortcuts::AllShortcuts : C::AdwTabViewShortcuts.new(0)
       C.adw_tab_view_set_shortcuts(@tab_view, shortcuts)
       inside = style.tabs_in_header?
@@ -557,6 +561,9 @@ module Apprt
     end
 
     private def connect_signals : Nil
+      # Added first, capture phase: GTK prepends controllers and runs them in
+      # order, so it beats `gtk-application-shortcuts` (no spec covers it).
+      # Sequences get no accel; this controller handles them.
       @sequence_keys = C.gtk_event_controller_key_new
       C.gtk_event_controller_set_propagation_phase(@sequence_keys, C::GtkPropagationPhase::Capture)
       Signals.connect(@sequence_keys, "key-pressed", ->(keyval : UInt32, _keycode : UInt32, state : UInt32) : Bool {
@@ -663,6 +670,8 @@ module Apprt
       return if @closed
       sync_title
       return if @destroy_pending || !empty?
+      # On an idle, skipped once closed: it must not touch a destroyed tab
+      # view.
       @destroy_pending = true
       Idle.add do
         @destroy_pending = false

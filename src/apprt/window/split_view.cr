@@ -81,6 +81,8 @@ module Apprt
       @rebuild = 0_u32
       return if @destroyed
       release_focus
+      # Detach divider children first: old panes outlive
+      # `adw_bin_set_child(nil)` and GTK rejects parented children.
       @dividers.each(&.detach)
       @dividers.clear
       C.adw_bin_set_child(@root, nil)
@@ -92,6 +94,7 @@ module Apprt
     # Takes the keyboard focus out of the panes before they lose their
     # children; a `GtkPaned` warns when its focused child goes first.
     private def release_focus : Nil
+      # Else GTK warns "Error finding last focus widget".
       window = @root.root || return
       focus = C.gtk_root_get_focus(window)
       C.gtk_root_set_focus(window, nil) if !focus.null? && C.gtk_widget_is_ancestor(focus, @root) != 0
@@ -153,7 +156,9 @@ module Apprt
         min = int_property("min-position")
         max = int_property("max-position")
         position = C.gtk_paned_get_position(@paned)
+        # `max-position` Int32::MAX = pane not allocated yet.
         return if max == Int32::MAX
+        # Full size = `max-position` + end child's minimum.
         size = max + end_minimum
         return if size <= 0
         if min != @min || max != @max

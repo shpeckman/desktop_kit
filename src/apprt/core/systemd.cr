@@ -25,6 +25,7 @@ module Apprt
         return false
       end
       path.to_slice.copy_to(sun_path.to_slice)
+      # Leading '@' = abstract address: NUL first byte.
       sun_path[0] = 0 if path.starts_with?('@')
       address = LibC::SockaddrUn.new(sun_family: LibC::SaFamilyT.new(LibC::AF_UNIX), sun_path: sun_path)
       length = LibC::SocklenT.new(sizeof(LibC::SaFamilyT) + path.bytesize)
@@ -48,6 +49,7 @@ module Apprt
       tasks_max.try { |tasks| properties << {"TasksMax", Variant.new(tasks)} }
       properties << {"ManagedOOMMemoryPressure", Variant.new("kill")} if oom_kill
       message = Variant.new({unit, "fail", properties, [] of {String, Array({String, Variant})}})
+      # Own g_bus_get_sync connection: works without a running App.
       bus = GLibError.check! { |error| C.g_bus_get_sync(C::GBusType::Session, Pointer(Void).null, error) }
       begin
         reply = GLibError.check! do |error|
@@ -59,6 +61,8 @@ module Apprt
       ensure
         C.g_object_unref(bus)
       end
+      # Ghostty waits in pre_exec instead; Crystal Process has no fork/exec
+      # hook, so poll /proc/<pid>/cgroup.
       deadline = Time.instant + timeout
       loop do
         return true if cgroup(pid).try(&.ends_with?("/#{unit}"))
@@ -83,6 +87,8 @@ module Apprt
     end
 
     protected def self.reloading : Bool
+      # CLOCK_MONOTONIC as systemd wants: Crystal's monotonic clock is
+      # CLOCK_BOOTTIME.
       LibC.clock_gettime(LibC::CLOCK_MONOTONIC, out now)
       notify("RELOADING=1\nMONOTONIC_USEC=#{now.tv_sec.to_i64 * 1_000_000 + now.tv_nsec.to_i64 // 1_000}")
     end

@@ -5,8 +5,9 @@ module Apprt
   # are described at runtime (`Wayland::PROTOCOL`), not taken from the
   # library, so no generated protocol code is needed.
   #
-  # gtk4-layer-shell must be linked before libwayland-client, and Crystal
-  # links the later annotation first.
+  # gtk4-layer-shell must be linked before libwayland-client (it interposes
+  # wl_* symbols), and Crystal links the later annotation first. Wrong
+  # order: gtk_layer_is_supported returns false.
   @[Link(pkg_config: "wayland-client")]
   @[Link(pkg_config: "gtk4-layer-shell-0")]
   lib Wl

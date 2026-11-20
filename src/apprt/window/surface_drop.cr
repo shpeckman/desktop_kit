@@ -41,6 +41,7 @@ module Apprt
       C.g_value_set_uint64(pointerof(value), @id)
       provider = C.gdk_content_provider_new_for_value(pointerof(value))
       C.g_value_unset(pointerof(value))
+      # Header buttons claim their clicks: drags start from free header area.
       {@handle, @header}.each do |widget|
         source = C.gtk_drag_source_new
         C.gtk_drag_source_set_actions(source, C::GdkDragAction::Move)
@@ -50,6 +51,8 @@ module Apprt
       end
       C.g_object_unref(provider)
 
+      # Host targets: Canvas's own target refuses surface moves (`uint64`
+      # `GValue`) and refused drags, which bubble up here.
       @surface_drop_target = surfaces = C.gtk_drop_target_new(C::TYPE_UINT64, C::GdkDragAction::Move)
       Signals.notify(surfaces, "value", -> { reject_self(surfaces) })
       Signals.connect(surfaces, "motion", ->(x : Float64, y : Float64) : Int32 { indicate(x, y) })

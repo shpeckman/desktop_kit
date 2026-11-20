@@ -5,6 +5,7 @@ module ActionSpecs
   Apprt.action Refresh, "spec-refresh", payload: {force: Bool}, ipc: true
 
   Apprt.action Paint, "spec-paint", scope: :split, payload: {color: Color, layers: Int32} do
+    # Not file-private: the `Variant` macro expansion must see it.
     enum Color
       Red
       DarkBlue

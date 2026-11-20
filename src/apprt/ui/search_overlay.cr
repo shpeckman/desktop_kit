@@ -99,6 +99,7 @@ module Apprt
     end
 
     private def connect_signals : Nil
+      # `search-changed` is GTK's debounced signal: no own debounce.
       Signals.connect(@entry, "search-changed", -> { @surface.search_changed(String.new(C.gtk_editable_get_text(@entry))) })
       Signals.connect(@entry, "stop-search", -> { @surface.end_search })
       C.gtk_event_controller_set_propagation_phase(@keys, C::GtkPropagationPhase::Capture)
@@ -109,6 +110,7 @@ module Apprt
       })
       @entry.add_controller(@keys)
       C.gtk_gesture_single_set_button(@drag, 1)
+      # Start recorded at `drag-begin`: GTK no longer reports it at `drag-end`.
       Signals.connect(@drag, "drag-begin", ->(x : Float64, y : Float64) { @drag_start = {x, y} })
       Signals.connect(@drag, "drag-end", ->(dx : Float64, dy : Float64) { snap(dx, dy) })
       @widget.add_controller(@drag)

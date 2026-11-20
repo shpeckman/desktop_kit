@@ -35,11 +35,14 @@ module Apprt
 
     # Plays `#bell_sound` from the start; does nothing without one.
     protected def play_bell_sound : Nil
+      # Plays even while the surface is focused.
       path = @bell_sound || return
       unless @bell_media_path == path
         release_bell_sound
         media = C.gtk_media_file_new_for_filename(path.to_s)
         Signals.notify(media, "error", -> { bell_sound_failed(media, path) })
+        # Checked once now too: the media backend may fail inside the
+        # constructor, before the handler exists.
         bell_sound_failed(media, path)
         @bell_media = media
         @bell_media_path = path

@@ -26,6 +26,9 @@ module Apprt
   # Translates the built-in *text*, falling back to it when the translator
   # raises.
   def self.tr(text : String) : String
+    # Pass literals: spec/pure/core/translate_spec.cr scans src for
+    # Apprt.tr literals (joining `\`-continued ones) and fails on one missing
+    # from README's Translation table. New text: wrap it and add the row.
     @@translator.call(text)
   rescue ex
     Log.error(exception: ex) { "translator failed for #{text.inspect}" }

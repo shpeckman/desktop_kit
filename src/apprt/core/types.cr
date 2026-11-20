@@ -33,6 +33,7 @@ module Apprt
     Down
   end
 
+  # Module-level, not inside `Mods`: enum bodies can't hold constants.
   private MODS_GDK = {
     Mods::Shift => C::GdkModifierType::ShiftMask,
     Mods::Ctrl  => C::GdkModifierType::ControlMask,

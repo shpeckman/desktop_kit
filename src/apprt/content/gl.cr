@@ -3,6 +3,9 @@ module Apprt
   # :nodoc:
   # The OpenGL calls the canvas makes itself, through libepoxy's function
   # pointers (the library GTK resolves GL with).
+  #
+  # `$epoxy_gl*` globals are Procs: `Proc#call` doesn't autocast literals,
+  # pass exact types (`0_u32`).
   @[Link(pkg_config: "epoxy")]
   lib GL
     FRAMEBUFFER                = 0x8D40_u32
@@ -213,6 +216,7 @@ module Apprt
       # only reference to that context, dropped when another one becomes
       # current, so it is referenced meanwhile.
       def delete_later : Nil
+        # Without the ref: freed context → `GDK_IS_GL_CONTEXT` critical.
         previous = C.gdk_gl_context_get_current
         C.g_object_ref(previous) unless previous.null?
         @context.make_current

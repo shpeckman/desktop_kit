@@ -39,6 +39,8 @@ module Apprt
       notifier = Wayland.globals(display).try(&.idle_notifier) || return
       seat = C.gdk_display_get_default_seat(display)
       return if seat.null? || C.g_type_check_instance_is_a(seat, C.gdk_wayland_seat_get_type) == 0
+      # ext_idle_notifier_v1 v1 `get_idle_notification` honours idle
+      # inhibitors (v2's `get_input_idle_notification` ignores them).
       milliseconds = timeout.total_milliseconds.clamp(0, UInt32::MAX).to_u32
       notification = notifier.create(Wayland::IDLE_NOTIFIER_GET, :idle_notification, Wayland::NEW_ID, milliseconds,
         C.gdk_wayland_seat_get_wl_seat(seat))

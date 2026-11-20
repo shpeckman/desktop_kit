@@ -249,6 +249,7 @@ module Apprt
 
     # The `(sa(iiay)ss)` tooltip: icon, no pixmaps, title and text.
     private def tooltip : Variant
+      # Raw `g_variant_new_tuple`: `Variant` has no `y`, can't build `a(iiay)` items.
       children = StaticArray[
         Variant.new(@tray.icon), Variant.parse("@a(iiay) []"), Variant.new(@tray.title), Variant.new(@tray.tooltip || ""),
       ]
@@ -276,6 +277,7 @@ module Apprt
       node = @nodes[id]
       properties = {} of String => Variant
       if label = node.label
+        # dbusmenu reads `_` as mnemonic prefix: escape as `__`.
         properties["label"] = Variant.new(label.gsub('_', "__"))
         properties["children-display"] = Variant.new("submenu") unless node.children.empty?
       elsif id != 0

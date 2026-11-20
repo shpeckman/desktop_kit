@@ -1,9 +1,11 @@
 # .gitignore
 /.dev/
-/bin/
-/docs/
-/lib/
-/.shards/
-shard.lock
 /.claude/
+bin/
+docs/
+lib/
+/test/out/
+shard.lock
+shard.override.yml
 AGENTS.md
+CLAUDE.md

@@ -26,6 +26,10 @@ end
 # files query runs (the query's callback touches the freed
 # `GtkFileSystemModel`).
 private def dismiss(type : String) : Nil
+  # The private bus has no portal, so GTK falls back to
+  # `GtkFileChooserDialog` and friends. Cancel via `response`:
+  # `gtk_window_close` on the color/font dialogs gave `gtk_window_destroy`
+  # criticals.
   settle
   list = ChoosersSpecLib.gtk_window_get_toplevels
   windows = Array.new(ChoosersSpecLib.g_list_model_get_n_items(list).to_i32) do |index|

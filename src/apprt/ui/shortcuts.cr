@@ -7,6 +7,9 @@ module Apprt
   # same action, else the action name in words; the trigger labels sit at
   # its end.
   class ShortcutsDialog
+    # Why not native: libadwaita 1.7 has no `AdwShortcutsDialog`,
+    # `GtkShortcutsWindow` is deprecated. Preferences dialog gives search.
+
     # Title and row of one listed binding.
     record Entry, title : String, shortcut : String, global : Bool
 

@@ -14,6 +14,8 @@ module Apprt
       0xffec_u32 => Mods::Super, # Super_R
     }
 
+    # Controller ivars use `@im_`/`_controller`/`_gesture` names:
+    # subclasses share the ivar namespace (a subclass `@keys` collided).
     @key_controller : Void*
     @click_gesture : Void*
     @scroll_controller : Void*
@@ -175,6 +177,8 @@ module Apprt
     end
 
     private def set_input_purpose(purpose : InputPurpose) : Nil
+      # `input-purpose` has no setter: GValue. GIR has no `get_type` for
+      # GtkInputPurpose: GType by name.
       value = C::GValue.new
       C.g_value_init(pointerof(value), C.g_type_from_name("GtkInputPurpose"))
       C.g_value_set_enum(pointerof(value), C::GtkInputPurpose.new(purpose.value).value)
@@ -250,6 +254,7 @@ module Apprt
       if mod = MODIFIER_KEYS[keyval]?
         mods = pressed ? mods | mod : mods & ~mod
       end
+      # GTK has no repeat flag: a press of a held keycode is a repeat.
       repeat = pressed && !@held_keycodes.add?(keycode)
       @held_keycodes.delete(keycode) unless pressed
       if pressed && text.nil?
@@ -257,6 +262,8 @@ module Apprt
         text = code.chr.to_s if code >= 0x20 && code != 0x7f
       end
       text = nil unless pressed
+      # Emitted events (specs) have no current GdkEvent: lowercased keyval
+      # stands in for `unshifted`/`base`.
       if event.null?
         code = C.gdk_keyval_to_unicode(C.gdk_keyval_to_lower(keyval))
         unshifted = code.chr unless code == 0
@@ -265,6 +272,7 @@ module Apprt
       end
       layout = C.gdk_key_event_get_layout(event)
       unshifted, shifted, base = layout_chars(keycode, layout)
+      # Lock states from the device: GDK 4 state has no lock masks.
       device = C.gdk_event_get_device(event)
       KeyEvent.new(pressed, keyval, keycode, mods, Mods.from_gdk(C.gdk_key_event_get_consumed_modifiers(event)), text,
         unshifted, C.gdk_key_event_is_modifier(event) != 0, composing,
@@ -333,6 +341,8 @@ module Apprt
     # Takes part in drags with MIME types that the content accepts; the
     # surface's own drags carry none.
     private def drop_accept(pointer : Void*) : Bool
+      # Surface moves (`uint64` GValue, no MIME types) and refused drags
+      # bubble to the surface host's drop targets.
       drop = drop_for(pointer)
       return true if !drop.mime_types.empty? && on_drop_accept(drop)
       @drop = nil

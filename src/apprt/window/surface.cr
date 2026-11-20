@@ -84,6 +84,7 @@ module Apprt
     protected def initialize(@app : App, @content : Content)
       raise ArgumentError.new("the content already belongs to a surface") if @content.surface?
       @id = @@last_id += 1
+      # Own ref (sunk): host survives split rebuilds unparented; `release` drops it.
       @host = Widget.new(C.g_object_ref_sink(C.adw_bin_new))
       @host.add_css_class("surface")
       @host.hexpand = true
@@ -240,6 +241,8 @@ module Apprt
     # concerns, and yields whether they did. Yields `false` when the surface
     # has no window.
     def confirm_clipboard(request : Clipboard::Request, text : String, &done : Bool ->) : Nil
+      # Parent = window, not host: a fresh surface's host stays unparented
+      # until the split view rebuilds.
       parent = window.try(&.widget)
       return done.call(false) if @closed || parent.nil?
       Dialogs.confirm_clipboard(parent, request, text, &done)

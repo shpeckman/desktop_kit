@@ -92,7 +92,7 @@ module Apprt
         {% else %}
           new(*variant.get(::Tuple({{ fields.values.splat }}))) if variant && variant.is?(::Tuple({{ fields.values.splat }}))
         {% end %}
-      rescue ArgumentError
+      rescue ArgumentError # unknown enum name in the payload
         nil
       end
 
@@ -152,6 +152,8 @@ module Apprt
     # :nodoc:
     # Every declared action type, built at compile time from the subclasses.
     def self.registry : Array(Info)
+      # Types named with leading `::`: else an app module named `Dialogs` or
+      # `Window` resolves to apprt's.
       @@registry ||= begin
         {% begin %}
           {% seen = {} of String => Bool %}
