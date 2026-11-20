@@ -78,6 +78,20 @@ module Apprt
     protected def context_menu(x : Float64, y : Float64) : Menu?
     end
 
+    # :showdoc:
+    #
+    # Returns the state to save for the surface with the session, such as a
+    # document path, or `nil`. A restored session hands it back to
+    # `App#new_surface` as `SurfaceContext#session_state`.
+    protected def session_state : String?
+    end
+
+    # Calls `#session_state` with an implicit receiver, which reaches
+    # overrides defined outside `Apprt`.
+    protected def saved_session_state : String?
+      session_state
+    end
+
     # Calls `#context_menu` with an implicit receiver, which reaches
     # overrides defined outside `Apprt`.
     protected def context_menu_at(x : Float64, y : Float64) : Menu?
@@ -128,6 +142,8 @@ module Apprt
       Tab
       # A split beside an existing surface.
       Split
+      # A surface of a window that `App#restore_session?` reopens.
+      Restore
     end
 
     getter kind : Kind
@@ -136,8 +152,12 @@ module Apprt
     # focused one when a window or tab opens; `nil` when there is none.
     getter parent : Surface?
 
+    # Returns what `Content#session_state` returned for the surface when the
+    # session was saved; `nil` unless *kind* is `Kind::Restore`.
+    getter session_state : String?
+
     # :nodoc:
-    def initialize(@kind : Kind, @parent : Surface?)
+    def initialize(@kind : Kind, @parent : Surface?, @session_state : String? = nil)
     end
   end
 end

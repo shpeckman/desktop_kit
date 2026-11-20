@@ -234,7 +234,7 @@ describe Apprt::Window do
       window = app.new_window
       surface = window.active_surface
       settle
-      Apprt::C.g_action_group_activate_action(app.to_unsafe, "new-window", Pointer(Void).null)
+      Apprt::C.g_action_group_activate_action(app.@actions, "new-window", Pointer(Void).null)
       settle
       app.windows.size.should eq 2
       app.contexts.last.kind.window?.should be_true
@@ -248,7 +248,7 @@ describe Apprt::Window do
       first = app.new_window
       second = app.new_window
       settle
-      Apprt::C.g_action_group_activate_action(app.to_unsafe, "close-all-windows", Pointer(Void).null)
+      Apprt::C.g_action_group_activate_action(app.@actions, "close-all-windows", Pointer(Void).null)
       settle
       first.closed?.should be_true
       second.closed?.should be_true
@@ -366,7 +366,7 @@ describe Apprt::Window do
       window = app.new_window
       window.active_surface.not_nil!.confirm_close = true
       settle
-      Apprt::C.g_action_group_activate_action(app.to_unsafe, "quit", Pointer(Void).null)
+      Apprt::C.g_action_group_activate_action(app.@actions, "quit", Pointer(Void).null)
       settle
       heading(window).should eq "Quit?"
       respond(window, "cancel")

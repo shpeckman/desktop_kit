@@ -5,6 +5,9 @@ module Apprt
     private KEY_TABLE_LIMIT = 8
 
     @sequence = [] of Trigger
+    # Ends the pending sequence after `App#sequence_timeout`; 0 when none
+    # runs.
+    @sequence_timer = 0_u32
     @sequence_keys = Pointer(Void).null
     @key_tables = [] of {String, Bool}
 
@@ -56,21 +59,44 @@ module Apprt
         case match = @app.key_match(@key_tables, keys)
         when Tuple
           action, table = match
-          @sequence.clear
+          end_sequence
           @key_tables.pop if table && @key_tables.last? == {table, true}
           sync_key_state
           Log.warn { "binding #{keys.join('>')}: action #{action.detailed_name} not handled" } unless @app.perform_in(self, action)
           return true
         when true
           @sequence = keys
+          restart_sequence_timer
           sync_key_state
           return true
         end
       end
       return false if @sequence.empty?
-      @sequence.clear
+      end_sequence
       sync_key_state
       true
+    end
+
+    # Drops the pending sequence after `App#sequence_timeout`, counted from
+    # its latest key.
+    private def restart_sequence_timer : Nil
+      stop_sequence_timer
+      timeout = @app.sequence_timeout || return
+      @sequence_timer = Idle.after(timeout) do
+        @sequence_timer = 0_u32
+        @sequence.clear
+        sync_key_state
+      end
+    end
+
+    private def end_sequence : Nil
+      stop_sequence_timer
+      @sequence.clear
+    end
+
+    private def stop_sequence_timer : Nil
+      Idle.cancel(@sequence_timer) unless @sequence_timer == 0
+      @sequence_timer = 0_u32
     end
 
     # Shows the active key tables and the pending sequence in the corner

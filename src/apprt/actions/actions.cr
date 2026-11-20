@@ -13,8 +13,9 @@ module Apprt
     # Reloads the configuration.
     Apprt.action ReloadConfig, "reload-config"
 
-    # Brings the surface *surface_id* and its window to the front.
-    Apprt.action PresentSurface, "present-surface", payload: {surface_id: UInt64}
+    # Brings the surface *surface_id* and its window to the front. Other
+    # processes may trigger it: clicking a notification does.
+    Apprt.action PresentSurface, "present-surface", ipc: true, payload: {surface_id: UInt64}
 
     # Shows a desktop notification.
     Apprt.action DesktopNotification, "desktop-notification", payload: {title: String, body: String}

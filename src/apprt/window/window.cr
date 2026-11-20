@@ -540,8 +540,10 @@ module Apprt
     end
 
     # Window actions act on the window; the tab and split groups act on the
-    # selected tab and its active surface.
+    # selected tab and its active surface. The application's private `app`
+    # group replaces the exported one.
     private def install_actions : Nil
+      @widget.insert_action_group(Action::Scope::App.prefix, @app.actions)
       Action.install(@widget.to_unsafe, :window) { |action| @app.dispatch(self, action) }
       install_group(Action::Scope::Tab) { |action| (tab = active_tab) ? @app.dispatch(tab, action) : false }
       install_group(Action::Scope::Split) { |action| (surface = active_surface) ? @app.dispatch(surface, action) : false }
@@ -699,6 +701,7 @@ module Apprt
 
     private def destroyed : Nil
       release_idle
+      stop_sequence_timer
       forget unless @closed
       @app.unregister(self)
     end

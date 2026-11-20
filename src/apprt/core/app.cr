@@ -43,6 +43,9 @@ module Apprt
     @@current = Atomic(App?).new(nil)
 
     @application = Pointer(Void).null
+    # Every `app` action; windows insert it as their `app` group, hiding the
+    # GApplication's, which holds only the ipc actions it exports on D-Bus.
+    @actions = Pointer(Void).null
     @provider = Pointer(Void).null
     @runtime_style = Pointer(Void).null
     @dark_handler = 0_u64
@@ -313,8 +316,12 @@ module Apprt
       perform(target, action)
     end
 
+    # Returns the group of every `app` action, for windows to insert.
+    protected getter actions : Void*
+
     protected def open_window(panel : Panel? = nil) : Window
       stop_quit_timer
+      @session_saved = false
       window = Window.new(self, panel)
       @windows << window
       on_window(window)
@@ -325,8 +332,8 @@ module Apprt
       on_window_suspended(window, suspended)
     end
 
-    protected def create_surface(kind : SurfaceContext::Kind, parent : Surface?) : Surface
-      surface = Surface.new(self, new_surface(SurfaceContext.new(kind, parent)))
+    protected def create_surface(kind : SurfaceContext::Kind, parent : Surface?, session_state : String? = nil) : Surface
+      surface = Surface.new(self, new_surface(SurfaceContext.new(kind, parent, session_state)))
       @surfaces[surface.id] = surface
       surface
     end
@@ -337,7 +344,9 @@ module Apprt
 
     protected def unregister(window : Window) : Nil
       @windows.delete(window)
-      start_quit_timer if @windows.empty? && running?
+      return unless @windows.empty? && running?
+      save_session unless window.panel
+      start_quit_timer
     end
 
     protected def unregister(tab : Tab) : Nil
@@ -387,6 +396,7 @@ module Apprt
 
     private def startup : Nil
       @ready = false
+      @session_saved = false
       @provider = C.gtk_css_provider_new
       Signals.connect(@provider, "parsing-error", ->(section : Void*, error : Void*) { css_error(section, error) })
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
@@ -394,7 +404,9 @@ module Apprt
       load_runtime_style
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_APPLICATION)
       @running.set(true)
-      Action.install(@application, :app) { |action| perform(self, action) }
+      @actions = C.g_simple_action_group_new
+      Action.install(@actions, :app) { |action| perform(self, action) }
+      Action.install(@application, :app, ipc_only: true) { |action| perform(self, action) }
       start_global_shortcuts
       apply_bindings
       apply_key_tables
@@ -407,8 +419,10 @@ module Apprt
       color_scheme_changed
     end
 
+    # Restores the saved session on the first activation when
+    # `#restore_session?`, else calls `#on_activate`.
     private def activate : Nil
-      on_activate
+      on_activate unless !@ready && restore_session? && Session.restore(self)
     ensure
       became_ready
     end
@@ -455,6 +469,7 @@ module Apprt
       @global_shortcuts = nil
       release_open_uri
       release_user_idle
+      release_logout_inhibit
       Source.cancel_all
       undo_stack.clear
       stop_quit_timer
@@ -464,6 +479,10 @@ module Apprt
       @windows.clear
       @tabs.clear
       @surfaces.clear
+      unless @actions.null?
+        C.g_object_unref(@actions)
+        @actions = Pointer(Void).null
+      end
       Signals.disconnect(C.adw_style_manager_get_default, @dark_handler) unless @dark_handler == 0
       @dark_handler = 0_u64
       unless @provider.null?
@@ -506,6 +525,7 @@ module Apprt
 
     private def quit_now : Nil
       return if @application.null?
+      save_session
       destroy_windows
       C.g_application_quit(@application)
     end

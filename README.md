@@ -86,6 +86,14 @@ valid reverse-DNS name (`ArgumentError` otherwise). With
 hands its arguments to the running instance and exits with the status
 that instance returns.
 
+With `App#restore_session = true` the application saves its windows, tabs,
+splits, their ratios and title overrides when it quits or its last window
+closes, to `$XDG_STATE_HOME/<app id>/session.json`, and reopens them on its
+first activation instead of calling `#on_activate`. Each surface saves what
+its content's `Content#session_state` returns, and `#new_surface` receives
+it back as `SurfaceContext#session_state`. Panels are not saved; a missing
+or unreadable session activates as usual.
+
 Hooks, all called on the GTK thread:
 
 | Hook                       | Called                                              |
@@ -177,8 +185,9 @@ A surface shows a `Apprt::Content`, which `#new_surface` creates: return
 an `Apprt::WidgetContent` to show a widget, or a subclass of `Content`.
 Each call must return a new content; `Content#surface` is the surface
 showing it. The `Apprt::SurfaceContext` tells where the surface opens:
-`kind` is `Window`, `Tab` or `Split`, and `parent` is the surface it opens
-from, if any.
+`kind` is `Window`, `Tab`, `Split` or `Restore` (a saved session reopens),
+`parent` is the surface it opens from, if any, and `session_state` is what
+the saved surface's content returned from `Content#session_state`.
 
 The window, tab and surface methods run on the GTK thread only: in hooks,
 in `perform`, or in `#post` blocks. `App#new_window` raises `RuntimeError`
@@ -358,7 +367,9 @@ tab's active surface; the pane header is `.surface-header`. Windows carry
 
 Closing asks the user first when a surface it closes has
 `Surface#confirm_close = true`: a split, a tab, a window, all windows or
-the application. `App#quit` never asks.
+the application. `App#quit` never asks. While any surface asks, the
+application also asks the desktop not to log out; `App#logout_inhibited?`
+tells whether it does.
 
 `Window#confirm` and `Window#prompt` ask the user something in a dialog
 over the window. Their block runs once, after the answer; `#prompt` skips
@@ -834,7 +845,7 @@ Built-in actions, all nested in `Apprt::Action`:
 
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)`, `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `TogglePanel(panel : String)` (ipc), `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
+| `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)` (ipc), `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `TogglePanel(panel : String)` (ipc), `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
 | `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
 | `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard`, `StartSearch`, `EndSearch`, `Search(needle)`, `NavigateSearch(direction : Previous/Next)` |
@@ -889,7 +900,8 @@ is ignored with a warning. `>` stays a key at the start of a trigger or
 after `+`, as in `"ctrl+>"` or `"a>>"`. `Binding#triggers` lists the
 triggers, `#sequence?` tells whether there are several, `#label` joins
 their labels with spaces (`"Ctrl+A N"`) and `#to_s` gives back the text.
-Sequences cannot be global.
+Sequences cannot be global. A pending sequence waits for its next key until
+`App#sequence_timeout` passes; `nil`, the default, waits indefinitely.
 
 `App#key_tables=` sets named key tables, modes that lay their own bindings
 over the window's while active:
@@ -954,8 +966,9 @@ a thread other than the target application's GTK thread:
 Apprt::IPC.send("org.example.Hello", Apprt::Action::NewWindow.new)
 ```
 
-GApplication exports every `app` action on the session bus, so `ipc:`
-selects what `IPC.send` sends, not what other DBus clients can call.
+Only `ipc: true` actions are exported on the session bus; other processes
+calling any other action get an error. Inside the application every
+action works as usual.
 
 ### D-Bus
 

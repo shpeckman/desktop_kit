@@ -20,8 +20,17 @@ module Apprt
     # The title the user chose; shown instead of `#title` while set.
     getter title_override : String?
 
-    # Whether closing the surface asks the user first.
-    property? confirm_close : Bool = false
+    # Whether closing the surface asks the user first. While any surface
+    # asks, the application also asks the desktop not to log out.
+    getter? confirm_close : Bool = false
+
+    # :ditto:
+    def confirm_close=(confirm : Bool) : Bool
+      return confirm if confirm == @confirm_close
+      @confirm_close = confirm
+      @app.sync_logout_inhibit
+      confirm
+    end
 
     # Returns the CSS name of the pointer shown over the surface, such as
     # `"text"`, or `nil` for the default pointer.
@@ -437,6 +446,7 @@ module Apprt
       release_overlays
       @app.unregister(self)
       @app.sync_progress if @progress
+      @app.sync_logout_inhibit if @confirm_close
       C.g_object_unref(@host)
     end
 

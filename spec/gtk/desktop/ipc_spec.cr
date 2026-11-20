@@ -31,6 +31,26 @@ private def send_from_thread(app_id : String, action : Apprt::Action) : Channel(
   outcome
 end
 
+# Activates the `app` action *name* of *app_id* over D-Bus from a thread of
+# its own, bypassing `IPC.send`'s compile-time check.
+private def activate_from_thread(app_id : String, name : String) : Channel(Exception?)
+  outcome = Channel(Exception?).new(1)
+  Fiber::ExecutionContext::Isolated.new("ipc") do
+    message = Apprt::Variant.new({name, [] of Apprt::Variant, {} of String => Apprt::Variant})
+    bus = Apprt::GLibError.check! { |error| Apprt::C.g_bus_get_sync(Apprt::C::GBusType::Session, Pointer(Void).null, error) }
+    reply = Apprt::GLibError.check! do |error|
+      Apprt::C.g_dbus_connection_call_sync(bus, app_id, "/#{app_id.tr(".-", "/_")}", "org.gtk.Actions", "Activate",
+        message, Pointer(Void).null, Apprt::C::GDBusCallFlags::None, -1, Pointer(Void).null, error)
+    end
+    Apprt::C.g_variant_unref(reply)
+    Apprt::C.g_object_unref(bus)
+    outcome.send(nil)
+  rescue ex
+    outcome.send(ex)
+  end
+  outcome
+end
+
 # Runs the GTK main loop until *outcome* arrives, and returns it.
 private def await(outcome : Channel(Exception?)) : Exception?
   result = nil.as(Exception?)
@@ -62,6 +82,25 @@ describe Apprt::IPC do
     run_steps(app) do
       await(send_from_thread(app.id, IpcSpecs::Open.new("/tmp/notes.txt"))).should be_nil
       eventually { app.opened == ["/tmp/notes.txt"] }.should be_true
+    end
+  end
+
+  it "refuses actions not declared with ipc" do
+    run_steps(IpcApp.new(single_instance: true)) do |app|
+      window = app.new_window
+      error = await(activate_from_thread(app.id, "close-all-windows"))
+      error.should be_a(Apprt::GLibError)
+      error.not_nil!.message.not_nil!.should contain("Unknown action")
+      settle
+      window.closed?.should be_false
+    end
+  end
+
+  it "keeps non-ipc actions working inside the application" do
+    run_steps(IpcApp.new(single_instance: true)) do |app|
+      window = app.new_window
+      Apprt::C.gtk_widget_activate_action_variant(window.@widget, "app.close-all-windows", Pointer(Void).null).should eq 1
+      eventually { window.closed? }.should be_true
     end
   end
 

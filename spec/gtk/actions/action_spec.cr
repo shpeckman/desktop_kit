@@ -30,8 +30,9 @@ private class ActionApp < TestApp
   end
 end
 
+# Activates the `app` action *name* as a window would.
 private def activate(app : Apprt::App, name : String, parameter : Apprt::Variant? = nil) : Nil
-  Apprt::C.g_action_group_activate_action(app.to_unsafe, name, parameter.try(&.to_unsafe) || Pointer(Void).null)
+  Apprt::C.g_action_group_activate_action(app.@actions, name, parameter.try(&.to_unsafe) || Pointer(Void).null)
 end
 
 private def accels(app : Apprt::App, name : String) : Array(String)
@@ -41,17 +42,22 @@ end
 describe "Apprt actions" do
   before_all { GtkHarness.start }
 
-  it "installs every application action on the application" do
+  it "installs every application action for windows and exports the ipc ones" do
     app = ActionApp.new
     installed = [] of String
+    exported = [] of String
     app.on_activated = ->(app : TestApp) do
       Apprt::Action.registry.each do |info|
-        installed << info.name if Apprt::C.g_action_group_has_action(app.to_unsafe, info.name) != 0
+        installed << info.name if Apprt::C.g_action_group_has_action(app.@actions, info.name) != 0
+        exported << info.name if Apprt::C.g_action_group_has_action(app.to_unsafe, info.name) != 0
       end
       app.quit
     end
     run_app(app).should eq 0
     installed.should eq Apprt::Action.registry.select(&.scope.app?).map(&.name)
+    exported.should eq Apprt::Action.registry.select { |info| info.scope.app? && info.ipc }.map(&.name)
+    exported.should_not be_empty
+    exported.size.should be < installed.size
   end
 
   it "performs activated actions with their payload" do

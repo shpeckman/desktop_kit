@@ -50,6 +50,38 @@ describe "key sequences" do
     end
   end
 
+  it "ends the sequence after the sequence timeout" do
+    app = TestApp.new
+    run_steps(app) do
+      app.sequence_timeout = 400.milliseconds
+      app.bindings = [Apprt::Binding.new("ctrl+a>n", Apprt::Action::NewTab.new)]
+      window = app.new_window
+      settle
+      press(window, 'a', CTRL).should be_true
+      window.@sequence.empty?.should be_false
+      eventually { window.@sequence.empty? }.should be_true
+      press(window, 'n').should be_false
+      window.tabs.size.should eq 1
+      press(window, 'a', CTRL).should be_true
+      press(window, 'n').should be_true
+      window.tabs.size.should eq 2
+    end
+  end
+
+  it "waits for the next key without a sequence timeout" do
+    app = TestApp.new
+    run_steps(app) do
+      app.sequence_timeout.should be_nil
+      app.bindings = [Apprt::Binding.new("ctrl+a>n", Apprt::Action::NewTab.new)]
+      window = app.new_window
+      settle
+      press(window, 'a', CTRL).should be_true
+      settle(300.milliseconds)
+      press(window, 'n').should be_true
+      window.tabs.size.should eq 2
+    end
+  end
+
   it "ignores modifier keys while waiting" do
     app = TestApp.new
     run_steps(app) do

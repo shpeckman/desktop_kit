@@ -128,7 +128,7 @@ module Apprt
     end
 
     # :nodoc:
-    record Info, name : String, scope : Scope, parameter_type : String?, decode : Proc(Variant?, Action?)
+    record Info, name : String, scope : Scope, ipc : Bool, parameter_type : String?, decode : Proc(Variant?, Action?)
 
     # Returns the action name, such as `"new-split"`.
     abstract def name : String
@@ -163,7 +163,7 @@ module Apprt
           {% end %}
           [
             {% for type in Action.all_subclasses.reject(&.abstract?) %}
-              Info.new(::{{ type }}::NAME, ::{{ type }}::SCOPE, ::{{ type }}.parameter_type, ->(variant : Variant?) { ::{{ type }}.from_variant(variant).as(Action?) }),
+              Info.new(::{{ type }}::NAME, ::{{ type }}::SCOPE, ::{{ type }}::IPC, ::{{ type }}.parameter_type, ->(variant : Variant?) { ::{{ type }}.from_variant(variant).as(Action?) }),
             {% end %}
           ] of Info
         {% end %}
@@ -171,11 +171,12 @@ module Apprt
     end
 
     # :nodoc:
-    # Adds a GAction to *map* for each action of *scope*; *perform* receives
-    # the decoded actions and returns whether it handled them.
-    def self.install(map : Void*, scope : Scope, &perform : Action -> Bool) : Nil
+    # Adds a GAction to *map* for each action of *scope*, only those
+    # declared with `ipc: true` when *ipc_only*; *perform* receives the
+    # decoded actions and returns whether it handled them.
+    def self.install(map : Void*, scope : Scope, *, ipc_only : Bool = false, &perform : Action -> Bool) : Nil
       registry.each do |info|
-        next unless info.scope == scope
+        next unless info.scope == scope && (info.ipc || !ipc_only)
         install(map, info, perform)
       end
     end

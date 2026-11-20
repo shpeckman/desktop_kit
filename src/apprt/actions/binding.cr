@@ -116,6 +116,16 @@ module Apprt
     @key_table_maps = {} of String => Keymap
     @global_shortcuts : GlobalShortcuts?
 
+    # Returns how long a started key sequence waits for its next key before
+    # it is dropped; `nil`, the default, waits indefinitely.
+    getter sequence_timeout : Time::Span? = nil
+
+    # Sets how long a started key sequence waits for its next key; it
+    # applies from the next key of a sequence on.
+    def sequence_timeout=(timeout : Time::Span?) : Time::Span?
+      @sequence_timeout = timeout
+    end
+
     # Returns the key bindings.
     def bindings : Array(Binding)
       @bindings.dup

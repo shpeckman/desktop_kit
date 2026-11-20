@@ -37,6 +37,10 @@ module Apprt
       @app.register(self)
     end
 
+    protected def tree : SplitTree(Surface)
+      @view.tree
+    end
+
     # Returns the window showing the tab, or `nil` once it is closed.
     def window : Window?
       @window unless @destroyed
