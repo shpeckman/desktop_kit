@@ -165,7 +165,9 @@ module Apprt::Test
   TRAY = Apprt::Tray.new(icon: "applications-system-symbolic", title: "apprt live test",
     menu: Apprt::Menu.build { |menu| menu.item "New Window", Action::NewWindow.new })
 
-  # The Dutch texts of the header menu, for `--dutch`.
+  # The Dutch texts of the header menu, for `--dutch`. The longest label
+  # keeps the menu an even number of pixels wide: KWin and sway round a
+  # centered popup's half pixel apart.
   DUTCH = {
     "Main Menu"            => "Hoofdmenu",
     "New Window"           => "Nieuw venster",
@@ -175,8 +177,8 @@ module Apprt::Test
     "Split Left"           => "Links splitsen",
     "Split Right"          => "Rechts splitsen",
     "Change Title…"        => "Titel wijzigen…",
-    "Change Tab Title…"    => "Tabbladtitel wijzigen…",
-    "Change Window Title…" => "Venstertitel wijzigen…",
+    "Change Tab Title…"    => "Tabnaam wijzigen…",
+    "Change Window Title…" => "Venstertitel…",
     "Close Tab"            => "Tabblad sluiten",
     "Close Window"         => "Venster sluiten",
     "Keyboard Shortcuts"   => "Sneltoetsen",
