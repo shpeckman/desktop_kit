@@ -6,7 +6,7 @@ require "./fake_portal"
 # argument to the log whose path the block receives, then exits with
 # *status* after printing *error* on standard error.
 private def with_xdg_open(status : Int32 = 0, error : String = "", & : String ->) : Nil
-  dir = File.tempname("apprt-xdg-open")
+  dir = File.tempname("desktop-kit-xdg-open")
   Dir.mkdir(dir)
   log = File.join(dir, "opened")
   script = File.join(dir, "xdg-open")
@@ -32,7 +32,7 @@ private def open_urls(urls : Array(String)) : Nil
   app = TestApp.new
   run_steps(app) do
     window = app.new_window
-    urls.each { |url| trigger(window, Apprt::Action::OpenUrl.new(url: url)) }
+    urls.each { |url| trigger(window, DesktopKit::Action::OpenUrl.new(url: url)) }
   end
 end
 
@@ -54,11 +54,11 @@ end
 # is logged.
 private def check_failing_xdg_open : Nil
   with_xdg_open(status: 3, error: "no handler") do |log|
-    Log.capture("apprt") do |logs|
+    Log.capture("desktop_kit") do |logs|
       app = TestApp.new
       logged = false
       run_steps(app) do
-        trigger(app.new_window, Apprt::Action::OpenUrl.new(url: "/tmp/c.txt"))
+        trigger(app.new_window, DesktopKit::Action::OpenUrl.new(url: "/tmp/c.txt"))
         logged = eventually { logs.@entries.any?(&.message.==("xdg-open /tmp/c.txt: no handler")) }
       end
       logged.should be_true
@@ -67,7 +67,7 @@ private def check_failing_xdg_open : Nil
   end
 end
 
-describe Apprt::Action::OpenUrl do
+describe DesktopKit::Action::OpenUrl do
   before_all { GtkHarness.start }
 
   it "opens a URL through the OpenURI portal" do

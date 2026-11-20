@@ -27,7 +27,7 @@ private def widgets(widget : Void*, type : String, found = [] of Void*) : Array(
   found
 end
 
-private def row(prefs : Apprt::Preferences, type : String) : Void*
+private def row(prefs : DesktopKit::Preferences, type : String) : Void*
   rows = widgets(prefs.@dialog, type)
   rows.size.should eq 1
   rows.first
@@ -37,8 +37,8 @@ private def title(row : Void*) : String
   String.new(PreferencesSpecLib.adw_preferences_row_get_title(row))
 end
 
-private def preferences(changes : Array(String)) : Apprt::Preferences
-  Apprt::Preferences.new("Settings").tap do |prefs|
+private def preferences(changes : Array(String)) : DesktopKit::Preferences
+  DesktopKit::Preferences.new("Settings").tap do |prefs|
     prefs.page("General", icon: "preferences-system-symbolic") do |page|
       page.group("Look", description: "How it looks") do |group|
         group.switch("Dark", subtitle: "Use dark colours", value: true) { |dark| changes << "dark #{dark}" }
@@ -47,14 +47,14 @@ private def preferences(changes : Array(String)) : Apprt::Preferences
     end
     prefs.page("Text") do |page|
       page.group do |group|
-        group.entry("Name", value: "apprt") { |text| changes << "name #{text}" }
+        group.entry("Name", value: "desktop_kit") { |text| changes << "name #{text}" }
         group.spin("Size", value: 12.0, range: 6.0..72.0, step: 0.5, digits: 1) { |size| changes << "size #{size}" }
       end
     end
   end
 end
 
-describe Apprt::Preferences do
+describe DesktopKit::Preferences do
   before_all { GtkHarness.start }
 
   it "shows its rows with their values and reports changes" do
@@ -74,7 +74,7 @@ describe Apprt::Preferences do
       {dark, theme, name, size}.map { |widget| title(widget) }.should eq({"Dark", "Theme", "Name", "Size"})
       PreferencesSpecLib.adw_switch_row_get_active(dark).should eq 1
       PreferencesSpecLib.adw_combo_row_get_selected(theme).should eq 2
-      String.new(PreferencesSpecLib.gtk_editable_get_text(name)).should eq "apprt"
+      String.new(PreferencesSpecLib.gtk_editable_get_text(name)).should eq "desktop_kit"
       PreferencesSpecLib.adw_spin_row_get_value(size).should eq 12.0
       changes.should be_empty
 
@@ -111,7 +111,7 @@ describe Apprt::Preferences do
   end
 
   it "rejects a choice without options or outside them" do
-    prefs = Apprt::Preferences.new
+    prefs = DesktopKit::Preferences.new
     prefs.page("Page") do |page|
       page.group do |group|
         expect_raises(ArgumentError) { group.choice("Empty", [] of String) { } }

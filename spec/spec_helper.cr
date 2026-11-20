@@ -2,7 +2,7 @@
 require "spec"
 require "log/spec"
 require "socket"
-require "../src/apprt"
+require "../src/desktop_kit"
 
 # Sets the environment variable *name* to *value* (deletes it for `nil`) for
 # the duration of the block.
@@ -16,7 +16,7 @@ end
 
 # Binds a datagram socket and points NOTIFY_SOCKET at it for the block.
 def with_notify_socket(& : Socket ->)
-  path = File.tempname("apprt-notify", ".sock")
+  path = File.tempname("desktop-kit-notify", ".sock")
   socket = Socket.unix(Socket::Type::DGRAM)
   socket.bind(Socket::UNIXAddress.new(path))
   with_env("NOTIFY_SOCKET", path) { yield socket }

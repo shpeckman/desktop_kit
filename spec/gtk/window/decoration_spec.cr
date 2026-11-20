@@ -7,8 +7,8 @@ lib DecorationSpecLib
   fun gtk_widget_get_next_sibling(widget : Void*) : Void*
 end
 
-private def decorated?(window : Apprt::Window) : Bool
-  Apprt::C.gtk_window_get_decorated(window.widget) != 0
+private def decorated?(window : DesktopKit::Window) : Bool
+  DesktopKit::C.gtk_window_get_decorated(window.widget) != 0
 end
 
 # Returns the number of toasts the window shows.
@@ -30,7 +30,7 @@ describe "window extras" do
     run_steps(app) do
       window = app.new_window
       eventually { window.widget.realized? }.should be_true
-      window.decoration.should eq Apprt::Decoration::Auto
+      window.decoration.should eq DesktopKit::Decoration::Auto
       window.decoration = :client
       decorated?(window).should be_true
       window.decoration = :none
@@ -65,10 +65,10 @@ describe "window extras" do
     run_steps(app) do
       window = app.new_window
       window.decoration = :server
-      trigger(window, Apprt::Action::ToggleWindowDecorations.new)
-      window.decoration.should eq Apprt::Decoration::None
-      trigger(window, Apprt::Action::ToggleWindowDecorations.new)
-      window.decoration.should eq Apprt::Decoration::Server
+      trigger(window, DesktopKit::Action::ToggleWindowDecorations.new)
+      window.decoration.should eq DesktopKit::Decoration::None
+      trigger(window, DesktopKit::Action::ToggleWindowDecorations.new)
+      window.decoration.should eq DesktopKit::Decoration::Server
     end
   end
 

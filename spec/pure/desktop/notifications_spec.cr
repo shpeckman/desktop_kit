@@ -1,11 +1,11 @@
 # spec/pure/desktop/notifications_spec.cr
 require "../../spec_helper"
 
-private def notifications(limit = 3) : Apprt::Notifications
-  Apprt::Notifications.new(Pointer(Void).null, 1_u64, limit)
+private def notifications(limit = 3) : DesktopKit::Notifications
+  DesktopKit::Notifications.new(Pointer(Void).null, 1_u64, limit)
 end
 
-describe Apprt::Notifications do
+describe DesktopKit::Notifications do
   it "keeps notifications oldest first" do
     list = notifications
     list.track(1)

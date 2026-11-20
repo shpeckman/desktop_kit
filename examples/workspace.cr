@@ -12,7 +12,7 @@
 # move to the next and previous tab, H, J, K and L move between splits,
 # and E enters the resize table, where H, J, K and L resize the split
 # until Esc.
-require "../src/apprt"
+require "../src/desktop_kit"
 
 lib LibGtk
   fun gtk_text_view_new : Void*
@@ -31,7 +31,7 @@ module Workspace
     DimUnfocused
   end
 
-  Apprt.action ToggleLook, "toggle-look", payload: {look: Look}
+  DesktopKit.action ToggleLook, "toggle-look", payload: {look: Look}
 
   # Icons the surfaces take in turn.
   ICONS = %w(utilities-terminal text-editor accessories-text-editor system-run)
@@ -40,16 +40,16 @@ module Workspace
     textview { font-size: 12pt; background: none; }
     CSS
 
-  class App < Apprt::App
+  class App < DesktopKit::App
     @looks = Look.values.to_set
     @count = 0
 
-    protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+    protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
       view = LibGtk.gtk_text_view_new
       LibGtk.gtk_text_view_set_monospace(view, 1)
       LibGtk.gtk_text_view_set_left_margin(view, 12)
       LibGtk.gtk_text_view_set_top_margin(view, 8)
-      pane = Pane.new(Apprt::Widget.new(view), @count += 1)
+      pane = Pane.new(DesktopKit::Widget.new(view), @count += 1)
       post { pane.name_surface }
       pane
     end
@@ -57,33 +57,33 @@ module Workspace
     protected def on_startup : Nil
       self.css = CSS
       self.window_style = style
-      self.commands = Apprt::Command.defaults + Look.values.map do |look|
-        Apprt::Command.new("Toggle #{look.to_s.underscore.tr("_", " ").capitalize}", ToggleLook.new(look), "style look")
+      self.commands = DesktopKit::Command.defaults + Look.values.map do |look|
+        DesktopKit::Command.new("Toggle #{look.to_s.underscore.tr("_", " ").capitalize}", ToggleLook.new(look), "style look")
       end
       self.key_tables = {
         "resize" => [
-          Apprt::Binding.new("h", Apprt::Action::ResizeSplit.new(:left, 20)),
-          Apprt::Binding.new("l", Apprt::Action::ResizeSplit.new(:right, 20)),
-          Apprt::Binding.new("k", Apprt::Action::ResizeSplit.new(:up, 20)),
-          Apprt::Binding.new("j", Apprt::Action::ResizeSplit.new(:down, 20)),
-          Apprt::Binding.new("esc", Apprt::Action::DeactivateKeyTable.new),
+          DesktopKit::Binding.new("h", DesktopKit::Action::ResizeSplit.new(:left, 20)),
+          DesktopKit::Binding.new("l", DesktopKit::Action::ResizeSplit.new(:right, 20)),
+          DesktopKit::Binding.new("k", DesktopKit::Action::ResizeSplit.new(:up, 20)),
+          DesktopKit::Binding.new("j", DesktopKit::Action::ResizeSplit.new(:down, 20)),
+          DesktopKit::Binding.new("esc", DesktopKit::Action::DeactivateKeyTable.new),
         ],
       }
       self.bindings = [
-        Apprt::Binding.new("ctrl+shift+p", Apprt::Action::ToggleCommandPalette.new),
-        Apprt::Binding.new("ctrl+a>c", Apprt::Action::NewTab.new),
-        Apprt::Binding.new("ctrl+a>r", Apprt::Action::NewSplit.new(:right)),
-        Apprt::Binding.new("ctrl+a>d", Apprt::Action::NewSplit.new(:down)),
-        Apprt::Binding.new("ctrl+a>z", Apprt::Action::ToggleSplitZoom.new),
-        Apprt::Binding.new("ctrl+a>x", Apprt::Action::CloseSurface.new),
-        Apprt::Binding.new("ctrl+a>n", Apprt::Action::GotoTab.new(Apprt::Action::GotoTab::NEXT)),
-        Apprt::Binding.new("ctrl+a>p", Apprt::Action::GotoTab.new(Apprt::Action::GotoTab::PREVIOUS)),
-        Apprt::Binding.new("ctrl+a>h", Apprt::Action::GotoSplit.new(:left)),
-        Apprt::Binding.new("ctrl+a>l", Apprt::Action::GotoSplit.new(:right)),
-        Apprt::Binding.new("ctrl+a>k", Apprt::Action::GotoSplit.new(:up)),
-        Apprt::Binding.new("ctrl+a>j", Apprt::Action::GotoSplit.new(:down)),
-        Apprt::Binding.new("ctrl+a>e", Apprt::Action::ActivateKeyTable.new("resize")),
-        Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
+        DesktopKit::Binding.new("ctrl+shift+p", DesktopKit::Action::ToggleCommandPalette.new),
+        DesktopKit::Binding.new("ctrl+a>c", DesktopKit::Action::NewTab.new),
+        DesktopKit::Binding.new("ctrl+a>r", DesktopKit::Action::NewSplit.new(:right)),
+        DesktopKit::Binding.new("ctrl+a>d", DesktopKit::Action::NewSplit.new(:down)),
+        DesktopKit::Binding.new("ctrl+a>z", DesktopKit::Action::ToggleSplitZoom.new),
+        DesktopKit::Binding.new("ctrl+a>x", DesktopKit::Action::CloseSurface.new),
+        DesktopKit::Binding.new("ctrl+a>n", DesktopKit::Action::GotoTab.new(DesktopKit::Action::GotoTab::NEXT)),
+        DesktopKit::Binding.new("ctrl+a>p", DesktopKit::Action::GotoTab.new(DesktopKit::Action::GotoTab::PREVIOUS)),
+        DesktopKit::Binding.new("ctrl+a>h", DesktopKit::Action::GotoSplit.new(:left)),
+        DesktopKit::Binding.new("ctrl+a>l", DesktopKit::Action::GotoSplit.new(:right)),
+        DesktopKit::Binding.new("ctrl+a>k", DesktopKit::Action::GotoSplit.new(:up)),
+        DesktopKit::Binding.new("ctrl+a>j", DesktopKit::Action::GotoSplit.new(:down)),
+        DesktopKit::Binding.new("ctrl+a>e", DesktopKit::Action::ActivateKeyTable.new("resize")),
+        DesktopKit::Binding.new("ctrl+q", DesktopKit::Action::Quit.new),
       ]
     end
 
@@ -91,20 +91,20 @@ module Workspace
       new_window
     end
 
-    protected def on_window(window : Apprt::Window) : Nil
+    protected def on_window(window : DesktopKit::Window) : Nil
       window.subtitle = System.hostname
-      window.pack_end(Apprt::Action::ToggleCommandPalette.new, "system-search-symbolic", "Command Palette")
+      window.pack_end(DesktopKit::Action::ToggleCommandPalette.new, "system-search-symbolic", "Command Palette")
       window.background_blur = true
     end
 
-    protected def perform(target : Apprt::App, action : ToggleLook) : Bool
+    protected def perform(target : DesktopKit::App, action : ToggleLook) : Bool
       @looks.includes?(action.look) ? @looks.delete(action.look) : @looks.add(action.look)
       self.window_style = style
       true
     end
 
-    private def style : Apprt::WindowStyle
-      Apprt::WindowStyle.new(
+    private def style : DesktopKit::WindowStyle
+      DesktopKit::WindowStyle.new(
         pane_headers: @looks.includes?(Look::PaneHeaders),
         cards: @looks.includes?(Look::Cards),
         tabs_in_header: @looks.includes?(Look::TabsInHeader),
@@ -114,8 +114,8 @@ module Workspace
   end
 
   # A text view that gives its surface a numbered title and an icon.
-  class Pane < Apprt::WidgetContent
-    def initialize(widget : Apprt::Widget, @number : Int32)
+  class Pane < DesktopKit::WidgetContent
+    def initialize(widget : DesktopKit::Widget, @number : Int32)
       super(widget)
     end
 

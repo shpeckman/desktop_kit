@@ -2,13 +2,13 @@
 require "../harness"
 
 module IpcSpecs
-  Apprt.action Open, "spec-ipc-open", payload: {path: String}, ipc: true
+  DesktopKit.action Open, "spec-ipc-open", payload: {path: String}, ipc: true
 end
 
 class IpcApp < TestApp
   getter opened = [] of String
 
-  protected def perform(target : Apprt::App, action : IpcSpecs::Open) : Bool
+  protected def perform(target : DesktopKit::App, action : IpcSpecs::Open) : Bool
     @opened << action.path
     true
   end
@@ -17,12 +17,12 @@ end
 # Sends *action* to *app_id* from a thread of its own, as another process
 # would, and returns where the outcome arrives: `IPC.send` blocks until the
 # application answers, which needs the GTK thread free.
-private def send_from_thread(app_id : String, action : Apprt::Action) : Channel(Exception?)
+private def send_from_thread(app_id : String, action : DesktopKit::Action) : Channel(Exception?)
   outcome = Channel(Exception?).new(1)
   Fiber::ExecutionContext::Isolated.new("ipc") do
     case action
-    when Apprt::Action::NewWindow then Apprt::IPC.send(app_id, action)
-    when IpcSpecs::Open           then Apprt::IPC.send(app_id, action)
+    when DesktopKit::Action::NewWindow then DesktopKit::IPC.send(app_id, action)
+    when IpcSpecs::Open                then DesktopKit::IPC.send(app_id, action)
     end
     outcome.send(nil)
   rescue ex
@@ -36,14 +36,14 @@ end
 private def activate_from_thread(app_id : String, name : String) : Channel(Exception?)
   outcome = Channel(Exception?).new(1)
   Fiber::ExecutionContext::Isolated.new("ipc") do
-    message = Apprt::Variant.new({name, [] of Apprt::Variant, {} of String => Apprt::Variant})
-    bus = Apprt::GLibError.check! { |error| Apprt::C.g_bus_get_sync(Apprt::C::GBusType::Session, Pointer(Void).null, error) }
-    reply = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_call_sync(bus, app_id, "/#{app_id.tr(".-", "/_")}", "org.gtk.Actions", "Activate",
-        message, Pointer(Void).null, Apprt::C::GDBusCallFlags::None, -1, Pointer(Void).null, error)
+    message = DesktopKit::Variant.new({name, [] of DesktopKit::Variant, {} of String => DesktopKit::Variant})
+    bus = DesktopKit::GLibError.check! { |error| DesktopKit::C.g_bus_get_sync(DesktopKit::C::GBusType::Session, Pointer(Void).null, error) }
+    reply = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_call_sync(bus, app_id, "/#{app_id.tr(".-", "/_")}", "org.gtk.Actions", "Activate",
+        message, Pointer(Void).null, DesktopKit::C::GDBusCallFlags::None, -1, Pointer(Void).null, error)
     end
-    Apprt::C.g_variant_unref(reply)
-    Apprt::C.g_object_unref(bus)
+    DesktopKit::C.g_variant_unref(reply)
+    DesktopKit::C.g_object_unref(bus)
     outcome.send(nil)
   rescue ex
     outcome.send(ex)
@@ -67,12 +67,12 @@ private def await(outcome : Channel(Exception?)) : Exception?
   result
 end
 
-describe Apprt::IPC do
+describe DesktopKit::IPC do
   before_all { GtkHarness.start }
 
   it "triggers an action in the running instance" do
     run_steps(IpcApp.new(single_instance: true)) do |app|
-      await(send_from_thread(app.id, Apprt::Action::NewWindow.new)).should be_nil
+      await(send_from_thread(app.id, DesktopKit::Action::NewWindow.new)).should be_nil
       eventually { app.windows.size == 1 }.should be_true
     end
   end
@@ -89,7 +89,7 @@ describe Apprt::IPC do
     run_steps(IpcApp.new(single_instance: true)) do |app|
       window = app.new_window
       error = await(activate_from_thread(app.id, "close-all-windows"))
-      error.should be_a(Apprt::GLibError)
+      error.should be_a(DesktopKit::GLibError)
       error.not_nil!.message.not_nil!.should contain("Unknown action")
       settle
       window.closed?.should be_false
@@ -99,20 +99,20 @@ describe Apprt::IPC do
   it "keeps non-ipc actions working inside the application" do
     run_steps(IpcApp.new(single_instance: true)) do |app|
       window = app.new_window
-      Apprt::C.gtk_widget_activate_action_variant(window.@widget, "app.close-all-windows", Pointer(Void).null).should eq 1
+      DesktopKit::C.gtk_widget_activate_action_variant(window.@widget, "app.close-all-windows", Pointer(Void).null).should eq 1
       eventually { window.closed? }.should be_true
     end
   end
 
   it "raises GLibError when no instance runs" do
-    expect_raises(Apprt::GLibError) do
-      Apprt::IPC.send("org.example.ApprtSpec.Nobody", Apprt::Action::NewWindow.new)
+    expect_raises(DesktopKit::GLibError) do
+      DesktopKit::IPC.send("org.example.DesktopKitSpec.Nobody", DesktopKit::Action::NewWindow.new)
     end
   end
 
   it "rejects an invalid application id" do
     expect_raises(ArgumentError, %(invalid application id: "no dots")) do
-      Apprt::IPC.send("no dots", Apprt::Action::NewWindow.new)
+      DesktopKit::IPC.send("no dots", DesktopKit::Action::NewWindow.new)
     end
   end
 end

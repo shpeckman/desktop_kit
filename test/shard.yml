@@ -1,7 +1,7 @@
-name: apprt-test
+name: desktop-kit-test
 version: 0.1.0
 
-description: Live tests of apprt on the KDE Plasma desktop, through livetest.
+description: Live tests of desktop_kit on the KDE Plasma desktop, through livetest.
 
 authors:
   - shpeckman
@@ -11,13 +11,13 @@ crystal: ">= 1.23.0"
 dependencies:
   livetest:
     github: shpeckman/livetest
-  apprt:
+  desktop_kit:
     path: ..
 
 targets:
-  apprt-test:
+  desktop-kit-test:
     main: src/main.cr
-  apprt-under-test:
+  desktop-kit-under-test:
     main: src/under_test.cr
 
 license: MIT

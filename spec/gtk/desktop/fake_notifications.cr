@@ -54,7 +54,7 @@ class FakeNotifications
   private PRIMARY_OWNER = 1_u32
 
   private METHOD_CALL = ->(connection : Void*, sender : UInt8*, path : UInt8*, interface : UInt8*, method : UInt8*, parameters : Void*, invocation : Void*, data : Void*) do
-    Apprt::Handles.get(data, FakeNotifications).call(String.new(method), Apprt::Variant.from_raw(parameters), invocation)
+    DesktopKit::Handles.get(data, FakeNotifications).call(String.new(method), DesktopKit::Variant.from_raw(parameters), invocation)
     nil
   end
 
@@ -64,7 +64,7 @@ class FakeNotifications
   @last_id = 0_u32
   @connection : Void*
   @node : Void*
-  @vtable : Pointer(Apprt::C::GDBusInterfaceVTable)
+  @vtable : Pointer(DesktopKit::C::GDBusInterfaceVTable)
   @handle = Pointer(Void).null
   @registration = 0_u32
 
@@ -75,8 +75,8 @@ class FakeNotifications
   # settles once more, so GIO sees the name vanish while *app* still holds
   # its notification backend: GLib's vanish handler crashes a backend that
   # only its notifications keep alive.
-  def self.serve(app : Apprt::App, & : FakeNotifications ->) : Nil
-    fake = new(Apprt::C.g_application_get_dbus_connection(app))
+  def self.serve(app : DesktopKit::App, & : FakeNotifications ->) : Nil
+    fake = new(DesktopKit::C.g_application_get_dbus_connection(app))
     begin
       yield fake
     ensure
@@ -94,67 +94,67 @@ class FakeNotifications
 
   def initialize(connection : Void*)
     raise "FakeNotifications: the app has no bus connection" if connection.null?
-    @connection = Apprt::C.g_object_ref(connection)
-    @node = Apprt::GLibError.check! { |error| Apprt::C.g_dbus_node_info_new_for_xml(XML, error) }
-    @vtable = Pointer(Apprt::C::GDBusInterfaceVTable).malloc(1)
+    @connection = DesktopKit::C.g_object_ref(connection)
+    @node = DesktopKit::GLibError.check! { |error| DesktopKit::C.g_dbus_node_info_new_for_xml(XML, error) }
+    @vtable = Pointer(DesktopKit::C::GDBusInterfaceVTable).malloc(1)
     @vtable.value.method_call = METHOD_CALL
-    @handle = Apprt::Handles.retain(self)
-    interface = Apprt::C.g_dbus_node_info_lookup_interface(@node, NAME)
-    @registration = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_register_object(@connection, PATH, interface, @vtable, @handle, nil, error)
+    @handle = DesktopKit::Handles.retain(self)
+    interface = DesktopKit::C.g_dbus_node_info_lookup_interface(@node, NAME)
+    @registration = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_register_object(@connection, PATH, interface, @vtable, @handle, nil, error)
     end
     # Exported on the app's own connection; `DO_NOT_QUEUE` must make us the
     # primary owner (1) at once.
-    owner = bus_call("RequestName", Apprt::Variant.new({NAME, DO_NOT_QUEUE}))[0].get(UInt32)
+    owner = bus_call("RequestName", DesktopKit::Variant.new({NAME, DO_NOT_QUEUE}))[0].get(UInt32)
     raise "FakeNotifications: #{NAME} is taken" unless owner == PRIMARY_OWNER
   end
 
   # Clicks the notification *id*, as the desktop does.
   def click(id : UInt32, action : String = "default") : Nil
-    Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_emit_signal(@connection, nil, PATH, NAME, "ActionInvoked", Apprt::Variant.new({id, action}), error)
+    DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_emit_signal(@connection, nil, PATH, NAME, "ActionInvoked", DesktopKit::Variant.new({id, action}), error)
     end
   end
 
   def stop : Nil
-    bus_call("ReleaseName", Apprt::Variant.new({NAME}))
-    Apprt::C.g_dbus_connection_unregister_object(@connection, @registration)
-    Apprt::C.g_dbus_node_info_unref(@node)
-    Apprt::C.g_object_unref(@connection)
-    Apprt::Handles.release(@handle)
+    bus_call("ReleaseName", DesktopKit::Variant.new({NAME}))
+    DesktopKit::C.g_dbus_connection_unregister_object(@connection, @registration)
+    DesktopKit::C.g_dbus_node_info_unref(@node)
+    DesktopKit::C.g_object_unref(@connection)
+    DesktopKit::Handles.release(@handle)
   end
 
-  protected def call(method : String, parameters : Apprt::Variant, invocation : Void*) : Nil
+  protected def call(method : String, parameters : DesktopKit::Variant, invocation : Void*) : Nil
     case method
     when "Notify"
       replaces_id = parameters[1].get(UInt32)
       id = replaces_id == 0 ? (@last_id += 1) : replaces_id
       @sent << Sent.new(id, parameters[0].get(String), replaces_id, parameters[3].get(String),
         parameters[4].get(String), parameters[5].get(Array(String)))
-      reply(invocation, Apprt::Variant.new({id}))
+      reply(invocation, DesktopKit::Variant.new({id}))
     when "CloseNotification"
       @closed << parameters[0].get(UInt32)
       reply(invocation, nil)
     when "GetCapabilities"
-      reply(invocation, Apprt::Variant.new({["actions", "body"]}))
+      reply(invocation, DesktopKit::Variant.new({["actions", "body"]}))
     when "GetServerInformation"
-      reply(invocation, Apprt::Variant.new({"fake", "apprt", "1", "1.2"}))
+      reply(invocation, DesktopKit::Variant.new({"fake", "desktop_kit", "1", "1.2"}))
     else
-      Apprt::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.UnknownMethod", method)
+      DesktopKit::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.UnknownMethod", method)
     end
   rescue ex
-    Apprt::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.Failed", ex.message || ex.class.name)
+    DesktopKit::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.Failed", ex.message || ex.class.name)
   end
 
-  private def reply(invocation : Void*, value : Apprt::Variant?) : Nil
-    Apprt::C.g_dbus_method_invocation_return_value(invocation, value.try(&.to_unsafe) || Pointer(Void).null)
+  private def reply(invocation : Void*, value : DesktopKit::Variant?) : Nil
+    DesktopKit::C.g_dbus_method_invocation_return_value(invocation, value.try(&.to_unsafe) || Pointer(Void).null)
   end
 
-  private def bus_call(method : String, parameters : Apprt::Variant) : Apprt::Variant
-    reply = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
-        method, parameters, nil, Apprt::C::GDBusCallFlags::None, -1, nil, error)
+  private def bus_call(method : String, parameters : DesktopKit::Variant) : DesktopKit::Variant
+    reply = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+        method, parameters, nil, DesktopKit::C::GDBusCallFlags::None, -1, nil, error)
     end
-    Apprt::Variant.take(reply)
+    DesktopKit::Variant.take(reply)
   end
 end

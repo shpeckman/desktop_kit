@@ -1,4 +1,4 @@
-# apprt-test - live tests of apprt on the KDE Plasma desktop
+# desktop-kit-test - live tests of desktop_kit on the KDE Plasma desktop
 .POSIX:
 
 CRYSTAL = crystal
@@ -14,14 +14,14 @@ ARGS =
 # shard.override.yml on every make, "shards install" keeps shard.lock
 SHARDS = shards update
 
-all: bin/apprt-test bin/apprt-under-test
+all: bin/desktop-kit-test bin/desktop-kit-under-test
 
-bin/apprt-test: src/main.cr src/apprt/test/subject.cr bin/shard.lock bin/lib.stamp
+bin/desktop-kit-test: src/main.cr src/desktop_kit/test/subject.cr bin/shard.lock bin/lib.stamp
 	mkdir -p bin
 	$(CRYSTAL) build $(CRFLAGS) src/main.cr -o $@
 
-# the app the cases run; built from the apprt in lib/
-bin/apprt-under-test: src/under_test.cr bin/shard.lock bin/lib.stamp
+# the app the cases run; built from the desktop_kit in lib/
+bin/desktop-kit-under-test: src/under_test.cr bin/shard.lock bin/lib.stamp
 	mkdir -p bin
 	$(CRYSTAL) build $(CRFLAGS) src/under_test.cr -o $@
 
@@ -36,24 +36,24 @@ bin/shard.lock: FORCE
 # test, so changes in the local checkouts rebuild the binaries too
 bin/lib.stamp: FORCE
 	mkdir -p bin
-	if [ ! -e $@ ] || [ ! -e bin/apprt-under-test ] || \
-	  [ -n "$$(find -L lib/*/src lib/*/data lib/*/shard.yml -newer bin/apprt-under-test -print 2>/dev/null | head -n 1)" ]; \
+	if [ ! -e $@ ] || [ ! -e bin/desktop-kit-under-test ] || \
+	  [ -n "$$(find -L lib/*/src lib/*/data lib/*/shard.yml -newer bin/desktop-kit-under-test -print 2>/dev/null | head -n 1)" ]; \
 	then touch $@; fi
 
 # fetches the shards now (also part of every make)
 shards:
 	shards update
 
-# lets bin/apprt-test take window screenshots and makes the desktop grant
+# lets bin/desktop-kit-test take window screenshots and makes the desktop grant
 # the global shortcut (once per desktop; confirm the dialog, then press the
 # shortcut)
 setup: all
-	bin/apprt-test setup
-	bin/apprt-under-test --setup
+	bin/desktop-kit-test setup
+	bin/desktop-kit-under-test --setup
 
 # runs the cases; MODE=kde takes over the keyboard and the pointer
 test: all
-	bin/apprt-test -m $(MODE) -b bin/apprt-under-test $(ARGS) $(CASES)
+	bin/desktop-kit-test -m $(MODE) -b bin/desktop-kit-under-test $(ARGS) $(CASES)
 
 spec: bin/shard.lock
 	$(CRYSTAL) spec $(CRFLAGS)

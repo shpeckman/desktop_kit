@@ -16,9 +16,9 @@ end
 
 # Canvas that clears its upper half (in GL coordinates) red and the lower
 # half blue, and records buffer ages and frame timings.
-class HalvesCanvas < Apprt::Canvas
+class HalvesCanvas < DesktopKit::Canvas
   getter ages = [] of Int32
-  getter timings = [] of Apprt::FrameTiming
+  getter timings = [] of DesktopKit::FrameTiming
   getter threads = [] of String?
 
   protected def on_render : Nil
@@ -33,14 +33,14 @@ class HalvesCanvas < Apprt::Canvas
     LibSpecGL.glDisable(LibSpecGL::SCISSOR_TEST)
   end
 
-  protected def on_presented(timing : Apprt::FrameTiming) : Nil
+  protected def on_presented(timing : DesktopKit::FrameTiming) : Nil
     @timings << timing
   end
 end
 
 private def halves_app(offload : Bool = false, threaded : Bool = false) : TestApp
   TestApp.new.tap do |app|
-    app.make_content = ->(context : Apprt::SurfaceContext) { HalvesCanvas.new(offload: offload, threaded: threaded).as(Apprt::Content) }
+    app.make_content = ->(context : DesktopKit::SurfaceContext) { HalvesCanvas.new(offload: offload, threaded: threaded).as(DesktopKit::Content) }
   end
 end
 
@@ -216,11 +216,11 @@ describe "Canvas rendering" do
 
   it "makes offscreen contexts" do
     run_steps(TestApp.new) do
-      context = Apprt::GLContext.new(version: {3, 0})
+      context = DesktopKit::GLContext.new(version: {3, 0})
       context.api.none?.should be_false
       context.make_current
       context.current?.should be_true
-      Apprt::GLContext.clear_current
+      DesktopKit::GLContext.clear_current
       context.current?.should be_false
     end
   end

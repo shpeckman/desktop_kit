@@ -12,44 +12,44 @@
 # the style; Shift+Ctrl+Alt+H opens a window from anywhere once the desktop
 # grants the global shortcut. `examples/ipc.cr` opens a window from another
 # process.
-require "../src/apprt"
+require "../src/desktop_kit"
 
 lib LibGtk
   fun gtk_entry_new : Void*
 end
 
 module Hello
-  Apprt.action Notify, "notify", scope: :split
+  DesktopKit.action Notify, "notify", scope: :split
 
   STYLES = [
     "entry { font-size: 14pt; }",
     "entry { font-size: 18pt; }",
   ]
 
-  class App < Apprt::App
+  class App < DesktopKit::App
     @style = 0
 
-    protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
-      Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_entry_new))
+    protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
+      DesktopKit::WidgetContent.new(DesktopKit::Widget.new(LibGtk.gtk_entry_new))
     end
 
     protected def on_startup : Nil
       self.css = STYLES[@style]
       self.bindings = [
-        Apprt::Binding.new("ctrl+shift+n", Apprt::Action::NewWindow.new),
-        Apprt::Binding.new("ctrl+shift+t", Apprt::Action::NewTab.new),
-        Apprt::Binding.new("ctrl+shift+o", Apprt::Action::NewSplit.new(:right)),
-        Apprt::Binding.new("ctrl+shift+e", Apprt::Action::NewSplit.new(:down)),
-        Apprt::Binding.new("ctrl+alt+left", Apprt::Action::GotoSplit.new(:left)),
-        Apprt::Binding.new("ctrl+alt+right", Apprt::Action::GotoSplit.new(:right)),
-        Apprt::Binding.new("ctrl+alt+up", Apprt::Action::GotoSplit.new(:up)),
-        Apprt::Binding.new("ctrl+alt+down", Apprt::Action::GotoSplit.new(:down)),
-        Apprt::Binding.new("ctrl+shift+enter", Apprt::Action::ToggleSplitZoom.new),
-        Apprt::Binding.new("ctrl+shift+w", Apprt::Action::CloseSurface.new),
-        Apprt::Binding.new("ctrl+shift+b", Notify.new),
-        Apprt::Binding.new("ctrl+shift+r", Apprt::Action::ReloadConfig.new),
-        Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
-        Apprt::Binding.new("ctrl+shift+alt+h", Apprt::Action::NewWindow.new, global: true),
+        DesktopKit::Binding.new("ctrl+shift+n", DesktopKit::Action::NewWindow.new),
+        DesktopKit::Binding.new("ctrl+shift+t", DesktopKit::Action::NewTab.new),
+        DesktopKit::Binding.new("ctrl+shift+o", DesktopKit::Action::NewSplit.new(:right)),
+        DesktopKit::Binding.new("ctrl+shift+e", DesktopKit::Action::NewSplit.new(:down)),
+        DesktopKit::Binding.new("ctrl+alt+left", DesktopKit::Action::GotoSplit.new(:left)),
+        DesktopKit::Binding.new("ctrl+alt+right", DesktopKit::Action::GotoSplit.new(:right)),
+        DesktopKit::Binding.new("ctrl+alt+up", DesktopKit::Action::GotoSplit.new(:up)),
+        DesktopKit::Binding.new("ctrl+alt+down", DesktopKit::Action::GotoSplit.new(:down)),
+        DesktopKit::Binding.new("ctrl+shift+enter", DesktopKit::Action::ToggleSplitZoom.new),
+        DesktopKit::Binding.new("ctrl+shift+w", DesktopKit::Action::CloseSurface.new),
+        DesktopKit::Binding.new("ctrl+shift+b", Notify.new),
+        DesktopKit::Binding.new("ctrl+shift+r", DesktopKit::Action::ReloadConfig.new),
+        DesktopKit::Binding.new("ctrl+q", DesktopKit::Action::Quit.new),
+        DesktopKit::Binding.new("ctrl+shift+alt+h", DesktopKit::Action::NewWindow.new, global: true),
       ]
     end
 
@@ -64,11 +64,11 @@ module Hello
       puts "reloaded: #{STYLES[@style]}"
     end
 
-    protected def on_binding_failed(binding : Apprt::Binding, message : String) : Nil
+    protected def on_binding_failed(binding : DesktopKit::Binding, message : String) : Nil
       puts "#{binding.trigger.label} is not bound: #{message}"
     end
 
-    protected def perform(target : Apprt::Surface, action : Notify) : Bool
+    protected def perform(target : DesktopKit::Surface, action : Notify) : Bool
       target.notify("Hello", "Split #{target.id} wants attention")
       true
     end

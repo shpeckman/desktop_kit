@@ -7,7 +7,7 @@
 #
 # Space starts and pauses, WASD or the arrows steer, R restarts. Shift+Ctrl+O splits
 # the window into a second, independent game.
-require "../src/apprt"
+require "../src/desktop_kit"
 
 @[Link("GL")]
 lib LibGL
@@ -28,14 +28,14 @@ module Snake
 
   # The direction each steering key turns the snake.
   STEERING = {
-    Apprt::Key::KeyW       => {0, -1},
-    Apprt::Key::ArrowUp    => {0, -1},
-    Apprt::Key::KeyS       => {0, 1},
-    Apprt::Key::ArrowDown  => {0, 1},
-    Apprt::Key::KeyA       => {-1, 0},
-    Apprt::Key::ArrowLeft  => {-1, 0},
-    Apprt::Key::KeyD       => {1, 0},
-    Apprt::Key::ArrowRight => {1, 0},
+    DesktopKit::Key::KeyW       => {0, -1},
+    DesktopKit::Key::ArrowUp    => {0, -1},
+    DesktopKit::Key::KeyS       => {0, 1},
+    DesktopKit::Key::ArrowDown  => {0, 1},
+    DesktopKit::Key::KeyA       => {-1, 0},
+    DesktopKit::Key::ArrowLeft  => {-1, 0},
+    DesktopKit::Key::KeyD       => {1, 0},
+    DesktopKit::Key::ArrowRight => {1, 0},
   }
 
   # Red, green and blue of each thing on the board.
@@ -111,11 +111,11 @@ module Snake
   end
 
   # The canvas showing one game, which it steps on a timer while open.
-  class Board < Apprt::Canvas
+  class Board < DesktopKit::Canvas
     @game = Game.new
     @status = ""
 
-    def initialize(@app : Apprt::App)
+    def initialize(@app : DesktopKit::App)
       super(api: :gl)
     end
 
@@ -146,7 +146,7 @@ module Snake
       LibGL.glDisable(LibGL::SCISSOR_TEST)
     end
 
-    protected def on_key(event : Apprt::KeyEvent) : Bool
+    protected def on_key(event : DesktopKit::KeyEvent) : Bool
       return false unless event.pressed? && event.mods.none?
       if direction = STEERING[event.key]?
         @game.steer(direction)
@@ -186,18 +186,18 @@ module Snake
     end
   end
 
-  class App < Apprt::App
-    protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+  class App < DesktopKit::App
+    protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
       board = Board.new(self)
       post { board.start }
       board
     end
 
     protected def on_startup : Nil
-      self.window_style = Apprt::WindowStyle.new(pane_headers: true, cards: true, unfocused_opacity: 0.7)
+      self.window_style = DesktopKit::WindowStyle.new(pane_headers: true, cards: true, unfocused_opacity: 0.7)
       self.bindings = [
-        Apprt::Binding.new("ctrl+shift+o", Apprt::Action::NewSplit.new(:right)),
-        Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
+        DesktopKit::Binding.new("ctrl+shift+o", DesktopKit::Action::NewSplit.new(:right)),
+        DesktopKit::Binding.new("ctrl+q", DesktopKit::Action::Quit.new),
       ]
     end
 

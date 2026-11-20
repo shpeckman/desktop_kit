@@ -3,9 +3,9 @@ require "../harness"
 
 # Content that records its reloads in the app's events; *broken* content
 # raises instead.
-class ReloadContent < Apprt::WidgetContent
+class ReloadContent < DesktopKit::WidgetContent
   def initialize(@app : TestApp, @broken : Bool = false)
-    super(Apprt::Widget.new(Apprt::C.gtk_entry_new))
+    super(DesktopKit::Widget.new(DesktopKit::C.gtk_entry_new))
   end
 
   protected def on_reload : Nil
@@ -14,12 +14,12 @@ class ReloadContent < Apprt::WidgetContent
   end
 end
 
-describe "Apprt::App#reload" do
+describe "DesktopKit::App#reload" do
   before_all { GtkHarness.start }
 
   it "reloads the content of every surface after the app" do
     app = TestApp.new
-    app.make_content = ->(context : Apprt::SurfaceContext) { ReloadContent.new(app).as(Apprt::Content) }
+    app.make_content = ->(context : DesktopKit::SurfaceContext) { ReloadContent.new(app).as(DesktopKit::Content) }
     run_steps(app) do
       window = app.new_window
       first = window.active_surface.not_nil!
@@ -33,10 +33,10 @@ describe "Apprt::App#reload" do
   it "reloads the other contents when one raises" do
     app = TestApp.new
     broken = true
-    app.make_content = ->(context : Apprt::SurfaceContext) do
+    app.make_content = ->(context : DesktopKit::SurfaceContext) do
       content = ReloadContent.new(app, broken)
       broken = false
-      content.as(Apprt::Content)
+      content.as(DesktopKit::Content)
     end
     run_steps(app) do
       window = app.new_window
@@ -49,7 +49,7 @@ describe "Apprt::App#reload" do
   it "reloads the content on SIGUSR2 before it reports ready to systemd" do
     with_notify_socket do |socket|
       app = TestApp.new
-      app.make_content = ->(context : Apprt::SurfaceContext) { ReloadContent.new(app).as(Apprt::Content) }
+      app.make_content = ->(context : DesktopKit::SurfaceContext) { ReloadContent.new(app).as(DesktopKit::Content) }
       id = 0_u64
       app.on_activated = ->(app : TestApp) do
         id = app.new_window.active_surface.not_nil!.id

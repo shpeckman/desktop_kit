@@ -1,6 +1,6 @@
-# apprt-test
+# desktop-kit-test
 
-Live tests of apprt through
+Live tests of desktop_kit through
 [livetest](https://github.com/shpeckman/livetest), with real keyboard
 input and a real pointer. On the KDE Plasma desktop they cover what a private test
 compositor cannot: global key bindings bound by the desktop's global
@@ -26,7 +26,7 @@ make test MODE=sway  # the cases that run in sway, in a headless sway
 ```
 
 `make setup` lets the harness take window screenshots, installs
-`org.example.ApprtLive.desktop` into `~/.local/share/applications` and
+`org.example.DesktopKitLive.desktop` into `~/.local/share/applications` and
 starts the app under test once. The desktop asks to confirm its global
 shortcut, Ctrl+Alt+Shift+F9: confirm it, then press the shortcut, and the
 app quits. The portal knows the app only through that desktop file, and
@@ -78,7 +78,7 @@ means every case passed.
   the dock's height. Panels close with the window.
 - `header-menu` - opens the header bar's main menu, shoots it and opens a
   tab from its New Tab item.
-- `translation` - the same menu with Dutch texts from `Apprt.translator`
+- `translation` - the same menu with Dutch texts from `DesktopKit.translator`
   (`dutch: true`).
 - `context-menu` - right-clicks the label, shoots its context menu and
   picks its Report item.
@@ -95,8 +95,8 @@ means every case passed.
 
 ## The app under test
 
-`bin/apprt-under-test` is an apprt app with the id `org.example.ApprtLive`.
-Its window shows a label and has these bindings:
+`bin/desktop-kit-under-test` is a desktop_kit app with the id
+`org.example.DesktopKitLive`. Its window shows a label and has these bindings:
 
 | Keys                        | Action                                    |
 |-----------------------------|-------------------------------------------|

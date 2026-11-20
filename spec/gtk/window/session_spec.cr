@@ -3,11 +3,11 @@ require "file_utils"
 require "../harness"
 
 # Content that saves the state it was created with, or its own once set.
-private class StateContent < Apprt::WidgetContent
+private class StateContent < DesktopKit::WidgetContent
   property state : String?
 
   def initialize(@state : String?)
-    super(Apprt::Widget.new(Apprt::C.gtk_entry_new))
+    super(DesktopKit::Widget.new(DesktopKit::C.gtk_entry_new))
   end
 
   protected def session_state : String?
@@ -21,17 +21,17 @@ end
 private class SessionApp < TestApp
   property steps : (TestApp ->)? = nil
 
-  protected def on_window(window : Apprt::Window) : Nil
+  protected def on_window(window : DesktopKit::Window) : Nil
     steps = @steps || return
     @steps = nil
-    Apprt::UIThread.post { steps.call(self) }
+    DesktopKit::UIThread.post { steps.call(self) }
   end
 end
 
 private def session_app(id : String, restore : Bool = true) : SessionApp
   SessionApp.new(id).tap do |app|
     app.restore_session = restore
-    app.make_content = ->(context : Apprt::SurfaceContext) { StateContent.new(context.session_state).as(Apprt::Content) }
+    app.make_content = ->(context : DesktopKit::SurfaceContext) { StateContent.new(context.session_state).as(DesktopKit::Content) }
   end
 end
 
@@ -53,22 +53,22 @@ private def run_restored(app : SessionApp, &block : TestApp ->) : Nil
 end
 
 # Returns the diagram of the active tab's split tree, surfaces unnamed.
-private def layout(window : Apprt::Window) : String
-  window.active_tab.not_nil!.@view.tree.to_diagram.gsub(/#<Apprt::Surface:0x[0-9a-f]+>/) { |name| " " * name.size }
+private def layout(window : DesktopKit::Window) : String
+  window.active_tab.not_nil!.@view.tree.to_diagram.gsub(/#<DesktopKit::Surface:0x[0-9a-f]+>/) { |name| " " * name.size }
 end
 
-private def state(surface : Apprt::Surface?) : String?
+private def state(surface : DesktopKit::Surface?) : String?
   surface.not_nil!.content.as(StateContent).state
 end
 
-private def split(window : Apprt::Window, direction : Apprt::Direction) : Apprt::Surface
-  trigger(window, Apprt::Action::NewSplit.new(direction))
+private def split(window : DesktopKit::Window, direction : DesktopKit::Direction) : DesktopKit::Surface
+  trigger(window, DesktopKit::Action::NewSplit.new(direction))
   window.active_surface.not_nil!
 end
 
 # Runs the block with `XDG_STATE_HOME` in a fresh directory.
 private def with_state_home(&) : Nil
-  dir = File.tempname("apprt-session")
+  dir = File.tempname("desktop-kit-session")
   Dir.mkdir_p(dir)
   saved = ENV["XDG_STATE_HOME"]?
   ENV["XDG_STATE_HOME"] = dir
@@ -98,7 +98,7 @@ describe "App#restore_session?" do
         tab = first.new_tab
         tab.title_override = "Second"
         tab.active_surface.not_nil!.content.as(StateContent).state = "d"
-        trigger(first, Apprt::Action::GotoTab.new(0))
+        trigger(first, DesktopKit::Action::GotoTab.new(0))
         app.new_window.active_surface.not_nil!.content.as(StateContent).state = "e"
         settle
         app.quit
@@ -122,7 +122,7 @@ describe "App#restore_session?" do
         first.tabs[1].title_override.should eq "Second"
         first.tabs[1].surfaces.map { |surface| state(surface) }.should eq ["d"]
         second.tabs.flat_map(&.surfaces).map { |surface| state(surface) }.should eq ["e"]
-        restored.contexts.map(&.kind).uniq.should eq [Apprt::SurfaceContext::Kind::Restore]
+        restored.contexts.map(&.kind).uniq.should eq [DesktopKit::SurfaceContext::Kind::Restore]
         diagram.should_not be_empty
       end
     end
@@ -137,7 +137,7 @@ describe "App#restore_session?" do
         window = app.new_window
         split(window, :right)
         split(window, :down)
-        trigger(window, Apprt::Action::ResizeSplit.new(:left, 100))
+        trigger(window, DesktopKit::Action::ResizeSplit.new(:left, 100))
         before = layout(window)
         app.quit
       end

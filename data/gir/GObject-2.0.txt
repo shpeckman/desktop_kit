@@ -1,5 +1,5 @@
 # data/gir/GObject-2.0.txt
-# GObject symbols of Apprt::C (src/apprt/c/gobject.cr); see tools/gir/generator.cr.
+# GObject symbols of DesktopKit::C (src/desktop_kit/c/gobject.cr); see tools/gir/generator.cr.
 
 # objects
 GObject

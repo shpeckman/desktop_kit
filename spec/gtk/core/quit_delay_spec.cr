@@ -38,7 +38,7 @@ describe "App#quit_delay" do
     app.quit_delay = 400.milliseconds
     alive = false
     elapsed = close_and_wait(app) do |app|
-      Apprt::Idle.after(200.milliseconds) { alive = app.running? }
+      DesktopKit::Idle.after(200.milliseconds) { alive = app.running? }
     end
     alive.should be_true
     elapsed.should be >= 400.milliseconds
@@ -50,8 +50,8 @@ describe "App#quit_delay" do
     app.quit_delay = 300.milliseconds
     windows = -1
     close_and_wait(app) do |app|
-      Apprt::Idle.after(100.milliseconds) { app.new_window }
-      Apprt::Idle.after(700.milliseconds) do
+      DesktopKit::Idle.after(100.milliseconds) { app.new_window }
+      DesktopKit::Idle.after(700.milliseconds) do
         windows = app.windows.size
         app.quit
       end
@@ -64,7 +64,7 @@ describe "App#quit_delay" do
     app.quit_delay = nil
     alive = false
     close_and_wait(app) do |app|
-      Apprt::Idle.after(500.milliseconds) do
+      DesktopKit::Idle.after(500.milliseconds) do
         alive = app.running? && app.windows.empty?
         app.quit
       end
@@ -76,7 +76,7 @@ describe "App#quit_delay" do
     app = UnheldApp.new
     app.quit_delay = nil
     elapsed = close_and_wait(app) do |app|
-      Apprt::Idle.after(200.milliseconds) { app.quit_delay = Time::Span.zero }
+      DesktopKit::Idle.after(200.milliseconds) { app.quit_delay = Time::Span.zero }
     end
     elapsed.should be >= 200.milliseconds
     elapsed.should be < 5.seconds

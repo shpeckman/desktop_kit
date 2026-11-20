@@ -7,12 +7,12 @@ lib WindowActionsSpecLib
   fun gtk_widget_has_css_class(widget : Void*, name : UInt8*) : Int32
 end
 
-private def default_size(window : Apprt::Window) : {Int32, Int32}
+private def default_size(window : DesktopKit::Window) : {Int32, Int32}
   WindowActionsSpecLib.gtk_window_get_default_size(window.widget, out width, out height)
   {width, height}
 end
 
-private def css_class?(widget : Apprt::Widget, name : String) : Bool
+private def css_class?(widget : DesktopKit::Widget, name : String) : Bool
   WindowActionsSpecLib.gtk_widget_has_css_class(widget, name) != 0
 end
 
@@ -25,10 +25,10 @@ describe "window actions" do
       first = app.new_window
       second = app.new_window
       settle
-      trigger(first, Apprt::Action::ToggleVisibility.new)
+      trigger(first, DesktopKit::Action::ToggleVisibility.new)
       first.widget.visible?.should be_false
       second.widget.visible?.should be_false
-      trigger(first, Apprt::Action::ToggleVisibility.new)
+      trigger(first, DesktopKit::Action::ToggleVisibility.new)
       first.widget.visible?.should be_true
       second.widget.visible?.should be_true
     end
@@ -39,9 +39,9 @@ describe "window actions" do
     run_steps(app) do
       window = app.new_window
       settle
-      trigger(window, Apprt::Action::InitialSize.new(640, 480))
+      trigger(window, DesktopKit::Action::InitialSize.new(640, 480))
       WindowActionsSpecLib.gtk_window_set_default_size(window.widget, 900, 700)
-      trigger(window, Apprt::Action::ResetWindowSize.new)
+      trigger(window, DesktopKit::Action::ResetWindowSize.new)
       default_size(window).should eq({640, 480})
     end
   end
@@ -51,12 +51,12 @@ describe "window actions" do
     run_steps(app) do
       window = app.new_window
       settle
-      trigger(window, Apprt::Action::ToggleBackgroundOpacity.new)
+      trigger(window, DesktopKit::Action::ToggleBackgroundOpacity.new)
       css_class?(window.widget, "opaque").should be_false
-      app.window_style = Apprt::WindowStyle.new(opacity: 0.8)
-      trigger(window, Apprt::Action::ToggleBackgroundOpacity.new)
+      app.window_style = DesktopKit::WindowStyle.new(opacity: 0.8)
+      trigger(window, DesktopKit::Action::ToggleBackgroundOpacity.new)
       css_class?(window.widget, "opaque").should be_true
-      trigger(window, Apprt::Action::ToggleBackgroundOpacity.new)
+      trigger(window, DesktopKit::Action::ToggleBackgroundOpacity.new)
       css_class?(window.widget, "opaque").should be_false
     end
   end
@@ -68,8 +68,8 @@ describe "window actions" do
       window = app.new_window
       settle
       window.active_surface.not_nil!.title = "copy me"
-      trigger(window, Apprt::Action::CopyTitleToClipboard.new)
-      Apprt::Clipboard.read { |text| copied.send(text) }
+      trigger(window, DesktopKit::Action::CopyTitleToClipboard.new)
+      DesktopKit::Clipboard.read { |text| copied.send(text) }
       settle
     end
     copied.receive.should eq "copy me"
@@ -83,7 +83,7 @@ describe "window actions" do
       surface = window.active_surface.not_nil!
       surface.read_only?.should be_false
       surface.@read_only_badge.visible?.should be_false
-      trigger(window, Apprt::Action::ToggleReadOnly.new)
+      trigger(window, DesktopKit::Action::ToggleReadOnly.new)
       surface.read_only?.should be_true
       surface.@read_only_badge.visible?.should be_true
       css_class?(surface.@host, "read-only").should be_true

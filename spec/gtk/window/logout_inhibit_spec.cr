@@ -63,14 +63,14 @@ private class FakeSessionManager < FakeBusService
     export(PATH, NAME)
   end
 
-  protected def call(sender : String, path : String, interface : String, method : String, parameters : Apprt::Variant, invocation : Void*) : Nil
+  protected def call(sender : String, path : String, interface : String, method : String, parameters : DesktopKit::Variant, invocation : Void*) : Nil
     case method
     when "Inhibit"
       cookie = @lock.synchronize do
         @inhibitions << Inhibition.new(parameters[0].get(String), parameters[3].get(UInt32), parameters[2].get(String))
         @inhibitions.size.to_u32
       end
-      reply(invocation, Apprt::Variant.new({cookie}))
+      reply(invocation, DesktopKit::Variant.new({cookie}))
     when "Uninhibit"
       @lock.synchronize { @uninhibited << parameters[0].get(UInt32) }
       reply(invocation, nil)
@@ -79,8 +79,8 @@ private class FakeSessionManager < FakeBusService
 end
 
 # Splits the active surface to the right and returns the new surface.
-private def split(window : Apprt::Window) : Apprt::Surface
-  trigger(window, Apprt::Action::NewSplit.new(:right))
+private def split(window : DesktopKit::Window) : DesktopKit::Surface
+  trigger(window, DesktopKit::Action::NewSplit.new(:right))
   window.active_surface.not_nil!
 end
 
@@ -125,10 +125,10 @@ describe "App#logout_inhibited?" do
         app.logout_inhibited?.should be_true
         surface = window.active_surface.not_nil!
         surface.close
-        dialog = Apprt::C.adw_application_window_get_visible_dialog(window.widget)
+        dialog = DesktopKit::C.adw_application_window_get_visible_dialog(window.widget)
         dialog.null?.should be_false
-        Apprt::C.adw_alert_dialog_set_close_response(dialog, "ok")
-        Apprt::C.adw_dialog_force_close(dialog)
+        DesktopKit::C.adw_alert_dialog_set_close_response(dialog, "ok")
+        DesktopKit::C.adw_dialog_force_close(dialog)
         eventually { surface.closed? }.should be_true
         app.logout_inhibited?.should be_false
         eventually { manager.uninhibited.size == 1 }.should be_true

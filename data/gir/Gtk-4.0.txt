@@ -1,5 +1,5 @@
 # data/gir/Gtk-4.0.txt
-# Gtk symbols of Apprt::C (src/apprt/c/gtk.cr); see tools/gir/generator.cr.
+# Gtk symbols of DesktopKit::C (src/desktop_kit/c/gtk.cr); see tools/gir/generator.cr.
 
 # widget
 GtkWidget

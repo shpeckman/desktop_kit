@@ -3,7 +3,7 @@ require "../harness"
 
 private LIFECYCLE = ["startup", "scheme light", "activate", "shutdown"]
 
-describe Apprt::App do
+describe DesktopKit::App do
   before_all { GtkHarness.start }
 
   it "rejects an invalid application id" do
@@ -34,7 +34,7 @@ describe Apprt::App do
     app.post { order << "first on #{Thread.current.name}" }
     app.post { raise "boom" }
     app.post { order << "second"; app.quit }
-    Log.capture("apprt") do |logs|
+    Log.capture("desktop_kit") do |logs|
       run_app(app).should eq 0
       logs.check(:error, "posted block")
       logs.entry.exception.try(&.message).should eq "boom"
@@ -71,14 +71,14 @@ describe Apprt::App do
     app.on_scheme = ->(app : TestApp) { app.quit if app.events.last == "scheme light" }
     run_app(app).should eq 0
     app.events.should eq ["startup", "scheme dark", "activate", "scheme light", "shutdown"]
-    app.appearance.should eq Apprt::Appearance::Light
+    app.appearance.should eq DesktopKit::Appearance::Light
   end
 
   it "logs style sheet errors" do
     app = TestApp.new
     app.css = "window { colr: red; }"
     app.on_activated = ->(app : TestApp) { app.css = "label { margin: wide; }"; app.quit }
-    Log.capture("apprt") do |logs|
+    Log.capture("desktop_kit") do |logs|
       run_app(app).should eq 0
       logs.check(:warn, /\Acss parsing failed at .+: .+/)
       logs.check(:warn, /\Acss parsing failed at .+: .+/)
@@ -104,9 +104,9 @@ describe Apprt::App do
   it "fires timers once and watches file descriptors until cancelled" do
     app = TestApp.new
     fired = [] of String
-    conditions = [] of Apprt::Source::Condition
-    timer = nil.as(Apprt::Source?)
-    cancelled = nil.as(Apprt::Source?)
+    conditions = [] of DesktopKit::Source::Condition
+    timer = nil.as(DesktopKit::Source?)
+    cancelled = nil.as(DesktopKit::Source?)
     reader, writer = IO.pipe
     run_steps(app) do |app|
       timer = app.after(10.milliseconds) { fired << "timer" }
@@ -124,7 +124,7 @@ describe Apprt::App do
       watch.active?.should be_false
     end
     fired.should eq ["timer"]
-    conditions.should eq [Apprt::Source::Condition::Read]
+    conditions.should eq [DesktopKit::Source::Condition::Read]
     timer.try(&.active?).should be_false
     cancelled.try(&.active?).should be_false
   ensure
@@ -135,9 +135,9 @@ describe Apprt::App do
   it "ends a watch when its descriptor reports invalid and cancels the rest when it quits" do
     app = TestApp.new
     reader, writer = IO.pipe
-    pending = nil.as(Apprt::Source?)
-    invalid = nil.as(Apprt::Source?)
-    seen = Apprt::Source::Condition::None
+    pending = nil.as(DesktopKit::Source?)
+    invalid = nil.as(DesktopKit::Source?)
+    seen = DesktopKit::Source::Condition::None
     run_steps(app) do |app|
       pending = app.after(1.hour) { }
       invalid = app.watch(writer.fd, :write) { |condition| seen |= condition }
@@ -153,10 +153,10 @@ describe Apprt::App do
   end
 
   it "guards the GTK thread" do
-    expect_raises(RuntimeError, "GTK called outside the UI thread") { Apprt::UIThread.assert! }
+    expect_raises(RuntimeError, "GTK called outside the UI thread") { DesktopKit::UIThread.assert! }
     app = TestApp.new
     asserted = false
-    app.on_activated = ->(app : TestApp) { Apprt::UIThread.assert!; asserted = true; app.quit }
+    app.on_activated = ->(app : TestApp) { DesktopKit::UIThread.assert!; asserted = true; app.quit }
     run_app(app).should eq 0
     asserted.should be_true
   end

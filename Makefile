@@ -1,5 +1,5 @@
 # Makefile
-# apprt - native application runtime for Crystal programs on Linux
+# desktop_kit - native application runtime for Crystal programs on Linux
 # See LICENSE file for copyright and license details.
 .POSIX:
 
@@ -18,7 +18,7 @@ spec-pure:
 spec-gtk:
 	$(CRYSTAL) spec spec/gtk --threads 2
 
-# Regenerates src/apprt/c/*.cr from the GIR files and the allowlists in
+# Regenerates src/desktop_kit/c/*.cr from the GIR files and the allowlists in
 # data/gir/ (see tools/gen_gir.cr).
 gen:
 	$(CRYSTAL) run tools/gen_gir.cr
@@ -36,7 +36,7 @@ examples:
 
 # API documentation into docs/.
 docs:
-	$(CRYSTAL) docs src/apprt.cr -o docs
+	$(CRYSTAL) docs src/desktop_kit.cr -o docs
 
 format:
 	$(CRYSTAL) tool format src spec tools examples

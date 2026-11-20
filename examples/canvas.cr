@@ -6,7 +6,7 @@
 #   crystal run examples/canvas.cr
 #
 # Shift+Ctrl+O splits the canvas; Escape clears the text.
-require "../src/apprt"
+require "../src/desktop_kit"
 
 @[Link("GL")]
 lib LibGL
@@ -16,7 +16,7 @@ lib LibGL
   fun glClear(mask : UInt32)
 end
 
-class Scene < Apprt::Canvas
+class Scene < DesktopKit::Canvas
   @red = 0.2
   @green = 0.2
   @brightness = 0.5
@@ -33,24 +33,24 @@ class Scene < Apprt::Canvas
     LibGL.glClear(LibGL::COLOR_BUFFER_BIT)
   end
 
-  protected def on_mouse_motion(event : Apprt::MouseMotionEvent) : Nil
+  protected def on_mouse_motion(event : DesktopKit::MouseMotionEvent) : Nil
     return if width == 0 || height == 0
     @red = (event.x / width).clamp(0.0, 1.0)
     @green = (event.y / height).clamp(0.0, 1.0)
     queue_render
   end
 
-  protected def on_mouse_button(event : Apprt::MouseButtonEvent) : Nil
+  protected def on_mouse_button(event : DesktopKit::MouseButtonEvent) : Nil
     @flash = event.pressed?
     queue_render
   end
 
-  protected def on_scroll(event : Apprt::ScrollEvent) : Nil
+  protected def on_scroll(event : DesktopKit::ScrollEvent) : Nil
     @brightness = (@brightness - event.dy * 0.05).clamp(0.1, 1.0)
     queue_render
   end
 
-  protected def on_key(event : Apprt::KeyEvent) : Bool
+  protected def on_key(event : DesktopKit::KeyEvent) : Bool
     return false unless event.pressed? && event.keyval == 0xff1b_u32 # Escape
     self.text = ""
     true
@@ -65,15 +65,15 @@ class Scene < Apprt::Canvas
   end
 end
 
-class CanvasApp < Apprt::App
-  protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+class CanvasApp < DesktopKit::App
+  protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
     Scene.new
   end
 
   protected def on_startup : Nil
     self.bindings = [
-      Apprt::Binding.new("ctrl+shift+o", Apprt::Action::NewSplit.new(:right)),
-      Apprt::Binding.new("ctrl+shift+w", Apprt::Action::CloseSurface.new),
+      DesktopKit::Binding.new("ctrl+shift+o", DesktopKit::Action::NewSplit.new(:right)),
+      DesktopKit::Binding.new("ctrl+shift+w", DesktopKit::Action::CloseSurface.new),
     ]
   end
 

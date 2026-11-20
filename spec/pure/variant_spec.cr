@@ -7,27 +7,27 @@ private enum Direction
 end
 
 private def round_trip(value : T) : T forall T
-  Apprt::Variant.new(value).get(T)
+  DesktopKit::Variant.new(value).get(T)
 end
 
-describe Apprt::Variant do
+describe DesktopKit::Variant do
   it "maps Crystal types to GVariant types" do
     {
-      Apprt::Variant.signature(Bool)                                               => "b",
-      Apprt::Variant.signature(Int32)                                              => "i",
-      Apprt::Variant.signature(UInt32)                                             => "u",
-      Apprt::Variant.signature(Int64)                                              => "x",
-      Apprt::Variant.signature(UInt64)                                             => "t",
-      Apprt::Variant.signature(Float64)                                            => "d",
-      Apprt::Variant.signature(String)                                             => "s",
-      Apprt::Variant.signature(Apprt::Variant::ObjectPath)                         => "o",
-      Apprt::Variant.signature(Apprt::Variant)                                     => "v",
-      Apprt::Variant.signature(Direction)                                          => "s",
-      Apprt::Variant.signature(Int32?)                                             => "mi",
-      Apprt::Variant.signature(Array(String))                                      => "as",
-      Apprt::Variant.signature(Hash(String, Apprt::Variant))                       => "a{sv}",
-      Apprt::Variant.signature(Tuple(String, Array(Int64), Bool?))                 => "(saxmb)",
-      Apprt::Variant.signature(Array(Tuple(String, Hash(String, Apprt::Variant)))) => "a(sa{sv})",
+      DesktopKit::Variant.signature(Bool)                                                    => "b",
+      DesktopKit::Variant.signature(Int32)                                                   => "i",
+      DesktopKit::Variant.signature(UInt32)                                                  => "u",
+      DesktopKit::Variant.signature(Int64)                                                   => "x",
+      DesktopKit::Variant.signature(UInt64)                                                  => "t",
+      DesktopKit::Variant.signature(Float64)                                                 => "d",
+      DesktopKit::Variant.signature(String)                                                  => "s",
+      DesktopKit::Variant.signature(DesktopKit::Variant::ObjectPath)                         => "o",
+      DesktopKit::Variant.signature(DesktopKit::Variant)                                     => "v",
+      DesktopKit::Variant.signature(Direction)                                               => "s",
+      DesktopKit::Variant.signature(Int32?)                                                  => "mi",
+      DesktopKit::Variant.signature(Array(String))                                           => "as",
+      DesktopKit::Variant.signature(Hash(String, DesktopKit::Variant))                       => "a{sv}",
+      DesktopKit::Variant.signature(Tuple(String, Array(Int64), Bool?))                      => "(saxmb)",
+      DesktopKit::Variant.signature(Array(Tuple(String, Hash(String, DesktopKit::Variant)))) => "a(sa{sv})",
     }.each { |actual, expected| actual.should eq expected }
   end
 
@@ -39,14 +39,14 @@ describe Apprt::Variant do
     round_trip(UInt64::MAX).should eq UInt64::MAX
     round_trip(2.5).should eq 2.5
     round_trip("héllo").should eq "héllo"
-    round_trip(Apprt::Variant::ObjectPath.new("/org/example/App")).path.should eq "/org/example/App"
+    round_trip(DesktopKit::Variant::ObjectPath.new("/org/example/App")).path.should eq "/org/example/App"
   end
 
   it "stores enums as snake case member names" do
-    variant = Apprt::Variant.new(Direction::DownRight)
+    variant = DesktopKit::Variant.new(Direction::DownRight)
     variant.to_s.should eq "'down_right'"
     variant.get(Direction).should eq Direction::DownRight
-    expect_raises(ArgumentError) { Apprt::Variant.new("sideways").get(Direction) }
+    expect_raises(ArgumentError) { DesktopKit::Variant.new("sideways").get(Direction) }
   end
 
   it "round-trips containers" do
@@ -62,13 +62,13 @@ describe Apprt::Variant do
   it "round-trips maybe values" do
     round_trip(5.as(Int32?)).should eq 5
     round_trip(nil.as(Int32?)).should be_nil
-    Apprt::Variant.new(nil.as(String?)).type_string.should eq "ms"
+    DesktopKit::Variant.new(nil.as(String?)).type_string.should eq "ms"
   end
 
   it "boxes variants and unboxes dictionary values" do
-    options = Apprt::Variant.new({"modal" => Apprt::Variant.new(true), "title" => Apprt::Variant.new("Hi")})
+    options = DesktopKit::Variant.new({"modal" => DesktopKit::Variant.new(true), "title" => DesktopKit::Variant.new("Hi")})
     options.type_string.should eq "a{sv}"
-    hash = options.get(Hash(String, Apprt::Variant))
+    hash = options.get(Hash(String, DesktopKit::Variant))
     hash["modal"].get(Bool).should be_true
     hash["title"].get(String).should eq "Hi"
     options["title"]?.try(&.get(String)).should eq "Hi"
@@ -76,7 +76,7 @@ describe Apprt::Variant do
   end
 
   it "indexes containers" do
-    variant = Apprt::Variant.new({"a", 1})
+    variant = DesktopKit::Variant.new({"a", 1})
     variant.size.should eq 2
     variant[0].get(String).should eq "a"
     variant[1].get(Int32).should eq 1
@@ -84,23 +84,23 @@ describe Apprt::Variant do
   end
 
   it "checks types" do
-    variant = Apprt::Variant.new(1)
+    variant = DesktopKit::Variant.new(1)
     variant.is?(Int32).should be_true
     variant.is?(String).should be_false
     expect_raises(TypeCastError, "cast from Variant(i) to String failed") { variant.get(String) }
   end
 
   it "parses the text format" do
-    Apprt::Variant.parse("(1, 'a')").get(Tuple(Int32, String)).should eq({1, "a"})
-    Apprt::Variant.parse("[1, 2]", "ax").get(Array(Int64)).should eq [1_i64, 2_i64]
-    expect_raises(Apprt::GLibError) { Apprt::Variant.parse("(1,") }
+    DesktopKit::Variant.parse("(1, 'a')").get(Tuple(Int32, String)).should eq({1, "a"})
+    DesktopKit::Variant.parse("[1, 2]", "ax").get(Array(Int64)).should eq [1_i64, 2_i64]
+    expect_raises(DesktopKit::GLibError) { DesktopKit::Variant.parse("(1,") }
   end
 
   it "compares by value and prints" do
-    Apprt::Variant.new([1, 2]).should eq Apprt::Variant.new([1, 2])
-    Apprt::Variant.new([1, 2]).should_not eq Apprt::Variant.new([2, 1])
-    Apprt::Variant.new([1, 2]).hash.should eq Apprt::Variant.new([1, 2]).hash
-    Apprt::Variant.new([1, 2]).to_s.should eq "[1, 2]"
-    Apprt::Variant.new("a").inspect.should eq "Variant(s 'a')"
+    DesktopKit::Variant.new([1, 2]).should eq DesktopKit::Variant.new([1, 2])
+    DesktopKit::Variant.new([1, 2]).should_not eq DesktopKit::Variant.new([2, 1])
+    DesktopKit::Variant.new([1, 2]).hash.should eq DesktopKit::Variant.new([1, 2]).hash
+    DesktopKit::Variant.new([1, 2]).to_s.should eq "[1, 2]"
+    DesktopKit::Variant.new("a").inspect.should eq "Variant(s 'a')"
   end
 end

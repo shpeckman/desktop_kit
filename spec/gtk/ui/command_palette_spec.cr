@@ -1,12 +1,12 @@
 # spec/gtk/ui/command_palette_spec.cr
 require "../harness"
 
-private def palette(window : Apprt::Window) : Apprt::CommandPalette
+private def palette(window : DesktopKit::Window) : DesktopKit::CommandPalette
   window.@palette.not_nil!
 end
 
-private def search(palette : Apprt::CommandPalette, text : String) : Nil
-  Apprt::C.gtk_editable_set_text(palette.@entry, text)
+private def search(palette : DesktopKit::CommandPalette, text : String) : Nil
+  DesktopKit::C.gtk_editable_set_text(palette.@entry, text)
   eventually { palette.query == text }.should be_true
   settle
 end
@@ -19,11 +19,11 @@ describe "command palette" do
     run_steps(app) do
       window = app.new_window
       settle
-      trigger(window, Apprt::Action::ToggleCommandPalette.new)
+      trigger(window, DesktopKit::Action::ToggleCommandPalette.new)
       palette = palette(window)
-      Apprt::C.adw_application_window_get_visible_dialog(window.widget).should eq palette.dialog.to_unsafe
-      palette.shown.map(&.title).should eq Apprt::Command.defaults.map(&.title)
-      trigger(window, Apprt::Action::ToggleCommandPalette.new)
+      DesktopKit::C.adw_application_window_get_visible_dialog(window.widget).should eq palette.dialog.to_unsafe
+      palette.shown.map(&.title).should eq DesktopKit::Command.defaults.map(&.title)
+      trigger(window, DesktopKit::Action::ToggleCommandPalette.new)
       palette.closed?.should be_true
     end
   end
@@ -33,7 +33,7 @@ describe "command palette" do
     run_steps(app) do
       window = app.new_window
       settle
-      trigger(window, Apprt::Action::ToggleCommandPalette.new)
+      trigger(window, DesktopKit::Action::ToggleCommandPalette.new)
       palette = palette(window)
       search(palette, "split right")
       palette.shown.map(&.title).should eq ["Split Right"]
@@ -50,7 +50,7 @@ describe "command palette" do
     run_steps(app) do
       window = app.new_window
       settle
-      trigger(window, Apprt::Action::ToggleCommandPalette.new)
+      trigger(window, DesktopKit::Action::ToggleCommandPalette.new)
       palette = palette(window)
       search(palette, "tab")
       shown = palette.shown.map(&.title)
@@ -74,11 +74,11 @@ describe "command palette" do
 
   it "lists the application's commands" do
     app = TestApp.new
-    app.commands = [Apprt::Command.new("Open Tab", Apprt::Action::NewTab.new)]
+    app.commands = [DesktopKit::Command.new("Open Tab", DesktopKit::Action::NewTab.new)]
     run_steps(app) do
       window = app.new_window
       settle
-      trigger(window, Apprt::Action::ToggleCommandPalette.new)
+      trigger(window, DesktopKit::Action::ToggleCommandPalette.new)
       palette = palette(window)
       palette.shown.map(&.title).should eq ["Open Tab"]
       palette.activate

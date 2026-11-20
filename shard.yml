@@ -1,4 +1,4 @@
-name: apprt
+name: desktop_kit
 version: 0.1.0
 
 authors:
@@ -8,7 +8,7 @@ description: |
   Native application runtime for Crystal programs on Linux: GTK 4 and
   libadwaita windows, tabs, splits and surfaces driven by typed actions,
   with desktop notifications, global shortcuts, DBus IPC and systemd
-  integration. A port of Ghostty's apprt.
+  integration.
 
 crystal: ">= 1.23.0"
 

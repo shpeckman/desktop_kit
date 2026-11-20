@@ -1,20 +1,20 @@
 # spec/gtk/ui/bell_spec.cr
 require "../harness"
 
-private def border_shown?(surface : Apprt::Surface) : Bool
-  Apprt::C.gtk_revealer_get_reveal_child(surface.@bell_border.to_unsafe) != 0
+private def border_shown?(surface : DesktopKit::Surface) : Bool
+  DesktopKit::C.gtk_revealer_get_reveal_child(surface.@bell_border.to_unsafe) != 0
 end
 
-private def needs_attention?(window : Apprt::Window, index : Int32) : Bool
-  Apprt::C.adw_tab_page_get_needs_attention(Apprt::C.adw_tab_view_get_nth_page(window.@tab_view, index)) != 0
+private def needs_attention?(window : DesktopKit::Window, index : Int32) : Bool
+  DesktopKit::C.adw_tab_page_get_needs_attention(DesktopKit::C.adw_tab_view_get_nth_page(window.@tab_view, index)) != 0
 end
 
-describe Apprt::Bell do
+describe DesktopKit::Bell do
   before_all { GtkHarness.start }
 
   it "beeps, marks the title and asks for attention by default" do
     app = TestApp.new
-    app.bell.should eq Apprt::Bell::System | Apprt::Bell::Attention | Apprt::Bell::Title
+    app.bell.should eq DesktopKit::Bell::System | DesktopKit::Bell::Attention | DesktopKit::Bell::Title
   end
 
   it "clamps the volume" do
@@ -28,7 +28,7 @@ describe Apprt::Bell do
 
   it "draws only the border when the bell is Border" do
     run_steps(TestApp.new) do |app|
-      app.bell = Apprt::Bell::Border
+      app.bell = DesktopKit::Bell::Border
       window = app.new_window
       first = window.active_surface.not_nil!
       first.title = "shell"
@@ -51,7 +51,7 @@ describe Apprt::Bell do
 
   it "rings without marks when the bell is empty" do
     run_steps(TestApp.new) do |app|
-      app.bell = Apprt::Bell::None
+      app.bell = DesktopKit::Bell::None
       window = app.new_window
       first = window.active_surface.not_nil!
       first.title = "shell"
@@ -67,7 +67,7 @@ describe Apprt::Bell do
 
   it "plays the bell sound and survives a missing file" do
     run_steps(TestApp.new) do |app|
-      app.bell = Apprt::Bell::Audio
+      app.bell = DesktopKit::Bell::Audio
       window = app.new_window
       surface = window.active_surface.not_nil!
       surface.ring_bell
@@ -75,7 +75,7 @@ describe Apprt::Bell do
 
       # The harness runs without a media backend, so every file fails.
       app.bell_sound = Path["/nonexistent/bell.oga"]
-      Log.capture("apprt") do |logs|
+      Log.capture("desktop_kit") do |logs|
         surface.ring_bell
         settle
         logs.check(:warn, /\Abell sound \/nonexistent\/bell\.oga: /)

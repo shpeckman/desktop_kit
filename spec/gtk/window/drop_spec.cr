@@ -15,12 +15,12 @@ lib DropSpecLib
 end
 
 # Content that records what the user drops on it.
-class DropContent < Apprt::WidgetContent
+class DropContent < DesktopKit::WidgetContent
   getter drops = [] of Array(Path) | String
   property? takes = true
 
   def initialize
-    super(Apprt::Widget.new(Apprt::C.gtk_entry_new))
+    super(DesktopKit::Widget.new(DesktopKit::C.gtk_entry_new))
   end
 
   protected def on_drop(files : Array(Path)) : Bool
@@ -36,73 +36,73 @@ end
 
 private def drop_app : TestApp
   app = TestApp.new
-  app.make_content = ->(_context : Apprt::SurfaceContext) { DropContent.new.as(Apprt::Content) }
+  app.make_content = ->(_context : DesktopKit::SurfaceContext) { DropContent.new.as(DesktopKit::Content) }
   app
 end
 
 # Emits `drop` on *target* with *value* at (*x*, *y*) and returns the result.
-private def emit_drop(target : Void*, value : Apprt::C::GValue*, x = 1.0, y = 1.0) : Bool
+private def emit_drop(target : Void*, value : DesktopKit::C::GValue*, x = 1.0, y = 1.0) : Bool
   result = 0
-  Apprt::C.g_signal_emit_by_name(target, "drop", value, x, y, pointerof(result))
-  Apprt::C.g_value_unset(value)
+  DesktopKit::C.g_signal_emit_by_name(target, "drop", value, x, y, pointerof(result))
+  DesktopKit::C.g_value_unset(value)
   result != 0
 end
 
-private def drop_text(surface : Apprt::Surface, text : String) : Bool
-  value = Apprt::C::GValue.new
-  Apprt::C.g_value_init(pointerof(value), Apprt::C::TYPE_STRING)
-  Apprt::C.g_value_set_string(pointerof(value), text)
+private def drop_text(surface : DesktopKit::Surface, text : String) : Bool
+  value = DesktopKit::C::GValue.new
+  DesktopKit::C.g_value_init(pointerof(value), DesktopKit::C::TYPE_STRING)
+  DesktopKit::C.g_value_set_string(pointerof(value), text)
   emit_drop(surface.@data_drop_target, pointerof(value))
 end
 
-private def drop_files(surface : Apprt::Surface, paths : Array(String)) : Bool
+private def drop_files(surface : DesktopKit::Surface, paths : Array(String)) : Bool
   files = paths.map { |path| DropSpecLib.g_file_new_for_path(path) }
-  value = Apprt::C::GValue.new
-  Apprt::C.g_value_init(pointerof(value), Apprt::C.gdk_file_list_get_type)
+  value = DesktopKit::C::GValue.new
+  DesktopKit::C.g_value_init(pointerof(value), DesktopKit::C.gdk_file_list_get_type)
   DropSpecLib.g_value_take_boxed(pointerof(value), DropSpecLib.gdk_file_list_new_from_array(files.to_unsafe, files.size))
-  files.each { |file| Apprt::C.g_object_unref(file) }
+  files.each { |file| DesktopKit::C.g_object_unref(file) }
   emit_drop(surface.@data_drop_target, pointerof(value))
 end
 
-private def drop_file(surface : Apprt::Surface, path : String) : Bool
+private def drop_file(surface : DesktopKit::Surface, path : String) : Bool
   file = DropSpecLib.g_file_new_for_path(path)
-  value = Apprt::C::GValue.new
-  Apprt::C.g_value_init(pointerof(value), DropSpecLib.g_file_get_type)
+  value = DesktopKit::C::GValue.new
+  DesktopKit::C.g_value_init(pointerof(value), DropSpecLib.g_file_get_type)
   DropSpecLib.g_value_set_object(pointerof(value), file)
-  Apprt::C.g_object_unref(file)
+  DesktopKit::C.g_object_unref(file)
   emit_drop(surface.@data_drop_target, pointerof(value))
 end
 
-private def surface_value(surface : Apprt::Surface) : Apprt::C::GValue
-  value = Apprt::C::GValue.new
-  Apprt::C.g_value_init(pointerof(value), Apprt::C::TYPE_UINT64)
-  Apprt::C.g_value_set_uint64(pointerof(value), surface.id)
+private def surface_value(surface : DesktopKit::Surface) : DesktopKit::C::GValue
+  value = DesktopKit::C::GValue.new
+  DesktopKit::C.g_value_init(pointerof(value), DesktopKit::C::TYPE_UINT64)
+  DesktopKit::C.g_value_set_uint64(pointerof(value), surface.id)
   value
 end
 
 # Drops *source* on *target* at the fraction (*x*, *y*) of its size.
-private def drop_surface(source : Apprt::Surface, target : Apprt::Surface, x : Float64, y : Float64) : Bool
+private def drop_surface(source : DesktopKit::Surface, target : DesktopKit::Surface, x : Float64, y : Float64) : Bool
   value = surface_value(source)
   host = target.@host
   emit_drop(target.@surface_drop_target, pointerof(value), x * host.width, y * host.height)
 end
 
-private def indicated?(surface : Apprt::Surface, css_class : String) : Bool
+private def indicated?(surface : DesktopKit::Surface, css_class : String) : Bool
   DropSpecLib.gtk_widget_has_css_class(surface.@drop_indicator, css_class) != 0
 end
 
-private def handle_visible?(surface : Apprt::Surface) : Bool
-  Apprt::C.gtk_widget_get_visible(surface.@handle) != 0
+private def handle_visible?(surface : DesktopKit::Surface) : Bool
+  DesktopKit::C.gtk_widget_get_visible(surface.@handle) != 0
 end
 
 # Returns the type names of *widget*'s event controllers.
-private def controllers(widget : Apprt::Widget) : Array(String)
+private def controllers(widget : DesktopKit::Widget) : Array(String)
   list = DropSpecLib.gtk_widget_observe_controllers(widget)
   names = Array(String).new(DropSpecLib.g_list_model_get_n_items(list)) do |index|
     item = DropSpecLib.g_list_model_get_item(list, index.to_u32)
-    String.new(DropSpecLib.g_type_name_from_instance(item)).tap { Apprt::C.g_object_unref(item) }
+    String.new(DropSpecLib.g_type_name_from_instance(item)).tap { DesktopKit::C.g_object_unref(item) }
   end
-  Apprt::C.g_object_unref(list)
+  DesktopKit::C.g_object_unref(list)
   names
 end
 
@@ -172,12 +172,12 @@ describe "drag and drop" do
         {0.5, 0.1, "drop-up"}, {0.5, 0.9, "drop-down"},
       }.each do |x, y, css_class|
         action = 0
-        Apprt::C.g_signal_emit_by_name(second.@surface_drop_target, "motion", x * host.width, y * host.height, pointerof(action))
-        action.should eq Apprt::C::GdkDragAction::Move.value
+        DesktopKit::C.g_signal_emit_by_name(second.@surface_drop_target, "motion", x * host.width, y * host.height, pointerof(action))
+        action.should eq DesktopKit::C::GdkDragAction::Move.value
         indicated?(second, css_class).should be_true
         (%w[drop-left drop-right drop-up drop-down] - [css_class]).none? { |other| indicated?(second, other) }.should be_true
       end
-      Apprt::C.g_signal_emit_by_name(second.@surface_drop_target, "leave")
+      DesktopKit::C.g_signal_emit_by_name(second.@surface_drop_target, "leave")
       %w[drop-left drop-right drop-up drop-down].none? { |css_class| indicated?(second, css_class) }.should be_true
     end
   end
@@ -208,7 +208,7 @@ describe "drag and drop" do
       first = first_tab.surfaces.first
       second_tab = window.new_tab
       moved = second_tab.surfaces.first
-      trigger(window, Apprt::Action::GotoTab.new(0))
+      trigger(window, DesktopKit::Action::GotoTab.new(0))
       settle
       drop_surface(moved, first, 0.5, 0.9).should be_true
       settle
@@ -230,15 +230,15 @@ describe "drag and drop" do
       second_tab = window.new_tab
       kept = second_tab.surfaces.first
       moved = kept.split(:down)
-      trigger(window, Apprt::Action::GotoTab.new(0))
+      trigger(window, DesktopKit::Action::GotoTab.new(0))
       settle
       drop_surface(moved, first, 0.9, 0.5).should be_true
       settle
       second_tab.surfaces.should eq [kept]
       first_tab.surfaces.should eq [first, moved]
-      trigger(window, Apprt::Action::GotoTab.new(0))
+      trigger(window, DesktopKit::Action::GotoTab.new(0))
       eventually { moved.@host.mapped? }.should be_true
-      trigger(window, Apprt::Action::GotoTab.new(1))
+      trigger(window, DesktopKit::Action::GotoTab.new(1))
       eventually { kept.@host.mapped? }.should be_true
     end
   end

@@ -13,12 +13,12 @@ abstract class FakeBusService
   private PRIMARY_OWNER = 1_u32
 
   private METHOD_CALL = ->(connection : Void*, sender : UInt8*, path : UInt8*, interface : UInt8*, method : UInt8*, parameters : Void*, invocation : Void*, data : Void*) do
-    service = Apprt::Handles.get(data, FakeBusService)
+    service = DesktopKit::Handles.get(data, FakeBusService)
     begin
       service.call(String.new(sender), String.new(path), String.new(interface), String.new(method),
-        Apprt::Variant.from_raw(parameters), invocation)
+        DesktopKit::Variant.from_raw(parameters), invocation)
     rescue ex
-      Apprt::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.Failed", ex.message || ex.class.name)
+      DesktopKit::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.Failed", ex.message || ex.class.name)
     end
     nil
   end
@@ -35,10 +35,10 @@ abstract class FakeBusService
   end
 
   @lock = Mutex.new
-  @context : Void* = Apprt::C.g_main_context_new
+  @context : Void* = DesktopKit::C.g_main_context_new
   @connection = Pointer(Void).null
   @node = Pointer(Void).null
-  @vtable = Pointer(Apprt::C::GDBusInterfaceVTable).malloc(1)
+  @vtable = Pointer(DesktopKit::C::GDBusInterfaceVTable).malloc(1)
   @handle = Pointer(Void).null
   @objects = {} of String => Array(UInt32)
   @quit = Atomic(Bool).new(false)
@@ -54,9 +54,9 @@ abstract class FakeBusService
 
   def stop : Nil
     @quit.set(true)
-    Apprt::C.g_main_context_wakeup(@context)
+    DesktopKit::C.g_main_context_wakeup(@context)
     @stopped.receive
-    Apprt::C.g_main_context_unref(@context)
+    DesktopKit::C.g_main_context_unref(@context)
   end
 
   # Returns the introspection XML of every interface the service exports.
@@ -67,35 +67,35 @@ abstract class FakeBusService
   private abstract def start_service : Nil
 
   # Answers *method* of *interface* on *path*; runs on the service thread.
-  protected abstract def call(sender : String, path : String, interface : String, method : String, parameters : Apprt::Variant, invocation : Void*) : Nil
+  protected abstract def call(sender : String, path : String, interface : String, method : String, parameters : DesktopKit::Variant, invocation : Void*) : Nil
 
   # Exports *interface* of `#xml` on *path*.
   private def export(path : String, interface : String) : Nil
-    info = Apprt::C.g_dbus_node_info_lookup_interface(@node, interface)
-    id = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_register_object(@connection, path, info, @vtable, @handle, nil, error)
+    info = DesktopKit::C.g_dbus_node_info_lookup_interface(@node, interface)
+    id = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_register_object(@connection, path, info, @vtable, @handle, nil, error)
     end
     (@objects[path] ||= [] of UInt32) << id
   end
 
   # Removes every interface exported on *path*.
   private def unexport(path : String) : Nil
-    @objects.delete(path).try &.each { |id| Apprt::C.g_dbus_connection_unregister_object(@connection, id) }
+    @objects.delete(path).try &.each { |id| DesktopKit::C.g_dbus_connection_unregister_object(@connection, id) }
   end
 
-  private def reply(invocation : Void*, value : Apprt::Variant?) : Nil
-    Apprt::C.g_dbus_method_invocation_return_value(invocation, value.try(&.to_unsafe) || Pointer(Void).null)
+  private def reply(invocation : Void*, value : DesktopKit::Variant?) : Nil
+    DesktopKit::C.g_dbus_method_invocation_return_value(invocation, value.try(&.to_unsafe) || Pointer(Void).null)
   end
 
-  private def emit(destination : String?, path : String, interface : String, signal : String, parameters : Apprt::Variant) : Nil
-    Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_emit_signal(@connection, destination, path, interface, signal, parameters, error)
+  private def emit(destination : String?, path : String, interface : String, signal : String, parameters : DesktopKit::Variant) : Nil
+    DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_emit_signal(@connection, destination, path, interface, signal, parameters, error)
     end
   end
 
   # The service thread: serves on `@context` until `#stop`.
   private def run(ready : Channel(Exception?)) : Nil
-    Apprt::C.g_main_context_push_thread_default(@context)
+    DesktopKit::C.g_main_context_push_thread_default(@context)
     begin
       start
     rescue ex
@@ -104,38 +104,38 @@ abstract class FakeBusService
     end
     ready.send(nil)
     until @quit.get
-      Apprt::C.g_main_context_iteration(@context, 1)
+      DesktopKit::C.g_main_context_iteration(@context, 1)
     end
   ensure
     finish
-    Apprt::C.g_main_context_pop_thread_default(@context)
+    DesktopKit::C.g_main_context_pop_thread_default(@context)
     @stopped.send(nil)
   end
 
   private def start : Nil
-    flags = Apprt::C::GDBusConnectionFlags::AuthenticationClient | Apprt::C::GDBusConnectionFlags::MessageBusConnection
-    @connection = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_new_for_address_sync(ENV["DBUS_SESSION_BUS_ADDRESS"], flags, nil, nil, error)
+    flags = DesktopKit::C::GDBusConnectionFlags::AuthenticationClient | DesktopKit::C::GDBusConnectionFlags::MessageBusConnection
+    @connection = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_new_for_address_sync(ENV["DBUS_SESSION_BUS_ADDRESS"], flags, nil, nil, error)
     end
-    @node = Apprt::GLibError.check! { |error| Apprt::C.g_dbus_node_info_new_for_xml(xml, error) }
-    @handle = Apprt::Handles.retain(self.as(FakeBusService))
+    @node = DesktopKit::GLibError.check! { |error| DesktopKit::C.g_dbus_node_info_new_for_xml(xml, error) }
+    @handle = DesktopKit::Handles.retain(self.as(FakeBusService))
     start_service
-    reply = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
-        "RequestName", Apprt::Variant.new({@name, DO_NOT_QUEUE}), nil, Apprt::C::GDBusCallFlags::None, -1, nil, error)
+    reply = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+        "RequestName", DesktopKit::Variant.new({@name, DO_NOT_QUEUE}), nil, DesktopKit::C::GDBusCallFlags::None, -1, nil, error)
     end
-    owner = Apprt::Variant.take(reply)[0].get(UInt32)
+    owner = DesktopKit::Variant.take(reply)[0].get(UInt32)
     raise "#{self.class}: #{@name} is taken" unless owner == PRIMARY_OWNER
   end
 
   # Closing the connection releases the bus name.
   private def finish : Nil
     return if @connection.null?
-    @objects.each_value { |ids| ids.each { |id| Apprt::C.g_dbus_connection_unregister_object(@connection, id) } }
+    @objects.each_value { |ids| ids.each { |id| DesktopKit::C.g_dbus_connection_unregister_object(@connection, id) } }
     @objects.clear
-    Apprt::C.g_dbus_connection_close_sync(@connection, nil, nil)
-    Apprt::C.g_object_unref(@connection)
-    Apprt::C.g_dbus_node_info_unref(@node) unless @node.null?
-    Apprt::Handles.release(@handle) unless @handle.null?
+    DesktopKit::C.g_dbus_connection_close_sync(@connection, nil, nil)
+    DesktopKit::C.g_object_unref(@connection)
+    DesktopKit::C.g_dbus_node_info_unref(@node) unless @node.null?
+    DesktopKit::Handles.release(@handle) unless @handle.null?
   end
 end

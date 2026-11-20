@@ -2,65 +2,65 @@
 require "../harness"
 
 # Returns the surface's host, the widget a split holds.
-private def host(surface : Apprt::Surface) : Apprt::Widget
+private def host(surface : DesktopKit::Surface) : DesktopKit::Widget
   surface.@host
 end
 
-private def paned?(widget : Apprt::Widget?) : Bool
-  !widget.nil? && Apprt::C.g_type_check_instance_is_a(widget, Apprt::C.gtk_paned_get_type) != 0
+private def paned?(widget : DesktopKit::Widget?) : Bool
+  !widget.nil? && DesktopKit::C.g_type_check_instance_is_a(widget, DesktopKit::C.gtk_paned_get_type) != 0
 end
 
-private def orientation(paned : Apprt::Widget) : Apprt::C::GtkOrientation
-  Apprt::C.gtk_orientable_get_orientation(paned)
+private def orientation(paned : DesktopKit::Widget) : DesktopKit::C::GtkOrientation
+  DesktopKit::C.gtk_orientable_get_orientation(paned)
 end
 
-private def start_child(paned : Apprt::Widget) : Apprt::Widget?
-  Apprt::Widget.new?(Apprt::C.gtk_paned_get_start_child(paned))
+private def start_child(paned : DesktopKit::Widget) : DesktopKit::Widget?
+  DesktopKit::Widget.new?(DesktopKit::C.gtk_paned_get_start_child(paned))
 end
 
-private def end_child(paned : Apprt::Widget) : Apprt::Widget?
-  Apprt::Widget.new?(Apprt::C.gtk_paned_get_end_child(paned))
+private def end_child(paned : DesktopKit::Widget) : DesktopKit::Widget?
+  DesktopKit::Widget.new?(DesktopKit::C.gtk_paned_get_end_child(paned))
 end
 
 # Returns whether the pane holding *surface* has its position from the split
 # ratio.
-private def divided?(surface : Apprt::Surface) : Bool
+private def divided?(surface : DesktopKit::Surface) : Bool
   paned = host(surface).parent
   return false unless paned?(paned)
-  value = Apprt::C::GValue.new
-  Apprt::C.g_value_init(pointerof(value), 20_u64) # G_TYPE_BOOLEAN
-  Apprt::C.g_object_get_property(paned.not_nil!, "position-set", pointerof(value))
-  Apprt::C.g_value_get_boolean(pointerof(value)) != 0
+  value = DesktopKit::C::GValue.new
+  DesktopKit::C.g_value_init(pointerof(value), 20_u64) # G_TYPE_BOOLEAN
+  DesktopKit::C.g_object_get_property(paned.not_nil!, "position-set", pointerof(value))
+  DesktopKit::C.g_value_get_boolean(pointerof(value)) != 0
 end
 
 # Returns the divider position of the pane holding *surface*.
-private def position(surface : Apprt::Surface) : Int32
-  Apprt::C.gtk_paned_get_position(host(surface).parent.not_nil!)
+private def position(surface : DesktopKit::Surface) : Int32
+  DesktopKit::C.gtk_paned_get_position(host(surface).parent.not_nil!)
 end
 
-private def dialog(window : Apprt::Window) : Void*
-  Apprt::C.adw_application_window_get_visible_dialog(window.widget)
+private def dialog(window : DesktopKit::Window) : Void*
+  DesktopKit::C.adw_application_window_get_visible_dialog(window.widget)
 end
 
-private def heading(window : Apprt::Window) : String?
+private def heading(window : DesktopKit::Window) : String?
   dialog = dialog(window)
-  Apprt::Native.string?(Apprt::C.adw_alert_dialog_get_heading(dialog)) unless dialog.null?
+  DesktopKit::Native.string?(DesktopKit::C.adw_alert_dialog_get_heading(dialog)) unless dialog.null?
 end
 
 # Closes the visible dialog of *window* with *response*.
-private def respond(window : Apprt::Window, response : String) : Nil
+private def respond(window : DesktopKit::Window, response : String) : Nil
   dialog = dialog(window)
   dialog.null?.should be_false
-  Apprt::C.adw_alert_dialog_set_close_response(dialog, response)
-  Apprt::C.adw_dialog_force_close(dialog)
+  DesktopKit::C.adw_alert_dialog_set_close_response(dialog, response)
+  DesktopKit::C.adw_dialog_force_close(dialog)
   settle
 end
 
 private def default_title : String
-  Apprt::Native.string?(Apprt::C.g_get_application_name) || ""
+  DesktopKit::Native.string?(DesktopKit::C.g_get_application_name) || ""
 end
 
-describe Apprt::Window do
+describe DesktopKit::Window do
   before_all { GtkHarness.start }
 
   it "opens with one tab showing one surface" do
@@ -81,7 +81,7 @@ describe Apprt::Window do
       surface.tab.should eq tab
       surface.window.should eq window
       app.surface(surface.id).should eq surface
-      app.contexts.map(&.kind).should eq [Apprt::SurfaceContext::Kind::Window]
+      app.contexts.map(&.kind).should eq [DesktopKit::SurfaceContext::Kind::Window]
       app.contexts.first.parent.should be_nil
       paned?(host(surface).parent).should be_false
     end
@@ -94,13 +94,13 @@ describe Apprt::Window do
   it "keeps a tab that opens while the application quits" do
     app = TestApp.new
     tabs = -1
-    app.make_content = ->(context : Apprt::SurfaceContext) do
+    app.make_content = ->(context : DesktopKit::SurfaceContext) do
       app.quit if context.kind.tab?
-      Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new)).as(Apprt::Content)
+      DesktopKit::WidgetContent.new(DesktopKit::Widget.new(DesktopKit::C.gtk_entry_new)).as(DesktopKit::Content)
     end
     app.on_activated = ->(app : TestApp) do
       window = app.new_window
-      Apprt::C.gtk_widget_activate_action_variant(window.widget, "win.new-tab", nil).should eq 1
+      DesktopKit::C.gtk_widget_activate_action_variant(window.widget, "win.new-tab", nil).should eq 1
       tabs = window.tabs.size
     end
     run_app(app).should eq 0
@@ -118,15 +118,15 @@ describe Apprt::Window do
       settle
       window.tabs.should eq [first, second, third]
       window.active_tab.should eq third
-      trigger(window, Apprt::Action::GotoTab.new(0))
+      trigger(window, DesktopKit::Action::GotoTab.new(0))
       window.active_tab.should eq first
       fourth = window.new_tab
       window.tabs.should eq [first, fourth, second, third]
       app.contexts.map(&.kind).should eq [
-        Apprt::SurfaceContext::Kind::Window,
-        Apprt::SurfaceContext::Kind::Tab,
-        Apprt::SurfaceContext::Kind::Tab,
-        Apprt::SurfaceContext::Kind::Tab,
+        DesktopKit::SurfaceContext::Kind::Window,
+        DesktopKit::SurfaceContext::Kind::Tab,
+        DesktopKit::SurfaceContext::Kind::Tab,
+        DesktopKit::SurfaceContext::Kind::Tab,
       ]
       app.contexts.last.parent.should eq first.active_surface
     end
@@ -140,16 +140,16 @@ describe Apprt::Window do
       second = window.new_tab
       third = window.new_tab
       settle
-      trigger(window, Apprt::Action::GotoTab.new(Apprt::Action::GotoTab::NEXT))
+      trigger(window, DesktopKit::Action::GotoTab.new(DesktopKit::Action::GotoTab::NEXT))
       window.active_tab.should eq first
-      trigger(window, Apprt::Action::GotoTab.new(Apprt::Action::GotoTab::PREVIOUS))
+      trigger(window, DesktopKit::Action::GotoTab.new(DesktopKit::Action::GotoTab::PREVIOUS))
       window.active_tab.should eq third
-      trigger(window, Apprt::Action::GotoTab.new(1))
+      trigger(window, DesktopKit::Action::GotoTab.new(1))
       window.active_tab.should eq second
-      trigger(window, Apprt::Action::GotoTab.new(Apprt::Action::GotoTab::LAST))
+      trigger(window, DesktopKit::Action::GotoTab.new(DesktopKit::Action::GotoTab::LAST))
       window.active_tab.should eq third
-      trigger(window, Apprt::Action::GotoTab.new(0))
-      trigger(window, Apprt::Action::GotoTab.new(10))
+      trigger(window, DesktopKit::Action::GotoTab.new(0))
+      trigger(window, DesktopKit::Action::GotoTab.new(10))
       window.active_tab.should eq third
     end
   end
@@ -162,11 +162,11 @@ describe Apprt::Window do
       second = window.new_tab
       third = window.new_tab
       settle
-      trigger(window, Apprt::Action::MoveTab.new(1))
+      trigger(window, DesktopKit::Action::MoveTab.new(1))
       window.tabs.should eq [third, first, second]
-      trigger(window, Apprt::Action::MoveTab.new(-1))
+      trigger(window, DesktopKit::Action::MoveTab.new(-1))
       window.tabs.should eq [first, second, third]
-      trigger(window, Apprt::Action::MoveTab.new(-1))
+      trigger(window, DesktopKit::Action::MoveTab.new(-1))
       window.tabs.should eq [first, third, second]
       window.active_tab.should eq third
     end
@@ -179,14 +179,14 @@ describe Apprt::Window do
       first = window.tabs.first
       second = window.new_tab
       settle
-      trigger(window, Apprt::Action::MoveTabToNewWindow.new)
+      trigger(window, DesktopKit::Action::MoveTabToNewWindow.new)
       app.windows.size.should eq 2
       other = app.windows.last
       window.tabs.should eq [first]
       other.tabs.should eq [second]
       second.window.should eq other
       second.active_surface.not_nil!.window.should eq other
-      trigger(other, Apprt::Action::MoveTabToNewWindow.new)
+      trigger(other, DesktopKit::Action::MoveTabToNewWindow.new)
       app.windows.size.should eq 2
     end
   end
@@ -199,15 +199,15 @@ describe Apprt::Window do
       second = window.new_tab
       third = window.new_tab
       settle
-      trigger(window, Apprt::Action::GotoTab.new(0))
-      trigger(window, Apprt::Action::CloseTab.new(:right))
+      trigger(window, DesktopKit::Action::GotoTab.new(0))
+      trigger(window, DesktopKit::Action::CloseTab.new(:right))
       window.tabs.should eq [first]
       second.closed?.should be_true
       third.closed?.should be_true
       second.window.should be_nil
       fourth = window.new_tab
       settle
-      trigger(window, Apprt::Action::CloseTab.new(:other))
+      trigger(window, DesktopKit::Action::CloseTab.new(:other))
       window.tabs.should eq [fourth]
       first.closed?.should be_true
     end
@@ -219,7 +219,7 @@ describe Apprt::Window do
       window = app.new_window
       surface = window.active_surface.not_nil!
       settle
-      trigger(window, Apprt::Action::CloseTab.new(:this))
+      trigger(window, DesktopKit::Action::CloseTab.new(:this))
       window.closed?.should be_true
       surface.closed?.should be_true
       app.windows.should be_empty
@@ -234,7 +234,7 @@ describe Apprt::Window do
       window = app.new_window
       surface = window.active_surface
       settle
-      Apprt::C.g_action_group_activate_action(app.@actions, "new-window", Pointer(Void).null)
+      DesktopKit::C.g_action_group_activate_action(app.@actions, "new-window", Pointer(Void).null)
       settle
       app.windows.size.should eq 2
       app.contexts.last.kind.window?.should be_true
@@ -248,7 +248,7 @@ describe Apprt::Window do
       first = app.new_window
       second = app.new_window
       settle
-      Apprt::C.g_action_group_activate_action(app.@actions, "close-all-windows", Pointer(Void).null)
+      DesktopKit::C.g_action_group_activate_action(app.@actions, "close-all-windows", Pointer(Void).null)
       settle
       first.closed?.should be_true
       second.closed?.should be_true
@@ -267,20 +267,20 @@ describe Apprt::Window do
       surface.title = "shell"
       tab.title.should eq "shell"
       window.title.should eq "shell"
-      Apprt::Native.string?(Apprt::C.gtk_window_get_title(window.widget)).should eq "shell"
-      trigger(window, Apprt::Action::SetTitle.new("vim"))
+      DesktopKit::Native.string?(DesktopKit::C.gtk_window_get_title(window.widget)).should eq "shell"
+      trigger(window, DesktopKit::Action::SetTitle.new("vim"))
       surface.title.should eq "vim"
       surface.title_override = "mine"
       tab.title.should eq "mine"
       tab.title_override = "tab"
       tab.title.should eq "tab"
       window.title.should eq "tab"
-      trigger(window, Apprt::Action::SetWindowTitle.new("window"))
+      trigger(window, DesktopKit::Action::SetWindowTitle.new("window"))
       window.title.should eq "window"
-      Apprt::Native.string?(Apprt::C.gtk_window_get_title(window.widget)).should eq "window"
+      DesktopKit::Native.string?(DesktopKit::C.gtk_window_get_title(window.widget)).should eq "window"
       window.title_override = nil
       window.title.should eq "tab"
-      trigger(window, Apprt::Action::SetTabTitle.new("other"))
+      trigger(window, DesktopKit::Action::SetTabTitle.new("other"))
       tab.title.should eq "other"
       tab.title_override = nil
       tab.title.should eq "mine"
@@ -296,23 +296,23 @@ describe Apprt::Window do
       tab = window.tabs.first
       surface = tab.surfaces.first
       settle
-      trigger(window, Apprt::Action::PromptTitle.new(:tab))
+      trigger(window, DesktopKit::Action::PromptTitle.new(:tab))
       heading(window).should eq "Change Tab Title"
       respond(window, "cancel")
       tab.title_override.should be_nil
-      trigger(window, Apprt::Action::PromptTitle.new(:surface))
+      trigger(window, DesktopKit::Action::PromptTitle.new(:surface))
       heading(window).should eq "Change Surface Title"
       respond(window, "cancel")
       surface.title_override.should be_nil
-      trigger(window, Apprt::Action::PromptTitle.new(:window))
+      trigger(window, DesktopKit::Action::PromptTitle.new(:window))
       heading(window).should eq "Change Window Title"
-      entry = Apprt::C.adw_alert_dialog_get_extra_child(dialog(window))
-      Apprt::C.gtk_editable_set_text(entry, "  custom  ")
+      entry = DesktopKit::C.adw_alert_dialog_get_extra_child(dialog(window))
+      DesktopKit::C.gtk_editable_set_text(entry, "  custom  ")
       respond(window, "ok")
       window.title_override.should eq "custom"
       window.title.should eq "custom"
-      trigger(window, Apprt::Action::PromptTitle.new(:window))
-      Apprt::C.gtk_editable_set_text(Apprt::C.adw_alert_dialog_get_extra_child(dialog(window)), " ")
+      trigger(window, DesktopKit::Action::PromptTitle.new(:window))
+      DesktopKit::C.gtk_editable_set_text(DesktopKit::C.adw_alert_dialog_get_extra_child(dialog(window)), " ")
       respond(window, "ok")
       window.title_override.should be_nil
     end
@@ -366,7 +366,7 @@ describe Apprt::Window do
       window = app.new_window
       window.active_surface.not_nil!.confirm_close = true
       settle
-      Apprt::C.g_action_group_activate_action(app.@actions, "quit", Pointer(Void).null)
+      DesktopKit::C.g_action_group_activate_action(app.@actions, "quit", Pointer(Void).null)
       settle
       heading(window).should eq "Quit?"
       respond(window, "cancel")
@@ -376,7 +376,7 @@ describe Apprt::Window do
   end
 end
 
-describe Apprt::Tab do
+describe DesktopKit::Tab do
   before_all { GtkHarness.start }
 
   it "splits surfaces into nested panes" do
@@ -394,7 +394,7 @@ describe Apprt::Tab do
       outer = host(first).parent.not_nil!
       paned?(outer).should be_true
       outer.parent.should eq root
-      orientation(outer).should eq Apprt::C::GtkOrientation::Horizontal
+      orientation(outer).should eq DesktopKit::C::GtkOrientation::Horizontal
       start_child(outer).should eq host(first)
       end_child(outer).should eq host(second)
 
@@ -405,7 +405,7 @@ describe Apprt::Tab do
       outer = host(first).parent.not_nil!
       outer.parent.should eq root
       inner.parent.should eq outer
-      orientation(inner).should eq Apprt::C::GtkOrientation::Vertical
+      orientation(inner).should eq DesktopKit::C::GtkOrientation::Vertical
       start_child(inner).should eq host(second)
       end_child(inner).should eq host(third)
 
@@ -416,10 +416,10 @@ describe Apprt::Tab do
       tab.surfaces.should eq [fourth, first, second, third]
       tab.active_surface.should eq fourth
       app.contexts.map(&.kind).should eq [
-        Apprt::SurfaceContext::Kind::Window,
-        Apprt::SurfaceContext::Kind::Split,
-        Apprt::SurfaceContext::Kind::Split,
-        Apprt::SurfaceContext::Kind::Split,
+        DesktopKit::SurfaceContext::Kind::Window,
+        DesktopKit::SurfaceContext::Kind::Split,
+        DesktopKit::SurfaceContext::Kind::Split,
+        DesktopKit::SurfaceContext::Kind::Split,
       ]
       app.contexts[2].parent.should eq second
       third.tab.should eq tab
@@ -433,10 +433,10 @@ describe Apprt::Tab do
       tab = window.tabs.first
       first = tab.surfaces.first
       settle
-      trigger(window, Apprt::Action::NewSplit.new(:down))
+      trigger(window, DesktopKit::Action::NewSplit.new(:down))
       second = tab.active_surface.not_nil!
       tab.surfaces.should eq [first, second]
-      orientation(host(first).parent.not_nil!).should eq Apprt::C::GtkOrientation::Vertical
+      orientation(host(first).parent.not_nil!).should eq DesktopKit::C::GtkOrientation::Vertical
     end
   end
 
@@ -452,14 +452,14 @@ describe Apprt::Tab do
       (host(first).width - host(second).width).abs.should be <= 8
       before = position(first)
       first.focus
-      trigger(window, Apprt::Action::ResizeSplit.new(:right, 80_u32))
+      trigger(window, DesktopKit::Action::ResizeSplit.new(:right, 80_u32))
       eventually { divided?(first) && (position(first) - before - 80).abs <= 4 }.should be_true
-      trigger(window, Apprt::Action::ResizeSplit.new(:left, 40_u32))
+      trigger(window, DesktopKit::Action::ResizeSplit.new(:left, 40_u32))
       eventually { divided?(first) && (position(first) - before - 40).abs <= 4 }.should be_true
-      trigger(window, Apprt::Action::EqualizeSplits.new)
+      trigger(window, DesktopKit::Action::EqualizeSplits.new)
       eventually { divided?(first) && (position(first) - before).abs <= 4 }.should be_true
 
-      Apprt::C.gtk_paned_set_position(host(first).parent.not_nil!, before + 100)
+      DesktopKit::C.gtk_paned_set_position(host(first).parent.not_nil!, before + 100)
       settle
       second.split(:down)
       eventually { paned?(host(second).parent) && divided?(first) && (position(first) - before - 100).abs <= 4 }.should be_true
@@ -476,13 +476,13 @@ describe Apprt::Tab do
       third = second.split(:down)
       settle
       tab.active_surface.should eq third
-      trigger(window, Apprt::Action::GotoSplit.new(:left))
+      trigger(window, DesktopKit::Action::GotoSplit.new(:left))
       tab.active_surface.should eq first
-      trigger(window, Apprt::Action::GotoSplit.new(:previous))
+      trigger(window, DesktopKit::Action::GotoSplit.new(:previous))
       tab.active_surface.should eq third
-      trigger(window, Apprt::Action::GotoSplit.new(:next))
+      trigger(window, DesktopKit::Action::GotoSplit.new(:next))
       tab.active_surface.should eq first
-      trigger(window, Apprt::Action::GotoSplit.new(:right))
+      trigger(window, DesktopKit::Action::GotoSplit.new(:right))
       tab.active_surface.should eq second
       second.focus
       third.focus
@@ -500,7 +500,7 @@ describe Apprt::Tab do
       second = first.split(:right)
       settle
       tab.active_surface.should eq second
-      Apprt::C.gtk_widget_grab_focus(first.content.widget)
+      DesktopKit::C.gtk_widget_grab_focus(first.content.widget)
       settle
       tab.active_surface.should eq first
     end
@@ -517,17 +517,17 @@ describe Apprt::Tab do
       second = first.split(:right)
       second.title = "shell"
       settle
-      trigger(window, Apprt::Action::ToggleSplitZoom.new)
+      trigger(window, DesktopKit::Action::ToggleSplitZoom.new)
       tab.zoomed?.should be_true
       tab.title.should eq "🔍 shell"
       host(second).parent.should eq root
       host(first).parent.should be_nil
-      trigger(window, Apprt::Action::ToggleSplitZoom.new)
+      trigger(window, DesktopKit::Action::ToggleSplitZoom.new)
       tab.zoomed?.should be_false
       tab.title.should eq "shell"
       paned?(host(first).parent).should be_true
 
-      trigger(window, Apprt::Action::ToggleSplitZoom.new)
+      trigger(window, DesktopKit::Action::ToggleSplitZoom.new)
       first.focus
       settle
       tab.zoomed?.should be_false
@@ -547,7 +547,7 @@ describe Apprt::Tab do
       second = first.split(:right)
       third = second.split(:down)
       settle
-      trigger(window, Apprt::Action::CloseSurface.new)
+      trigger(window, DesktopKit::Action::CloseSurface.new)
       third.closed?.should be_true
       app.surface(third.id).should be_nil
       tab.surfaces.should eq [first, second]
@@ -616,9 +616,9 @@ describe Apprt::Tab do
       window.prompt("Rename", text: "old") { |text| texts << text }
       settle
       heading(window).should eq "Rename"
-      entry = Apprt::C.adw_alert_dialog_get_extra_child(dialog(window))
-      Apprt::Native.string?(Apprt::C.gtk_editable_get_text(entry)).should eq "old"
-      Apprt::C.gtk_editable_set_text(entry, "new")
+      entry = DesktopKit::C.adw_alert_dialog_get_extra_child(dialog(window))
+      DesktopKit::Native.string?(DesktopKit::C.gtk_editable_get_text(entry)).should eq "old"
+      DesktopKit::C.gtk_editable_set_text(entry, "new")
       respond(window, "ok")
       window.prompt("Rename") { |text| texts << text }
       settle

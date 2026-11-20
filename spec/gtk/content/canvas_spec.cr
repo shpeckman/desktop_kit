@@ -2,12 +2,12 @@
 require "../harness"
 
 # Canvas that records its hooks.
-class TestCanvas < Apprt::Canvas
+class TestCanvas < DesktopKit::Canvas
   getter events = [] of String
-  getter keys = [] of Apprt::KeyEvent
-  getter buttons = [] of Apprt::MouseButtonEvent
-  getter motions = [] of Apprt::MouseMotionEvent
-  getter scrolls = [] of Apprt::ScrollEvent
+  getter keys = [] of DesktopKit::KeyEvent
+  getter buttons = [] of DesktopKit::MouseButtonEvent
+  getter motions = [] of DesktopKit::MouseMotionEvent
+  getter scrolls = [] of DesktopKit::ScrollEvent
   getter renders = 0
   property? handle_keys = false
 
@@ -31,7 +31,7 @@ class TestCanvas < Apprt::Canvas
     @events << "resize"
   end
 
-  protected def on_key(event : Apprt::KeyEvent) : Bool
+  protected def on_key(event : DesktopKit::KeyEvent) : Bool
     @keys << event
     handle_keys?
   end
@@ -48,15 +48,15 @@ class TestCanvas < Apprt::Canvas
     @events << "focus #{focused}"
   end
 
-  protected def on_mouse_button(event : Apprt::MouseButtonEvent) : Nil
+  protected def on_mouse_button(event : DesktopKit::MouseButtonEvent) : Nil
     @buttons << event
   end
 
-  protected def on_mouse_motion(event : Apprt::MouseMotionEvent) : Nil
+  protected def on_mouse_motion(event : DesktopKit::MouseMotionEvent) : Nil
     @motions << event
   end
 
-  protected def on_mouse_enter(event : Apprt::MouseMotionEvent) : Nil
+  protected def on_mouse_enter(event : DesktopKit::MouseMotionEvent) : Nil
     @events << "enter #{event.x} #{event.y}"
   end
 
@@ -64,18 +64,18 @@ class TestCanvas < Apprt::Canvas
     @events << "leave"
   end
 
-  protected def on_scroll(event : Apprt::ScrollEvent) : Nil
+  protected def on_scroll(event : DesktopKit::ScrollEvent) : Nil
     @scrolls << event
   end
 end
 
 private def canvas_app : TestApp
   TestApp.new.tap do |app|
-    app.make_content = ->(context : Apprt::SurfaceContext) { TestCanvas.new.as(Apprt::Content) }
+    app.make_content = ->(context : DesktopKit::SurfaceContext) { TestCanvas.new.as(DesktopKit::Content) }
   end
 end
 
-private def canvas(surface : Apprt::Surface) : TestCanvas
+private def canvas(surface : DesktopKit::Surface) : TestCanvas
   surface.content.as(TestCanvas)
 end
 
@@ -88,19 +88,19 @@ end
 
 # Emits *signal* of a key controller as a key press or release does and
 # returns the signal's result.
-private def key(canvas : TestCanvas, signal : String, keyval : UInt32, state : Apprt::C::GdkModifierType = :none,
+private def key(canvas : TestCanvas, signal : String, keyval : UInt32, state : DesktopKit::C::GdkModifierType = :none,
                 keycode : UInt32 = 0_u32) : Bool
   result = 0
-  Apprt::C.g_signal_emit_by_name(canvas.@key_controller, signal, keyval, keycode, state.value, pointerof(result))
+  DesktopKit::C.g_signal_emit_by_name(canvas.@key_controller, signal, keyval, keycode, state.value, pointerof(result))
   result != 0
 end
 
-private def cursor_name(surface : Apprt::Surface) : String?
-  cursor = Apprt::C.gtk_widget_get_cursor(surface.content.widget)
-  Apprt::Native.string?(Apprt::C.gdk_cursor_get_name(cursor)) unless cursor.null?
+private def cursor_name(surface : DesktopKit::Surface) : String?
+  cursor = DesktopKit::C.gtk_widget_get_cursor(surface.content.widget)
+  DesktopKit::Native.string?(DesktopKit::C.gdk_cursor_get_name(cursor)) unless cursor.null?
 end
 
-describe Apprt::Canvas do
+describe DesktopKit::Canvas do
   before_all { GtkHarness.start }
 
   it "makes a GL context, sizes the framebuffer and draws" do
@@ -139,7 +139,7 @@ describe Apprt::Canvas do
       event.keyval.should eq 0x61
       event.text.should eq "a"
       event.unshifted.should eq 'a'
-      event.mods.should eq Apprt::Mods::None
+      event.mods.should eq DesktopKit::Mods::None
       event.modifier?.should be_false
 
       canvas.handle_keys = true
@@ -147,11 +147,11 @@ describe Apprt::Canvas do
       event = canvas.keys.last
       event.text.should eq "A"
       event.unshifted.should eq 'a'
-      event.mods.should eq Apprt::Mods::Shift
+      event.mods.should eq DesktopKit::Mods::Shift
 
       key(canvas, "key-pressed", 0x63_u32, :control_mask)
       canvas.keys.last.text.should eq "c"
-      canvas.keys.last.mods.should eq Apprt::Mods::Ctrl
+      canvas.keys.last.mods.should eq DesktopKit::Mods::Ctrl
 
       key(canvas, "key-released", 0x63_u32, :control_mask)
       canvas.keys.last.pressed?.should be_false
@@ -182,10 +182,10 @@ describe Apprt::Canvas do
       canvas = drawn_canvas(app)
       key(canvas, "key-pressed", 0xffe3_u32)
       canvas.keys.last.modifier?.should be_true
-      canvas.keys.last.mods.should eq Apprt::Mods::Ctrl
+      canvas.keys.last.mods.should eq DesktopKit::Mods::Ctrl
       canvas.keys.last.text.should be_nil
       key(canvas, "key-released", 0xffe3_u32, :control_mask)
-      canvas.keys.last.mods.should eq Apprt::Mods::None
+      canvas.keys.last.mods.should eq DesktopKit::Mods::None
     end
   end
 
@@ -193,13 +193,13 @@ describe Apprt::Canvas do
     run_steps(TestApp.new) do |app|
       app.new_window
       purpose = ->(canvas : TestCanvas) do
-        value = Apprt::C::GValue.new
-        Apprt::C.g_value_init(pointerof(value), Apprt::C.g_type_from_name("GtkInputPurpose"))
-        Apprt::C.g_object_get_property(canvas.@im_context, "input-purpose", pointerof(value))
-        Apprt::C.g_value_get_enum(pointerof(value)).tap { Apprt::C.g_value_unset(pointerof(value)) }
+        value = DesktopKit::C::GValue.new
+        DesktopKit::C.g_value_init(pointerof(value), DesktopKit::C.g_type_from_name("GtkInputPurpose"))
+        DesktopKit::C.g_object_get_property(canvas.@im_context, "input-purpose", pointerof(value))
+        DesktopKit::C.g_value_get_enum(pointerof(value)).tap { DesktopKit::C.g_value_unset(pointerof(value)) }
       end
-      purpose.call(TestCanvas.new).should eq Apprt::C::GtkInputPurpose::FreeForm.value
-      purpose.call(TestCanvas.new(input_purpose: :terminal)).should eq Apprt::C::GtkInputPurpose::Terminal.value
+      purpose.call(TestCanvas.new).should eq DesktopKit::C::GtkInputPurpose::FreeForm.value
+      purpose.call(TestCanvas.new(input_purpose: :terminal)).should eq DesktopKit::C::GtkInputPurpose::Terminal.value
     end
   end
 
@@ -207,10 +207,10 @@ describe Apprt::Canvas do
     run_steps(canvas_app) do |app|
       canvas = drawn_canvas(app)
       im = canvas.@im_context
-      Apprt::C.g_signal_emit_by_name(im, "commit", "é")
+      DesktopKit::C.g_signal_emit_by_name(im, "commit", "é")
       canvas.events.last(2).should eq ["preedit nil", "commit é"]
 
-      Apprt::C.g_signal_emit_by_name(im, "preedit-start")
+      DesktopKit::C.g_signal_emit_by_name(im, "preedit-start")
       canvas.handle_keys = true
       key(canvas, "key-pressed", 0x61_u32).should be_true
       canvas.keys.last.composing?.should be_true
@@ -223,7 +223,7 @@ describe Apprt::Canvas do
       canvas = drawn_canvas(app)
       second = canvas.surface.split(:right)
       eventually { second.focused? }.should be_true
-      Apprt::C.g_signal_emit_by_name(canvas.@click_gesture, "pressed", 1, 1.0, 1.0)
+      DesktopKit::C.g_signal_emit_by_name(canvas.@click_gesture, "pressed", 1, 1.0, 1.0)
       eventually { canvas.surface.focused? }.should be_true
       second.focused?.should be_false
     end
@@ -232,19 +232,19 @@ describe Apprt::Canvas do
   it "reports buttons, motion and scrolls in framebuffer pixels" do
     run_steps(canvas_app) do |app|
       canvas = drawn_canvas(app)
-      Apprt::C.g_signal_emit_by_name(canvas.@click_gesture, "pressed", 1, 10.5, 20.0)
-      Apprt::C.g_signal_emit_by_name(canvas.@click_gesture, "released", 1, 11.0, 21.0)
+      DesktopKit::C.g_signal_emit_by_name(canvas.@click_gesture, "pressed", 1, 10.5, 20.0)
+      DesktopKit::C.g_signal_emit_by_name(canvas.@click_gesture, "released", 1, 11.0, 21.0)
       canvas.buttons.map { |event| {event.pressed?, event.x, event.y} }.should eq [{true, 10.5, 20.0}, {false, 11.0, 21.0}]
 
-      Apprt::C.g_signal_emit_by_name(canvas.@motion_controller, "enter", 1.0, 2.0)
+      DesktopKit::C.g_signal_emit_by_name(canvas.@motion_controller, "enter", 1.0, 2.0)
       canvas.events.last.should eq "enter 1.0 2.0"
-      Apprt::C.g_signal_emit_by_name(canvas.@motion_controller, "motion", 3.0, 4.0)
+      DesktopKit::C.g_signal_emit_by_name(canvas.@motion_controller, "motion", 3.0, 4.0)
       {canvas.motions.last.x, canvas.motions.last.y}.should eq({3.0, 4.0})
-      Apprt::C.g_signal_emit_by_name(canvas.@motion_controller, "leave")
+      DesktopKit::C.g_signal_emit_by_name(canvas.@motion_controller, "leave")
       canvas.events.last.should eq "leave"
 
       result = 0
-      Apprt::C.g_signal_emit_by_name(canvas.@scroll_controller, "scroll", 0.0, 2.0, pointerof(result))
+      DesktopKit::C.g_signal_emit_by_name(canvas.@scroll_controller, "scroll", 0.0, 2.0, pointerof(result))
       result.should eq 1
       event = canvas.scrolls.last
       {event.dx, event.dy, event.precise?}.should eq({0.0, 2.0, false})
@@ -252,7 +252,7 @@ describe Apprt::Canvas do
   end
 end
 
-describe Apprt::Surface do
+describe DesktopKit::Surface do
   before_all { GtkHarness.start }
 
   it "sets the pointer and hides it" do
@@ -262,7 +262,7 @@ describe Apprt::Surface do
       cursor_name(surface).should be_nil
       surface.cursor = "text"
       cursor_name(surface).should eq "text"
-      trigger(window, Apprt::Action::MouseVisibility.new(visible: false))
+      trigger(window, DesktopKit::Action::MouseVisibility.new(visible: false))
       surface.mouse_visible?.should be_false
       cursor_name(surface).should eq "none"
       surface.mouse_visible = true
@@ -278,7 +278,7 @@ describe Apprt::Surface do
       first = window.active_surface.not_nil!
       first.title = "shell"
       eventually { first.focused? }.should be_true
-      trigger(window, Apprt::Action::RingBell.new)
+      trigger(window, DesktopKit::Action::RingBell.new)
       first.bell_ringing?.should be_false
 
       second = first.split(:right)
@@ -304,30 +304,30 @@ describe Apprt::Surface do
       other = window.new_tab
       settle
       first.ring_bell
-      page = Apprt::C.adw_tab_view_get_nth_page(window.@tab_view, 0)
-      Apprt::C.adw_tab_page_get_needs_attention(page).should eq 1
+      page = DesktopKit::C.adw_tab_view_get_nth_page(window.@tab_view, 0)
+      DesktopKit::C.adw_tab_page_get_needs_attention(page).should eq 1
       tab.title.starts_with?("🔔 ").should be_true
       first.focus
       eventually { !first.bell_ringing? }.should be_true
-      Apprt::C.adw_tab_page_get_needs_attention(page).should eq 0
+      DesktopKit::C.adw_tab_page_get_needs_attention(page).should eq 0
       other.closed?.should be_false
     end
   end
 end
 
-describe Apprt::Clipboard do
+describe DesktopKit::Clipboard do
   before_all { GtkHarness.start }
 
   it "reads back what it wrote" do
     run_steps(TestApp.new) do |app|
       app.new_window
       texts = [] of String?
-      Apprt::Clipboard.write("hello apprt")
-      Apprt::Clipboard.read { |text| texts << text }
-      Apprt::Clipboard.write("selected", :primary)
-      Apprt::Clipboard.read(:primary) { |text| texts << text }
+      DesktopKit::Clipboard.write("hello desktop_kit")
+      DesktopKit::Clipboard.read { |text| texts << text }
+      DesktopKit::Clipboard.write("selected", :primary)
+      DesktopKit::Clipboard.read(:primary) { |text| texts << text }
       eventually { texts.size == 2 }.should be_true
-      texts.should eq ["hello apprt", "selected"]
+      texts.should eq ["hello desktop_kit", "selected"]
     end
   end
 
@@ -335,28 +335,28 @@ describe Apprt::Clipboard do
     run_steps(TestApp.new) do |app|
       app.new_window
       items = [{"text/html", "<b>hi</b>".to_slice}, {"text/plain;charset=utf-8", "hi".to_slice}]
-      Apprt::Clipboard.write(items)
-      Apprt::Clipboard.offered.should eq ["text/html", "text/plain;charset=utf-8"]
-      Apprt::Clipboard.items.should eq items
+      DesktopKit::Clipboard.write(items)
+      DesktopKit::Clipboard.offered.should eq ["text/html", "text/plain;charset=utf-8"]
+      DesktopKit::Clipboard.items.should eq items
       reads = [] of String?
-      Apprt::Clipboard.read("text/html") { |data| reads << data.try { |bytes| String.new(bytes) } }
-      Apprt::Clipboard.read("image/png") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      DesktopKit::Clipboard.read("text/html") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      DesktopKit::Clipboard.read("image/png") { |data| reads << data.try { |bytes| String.new(bytes) } }
       eventually { reads.size == 2 }.should be_true
       reads.sort_by(&.to_s).should eq [nil, "<b>hi</b>"]
-      Apprt::Clipboard.write("plain")
-      Apprt::Clipboard.items.should be_nil
-      Apprt::Clipboard.write([] of {String, Bytes})
-      Apprt::Clipboard.offered.should be_empty
-      expect_raises(ArgumentError, "repeated MIME type") { Apprt::Clipboard.write([items[0], items[0]]) }
+      DesktopKit::Clipboard.write("plain")
+      DesktopKit::Clipboard.items.should be_nil
+      DesktopKit::Clipboard.write([] of {String, Bytes})
+      DesktopKit::Clipboard.offered.should be_empty
+      expect_raises(ArgumentError, "repeated MIME type") { DesktopKit::Clipboard.write([items[0], items[0]]) }
     end
   end
 
   it "raises off the GTK thread" do
-    expect_raises(RuntimeError, "GTK called outside the UI thread") { Apprt::Clipboard.write("x") }
+    expect_raises(RuntimeError, "GTK called outside the UI thread") { DesktopKit::Clipboard.write("x") }
   end
 end
 
-describe "Apprt::Drag" do
+describe "DesktopKit::Drag" do
   before_all { GtkHarness.start }
 
   # A drag's content answers clipboard reads too, which exercises it
@@ -365,20 +365,20 @@ describe "Apprt::Drag" do
     run_steps(TestApp.new) do |app|
       app.new_window
       requests = [] of String
-      source = Apprt::DragContent::Source.new(["text/uri-list", "text/plain"], ->(request : Apprt::Drag::Request) {
+      source = DesktopKit::DragContent::Source.new(["text/uri-list", "text/plain"], ->(request : DesktopKit::Drag::Request) {
         requests << request.mime_type
         request.mime_type == "text/plain" ? request.reply("dragged".to_slice) : request.fail
         request.reply("again".to_slice)
         nil
       })
-      provider = Apprt::DragContent.new(source)
-      Apprt::C.gdk_clipboard_set_content(Apprt::C.gdk_display_get_clipboard(Apprt::C.gdk_display_get_default), provider)
-      Apprt::C.g_object_unref(provider)
-      Apprt::Clipboard.offered.should eq ["text/uri-list", "text/plain"]
+      provider = DesktopKit::DragContent.new(source)
+      DesktopKit::C.gdk_clipboard_set_content(DesktopKit::C.gdk_display_get_clipboard(DesktopKit::C.gdk_display_get_default), provider)
+      DesktopKit::C.g_object_unref(provider)
+      DesktopKit::Clipboard.offered.should eq ["text/uri-list", "text/plain"]
       reads = [] of String?
-      Apprt::Clipboard.read("text/plain") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      DesktopKit::Clipboard.read("text/plain") { |data| reads << data.try { |bytes| String.new(bytes) } }
       eventually { reads.size == 1 }.should be_true
-      Apprt::Clipboard.read("text/uri-list") { |data| reads << data.try { |bytes| String.new(bytes) } }
+      DesktopKit::Clipboard.read("text/uri-list") { |data| reads << data.try { |bytes| String.new(bytes) } }
       eventually { reads.size == 2 }.should be_true
       # A local read of a failed request ends with no data, not an error.
       reads.should eq ["dragged", ""]
@@ -387,8 +387,8 @@ describe "Apprt::Drag" do
   end
 
   it "maps actions to GDK" do
-    Apprt::DragAction.from_gdk(Apprt::C::GdkDragAction::Move | Apprt::C::GdkDragAction::Ask).should eq Apprt::DragAction::Move
-    (Apprt::DragAction::Copy | Apprt::DragAction::Link).to_gdk.should eq Apprt::C::GdkDragAction::Copy | Apprt::C::GdkDragAction::Link
+    DesktopKit::DragAction.from_gdk(DesktopKit::C::GdkDragAction::Move | DesktopKit::C::GdkDragAction::Ask).should eq DesktopKit::DragAction::Move
+    (DesktopKit::DragAction::Copy | DesktopKit::DragAction::Link).to_gdk.should eq DesktopKit::C::GdkDragAction::Copy | DesktopKit::C::GdkDragAction::Link
   end
 end
 

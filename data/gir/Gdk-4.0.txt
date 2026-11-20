@@ -1,5 +1,5 @@
 # data/gir/Gdk-4.0.txt
-# Gdk symbols of Apprt::C (src/apprt/c/gdk.cr); see tools/gir/generator.cr.
+# Gdk symbols of DesktopKit::C (src/desktop_kit/c/gdk.cr); see tools/gir/generator.cr.
 
 # structs
 GdkRectangle

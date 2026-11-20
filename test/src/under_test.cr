@@ -1,6 +1,6 @@
 # src/under_test.cr
 #
-# The apprt app the live tests run: one window of labels with key
+# The desktop_kit app the live tests run: one window of labels with key
 # sequences, a key table, progress, tab, split, header, pane header,
 # offloading and threaded canvas, search, panel, shortcuts dialog, about
 # dialog, sequence timeout and tray bindings, a context menu on every
@@ -35,13 +35,13 @@
 #                              left panel that respects reserved space lost
 #                              exactly the dock's height
 #
-#   apprt-under-test --class ID  runs under the harness with window class ID
-#   apprt-under-test --global    also binds the global shortcut
-#   apprt-under-test --dutch     shows the header menu's texts in Dutch
-#   apprt-under-test --setup     installs the app's desktop file and binds the
+#   desktop-kit-under-test --class ID  runs under the harness with window class ID
+#   desktop-kit-under-test --global    also binds the global shortcut
+#   desktop-kit-under-test --dutch     shows the header menu's texts in Dutch
+#   desktop-kit-under-test --setup     installs the app's desktop file and binds the
 #                                shortcut once, which the desktop confirms
 require "option_parser"
-require "apprt"
+require "desktop_kit"
 
 lib LibGtk
   fun gtk_label_new(text : UInt8*) : Void*
@@ -66,7 +66,7 @@ lib LibGdkWayland
   fun gdk_wayland_toplevel_set_application_id(toplevel : Void*, application_id : UInt8*) : Void
 end
 
-module Apprt::Test
+module DesktopKit::Test
   # The application id, also the basename of the desktop file the portal
   # and the taskbar need to know the app.
   #
@@ -74,59 +74,59 @@ module Apprt::Test
   # id needs a dot, and the portal and kglobalaccel need a stable id. The
   # portal accepts `Registry.Register` only for an id naming an installed
   # desktop file; without one xdg-desktop-portal-kde names the kglobalaccel
-  # component after the session token (`token_apprt_<hex>` in
+  # component after the session token (`token_desktop_kit_<hex>` in
   # `~/.config/kglobalshortcutsrc`), new each run, and asks again each time.
-  APP_ID = "org.example.ApprtLive"
+  APP_ID = "org.example.DesktopKitLive"
 
   # The global binding under test.
-  TRIGGER = Apprt::Trigger.parse("ctrl+alt+shift+F9")
+  TRIGGER = DesktopKit::Trigger.parse("ctrl+alt+shift+F9")
 
   # Reports *line* and the window's key tables.
-  Apprt.action Report, "report", scope: :window, payload: {line: String}
+  DesktopKit.action Report, "report", scope: :window, payload: {line: String}
 
   # Shows *percent* as the surface's progress; -1 clears it.
-  Apprt.action ShowProgress, "show-progress", scope: :split, payload: {percent: Int32}
+  DesktopKit.action ShowProgress, "show-progress", scope: :split, payload: {percent: Int32}
 
   # Reports the tab's surfaces in order.
-  Apprt.action ReportSurfaces, "report-surfaces", scope: :tab
+  DesktopKit.action ReportSurfaces, "report-surfaces", scope: :tab
 
   # Moves the tab bar into the header bar.
-  Apprt.action HeaderTabs, "header-tabs", scope: :app
+  DesktopKit.action HeaderTabs, "header-tabs", scope: :app
 
   # Shows a pane header on every surface.
-  Apprt.action PaneHeaders, "pane-headers", scope: :app
+  DesktopKit.action PaneHeaders, "pane-headers", scope: :app
 
   # Opens a tab whose content is a `Halves` canvas: rendering on its own
   # thread when *threaded*, else offloading.
-  Apprt.action OpenCanvas, "open-canvas", scope: :window, payload: {threaded: Bool}
+  DesktopKit.action OpenCanvas, "open-canvas", scope: :window, payload: {threaded: Bool}
 
   # Lets pending key sequences expire after `SEQUENCE_TIMEOUT`.
-  Apprt.action SequenceTimeout, "sequence-timeout", scope: :app
+  DesktopKit.action SequenceTimeout, "sequence-timeout", scope: :app
 
   # Shows the about dialog.
-  Apprt.action ShowAbout, "show-about", scope: :window
+  DesktopKit.action ShowAbout, "show-about", scope: :window
 
   # Shows the tray icon and reports whether the desktop registered it.
-  Apprt.action ShowTray, "show-tray", scope: :app
+  DesktopKit.action ShowTray, "show-tray", scope: :app
 
   # Opens the quick panel the first time, toggles it after that.
-  Apprt.action QuickPanel, "quick-panel", scope: :app
+  DesktopKit.action QuickPanel, "quick-panel", scope: :app
 
   # Reports whether the quick panel is shown.
-  Apprt.action ReportPanel, "report-panel", scope: :app
+  DesktopKit.action ReportPanel, "report-panel", scope: :app
 
   # Opens a bottom dock and checks the space it reserves.
-  Apprt.action DockPanel, "dock-panel", scope: :app
+  DesktopKit.action DockPanel, "dock-panel", scope: :app
 
   # The quick panel: a drop-down above other windows that hides when it
   # loses the focus.
-  QUICK = Apprt::Panel.new(edge: :top, height: 200, layer: :overlay,
+  QUICK = DesktopKit::Panel.new(edge: :top, height: 200, layer: :overlay,
     hide_on_focus_loss: true, name: "quick")
 
   # The dock `DockPanel` opens, and the left panel whose height shows
   # the space the dock reserves.
-  DOCK  = Apprt::Panel.new(edge: :bottom, height: 160, name: "dock")
-  PROBE = Apprt::Panel.new(edge: :left, width: 60, exclusive_zone: 0, name: "probe")
+  DOCK  = DesktopKit::Panel.new(edge: :bottom, height: 160, name: "dock")
+  PROBE = DesktopKit::Panel.new(edge: :left, width: 60, exclusive_zone: 0, name: "probe")
 
   # The window bindings under test. `ctrl+t` is a plain window shortcut
   # that `ctrl+a>ctrl+t` must win over while the sequence is pending.
@@ -165,12 +165,12 @@ module Apprt::Test
   SEQUENCE_TIMEOUT = 300.milliseconds
 
   # The about dialog `ShowAbout` shows.
-  ABOUT = Apprt::About.new("apprt live test", version: "1.0", icon: "applications-system-symbolic",
-    developer: "apprt", comments: "The app the apprt live tests run", license: :mit)
+  ABOUT = DesktopKit::About.new("desktop_kit live test", version: "1.0", icon: "applications-system-symbolic",
+    developer: "desktop_kit", comments: "The app the desktop_kit live tests run", license: :mit)
 
   # The tray icon `ShowTray` shows; its menu opens a window.
-  TRAY = Apprt::Tray.new(icon: "applications-system-symbolic", title: "apprt live test",
-    menu: Apprt::Menu.build { |menu| menu.item "New Window", Action::NewWindow.new })
+  TRAY = DesktopKit::Tray.new(icon: "applications-system-symbolic", title: "desktop_kit live test",
+    menu: DesktopKit::Menu.build { |menu| menu.item "New Window", Action::NewWindow.new })
 
   # The Dutch texts of the header menu, for `--dutch`. The longest label
   # keeps the menu an even number of pixels wide: KWin and sway round a
@@ -192,7 +192,7 @@ module Apprt::Test
   }
 
   # The context menu of every label.
-  CONTEXT_MENU = Apprt::Menu.build do |menu|
+  CONTEXT_MENU = DesktopKit::Menu.build do |menu|
     menu.item "Report", Report.new("context")
     menu.item "Split Right", Action::NewSplit.new(:right)
   end
@@ -207,7 +207,7 @@ module Apprt::Test
   # Canvas that clears its upper half red and its lower half blue, and
   # reports how its first frame reached the screen. It renders on its own
   # thread when *threaded*, else it offloads.
-  class Halves < Apprt::Canvas
+  class Halves < DesktopKit::Canvas
     @reported = false
 
     def initialize(@threaded : Bool)
@@ -226,7 +226,7 @@ module Apprt::Test
       LibGL.glDisable(LibGL::SCISSOR_TEST)
     end
 
-    protected def on_presented(timing : Apprt::FrameTiming) : Nil
+    protected def on_presented(timing : DesktopKit::FrameTiming) : Nil
       return if @reported
       @reported = true
       Test.report(@threaded ? "canvas threaded" : "canvas dmabuf=#{dmabuf?}")
@@ -234,7 +234,7 @@ module Apprt::Test
   end
 
   # A label that reports its search and matches every needle three times.
-  class Label < Apprt::WidgetContent
+  class Label < DesktopKit::WidgetContent
     MATCHES = 3
 
     # Labels are not focusable: the window's first button keeps the focus,
@@ -243,10 +243,10 @@ module Apprt::Test
     @selected = 0
 
     def initialize(text : String)
-      super(Apprt::Widget.new(LibGtk.gtk_label_new(text)))
+      super(DesktopKit::Widget.new(LibGtk.gtk_label_new(text)))
     end
 
-    protected def context_menu(x : Float64, y : Float64) : Apprt::Menu?
+    protected def context_menu(x : Float64, y : Float64) : DesktopKit::Menu?
       CONTEXT_MENU
     end
 
@@ -268,12 +268,12 @@ module Apprt::Test
     end
   end
 
-  class UnderTest < Apprt::App
+  class UnderTest < DesktopKit::App
     getter? failed = false
 
     # The kind each surface's content was opened as: `ReportSurfaces` names
     # surfaces by it, so a drop's new order shows.
-    @kinds = {} of Apprt::Content => String
+    @kinds = {} of DesktopKit::Content => String
 
     # Whether the next surface is a `Halves` canvas, and whether it renders
     # on its own thread.
@@ -281,7 +281,7 @@ module Apprt::Test
     @threaded = false
 
     # The quick panel once `QuickPanel` opened it.
-    @quick : Apprt::Window?
+    @quick : DesktopKit::Window?
 
     # Runs with *window_class* as the Wayland app id of its window when
     # given; *global* binds the global shortcut; *setup* waits for the
@@ -299,8 +299,8 @@ module Apprt::Test
       File.write(file, <<-DESKTOP)
         [Desktop Entry]
         Type=Application
-        Name=apprt live test
-        Comment=The app the apprt live tests run
+        Name=desktop_kit live test
+        Comment=The app the desktop_kit live tests run
         Exec=#{Process.executable_path || PROGRAM_NAME}
         NoDisplay=true
 
@@ -312,15 +312,15 @@ module Apprt::Test
     protected def on_startup : Nil
       # A blinking caret would make shots of the search bar differ.
       LibGtk.g_object_set(LibGtk.gtk_settings_get_default, "gtk-cursor-blink", 0, Pointer(Void).null)
-      bindings = BINDINGS.map { |keys, action| Apprt::Binding.new(keys, action) }
+      bindings = BINDINGS.map { |keys, action| DesktopKit::Binding.new(keys, action) }
       # Only --global and --setup bind: a nested sway shares the session bus
       # and would reach the real desktop's portal. Plasma 6.4+ asks in a
       # dialog for unbound shortcuts, so --setup binds once; still every
       # start calls `BindShortcuts`, which xdg-desktop-portal-kde 6.7.4+
       # needs to activate the stored shortcut.
-      bindings << Apprt::Binding.new(TRIGGER, Apprt::Action::NewTab.new, global: true) if @global || @setup
+      bindings << DesktopKit::Binding.new(TRIGGER, DesktopKit::Action::NewTab.new, global: true) if @global || @setup
       self.bindings = bindings
-      self.key_tables = {"mode" => MODE.map { |keys, action| Apprt::Binding.new(keys, action) }}
+      self.key_tables = {"mode" => MODE.map { |keys, action| DesktopKit::Binding.new(keys, action) }}
     end
 
     protected def on_activate : Nil
@@ -334,7 +334,7 @@ module Apprt::Test
       report "window"
     end
 
-    protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+    protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
       if context.kind.tab?
         report "tab"
         if @setup
@@ -352,70 +352,70 @@ module Apprt::Test
       content
     end
 
-    protected def on_binding_failed(binding : Apprt::Binding, message : String) : Nil
+    protected def on_binding_failed(binding : DesktopKit::Binding, message : String) : Nil
       @failed = true
       report "unbound #{binding.trigger}: #{message}"
       quit if @setup
     end
 
-    protected def perform(target : Apprt::Window, action : Report) : Bool
+    protected def perform(target : DesktopKit::Window, action : Report) : Bool
       # The active key tables ride along, so `expect` proves both the
       # binding and the table it came from.
       report "#{action.line} tables=#{target.key_tables.join(',')}"
       true
     end
 
-    protected def perform(target : Apprt::Surface, action : ShowProgress) : Bool
-      target.progress = action.percent < 0 ? nil : Apprt::Progress.new(action.percent / 100)
+    protected def perform(target : DesktopKit::Surface, action : ShowProgress) : Bool
+      target.progress = action.percent < 0 ? nil : DesktopKit::Progress.new(action.percent / 100)
       report "progress #{action.percent}"
       true
     end
 
-    protected def perform(target : Apprt::Tab, action : ReportSurfaces) : Bool
+    protected def perform(target : DesktopKit::Tab, action : ReportSurfaces) : Bool
       report "surfaces #{target.surfaces.join(',') { |surface| @kinds[surface.content]? }}"
       true
     end
 
-    protected def perform(target : Apprt::App, action : HeaderTabs) : Bool
-      self.window_style = Apprt::WindowStyle.new(tabs_in_header: true)
+    protected def perform(target : DesktopKit::App, action : HeaderTabs) : Bool
+      self.window_style = DesktopKit::WindowStyle.new(tabs_in_header: true)
       report "header tabs"
       true
     end
 
-    protected def perform(target : Apprt::App, action : PaneHeaders) : Bool
-      self.window_style = Apprt::WindowStyle.new(pane_headers: true)
+    protected def perform(target : DesktopKit::App, action : PaneHeaders) : Bool
+      self.window_style = DesktopKit::WindowStyle.new(pane_headers: true)
       report "pane headers"
       true
     end
 
-    protected def perform(target : Apprt::Window, action : OpenCanvas) : Bool
+    protected def perform(target : DesktopKit::Window, action : OpenCanvas) : Bool
       @canvas = true
       @threaded = action.threaded
-      perform(target, Apprt::Action::NewTab.new)
+      perform(target, DesktopKit::Action::NewTab.new)
     end
 
-    protected def perform(target : Apprt::App, action : SequenceTimeout) : Bool
+    protected def perform(target : DesktopKit::App, action : SequenceTimeout) : Bool
       self.sequence_timeout = SEQUENCE_TIMEOUT
       report "timeout #{SEQUENCE_TIMEOUT.total_milliseconds.to_i}"
       true
     end
 
-    protected def perform(target : Apprt::Window, action : ShowAbout) : Bool
+    protected def perform(target : DesktopKit::Window, action : ShowAbout) : Bool
       target.show_about(ABOUT)
       true
     end
 
     # Shows the tray, then asks the watcher after a second, when the
     # registration had time to arrive.
-    protected def perform(target : Apprt::App, action : ShowTray) : Bool
+    protected def perform(target : DesktopKit::App, action : ShowTray) : Bool
       self.tray = TRAY
       after(1.second) { report_tray }
       true
     end
 
-    protected def perform(target : Apprt::App, action : QuickPanel) : Bool
+    protected def perform(target : DesktopKit::App, action : QuickPanel) : Bool
       if @quick
-        perform(target, Apprt::Action::TogglePanel.new(QUICK.name))
+        perform(target, DesktopKit::Action::TogglePanel.new(QUICK.name))
       else
         @quick = new_panel(QUICK)
       end
@@ -423,12 +423,12 @@ module Apprt::Test
       true
     end
 
-    protected def perform(target : Apprt::App, action : ReportPanel) : Bool
+    protected def perform(target : DesktopKit::App, action : ReportPanel) : Bool
       report_panel
       true
     end
 
-    protected def perform(target : Apprt::App, action : DockPanel) : Bool
+    protected def perform(target : DesktopKit::App, action : DockPanel) : Bool
       probe = new_panel(PROBE)
       after(500.milliseconds) do
         before = probe.widget.height
@@ -438,9 +438,9 @@ module Apprt::Test
       true
     end
 
-    # Closes every panel once *window* closed, so the app quits; apprt has
+    # Closes every panel once *window* closed, so the app quits; desktop_kit has
     # no hook for a closed window, so this checks every 100 ms.
-    private def close_panels_with(window : Apprt::Window) : Nil
+    private def close_panels_with(window : DesktopKit::Window) : Nil
       after(100.milliseconds) do
         if window.closed?
           windows.select(&.panel).each(&.close)
@@ -452,9 +452,9 @@ module Apprt::Test
 
     private def report_tray : Nil
       bus = dbus || return report "tray registered=false"
-      args = Apprt::Variant.new({"org.kde.StatusNotifierWatcher", "RegisteredStatusNotifierItems"})
+      args = DesktopKit::Variant.new({"org.kde.StatusNotifierWatcher", "RegisteredStatusNotifierItems"})
       bus.call("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties", "Get", args) do |reply, _error|
-        items = reply.try(&.[0].get(Apprt::Variant).get(Array(String))) || [] of String
+        items = reply.try(&.[0].get(DesktopKit::Variant).get(Array(String))) || [] of String
         report "tray registered=#{items.any?(&.starts_with?(bus.unique_name))}"
       end
     end
@@ -474,23 +474,23 @@ global = false
 dutch = false
 setup = false
 OptionParser.parse do |parser|
-  parser.banner = "Usage: apprt-under-test [--class ID] [--global] | --setup"
+  parser.banner = "Usage: desktop-kit-under-test [--class ID] [--global] | --setup"
   parser.on("--class ID", "Runs under the harness with window class ID") { |id| window_class = id }
   parser.on("--global", "Also binds the global shortcut") { global = true }
   parser.on("--dutch", "Shows the header menu's texts in Dutch") { dutch = true }
   parser.on("--setup", "Installs the desktop file and binds the shortcut once") { setup = true }
   parser.invalid_option do |flag|
-    STDERR.puts "apprt-under-test: unknown option #{flag}\n#{parser}"
+    STDERR.puts "desktop-kit-under-test: unknown option #{flag}\n#{parser}"
     exit 2
   end
 end
 
 if setup
-  STDERR.puts "Installed #{Apprt::Test::UnderTest.install_desktop_file}."
-  STDERR.puts "Confirm the shortcut in the desktop's dialog, then press #{Apprt::Test::TRIGGER.label}."
+  STDERR.puts "Installed #{DesktopKit::Test::UnderTest.install_desktop_file}."
+  STDERR.puts "Confirm the shortcut in the desktop's dialog, then press #{DesktopKit::Test::TRIGGER.label}."
 end
 # Before `App.new`: built-in defaults (`Menu.window`) translate at init.
-Apprt.translator = ->(text : String) { Apprt::Test::DUTCH.fetch(text, text) } if dutch
-app = Apprt::Test::UnderTest.new(window_class, global, setup)
+DesktopKit.translator = ->(text : String) { DesktopKit::Test::DUTCH.fetch(text, text) } if dutch
+app = DesktopKit::Test::UnderTest.new(window_class, global, setup)
 status = app.run
 exit(app.failed? ? 1 : status)

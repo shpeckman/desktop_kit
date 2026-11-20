@@ -1,5 +1,5 @@
 # data/gir/Pango-1.0.txt
-# Pango symbols of Apprt::C (src/apprt/c/pango.cr); see tools/gir/generator.cr.
+# Pango symbols of DesktopKit::C (src/desktop_kit/c/pango.cr); see tools/gir/generator.cr.
 
 # font chooser
 pango_font_description_from_string

@@ -42,7 +42,7 @@ module GtkHarness
 
   def self.start : Nil
     return if @@dir
-    dir = File.tempname("apprt-spec")
+    dir = File.tempname("desktop-kit-spec")
     Dir.mkdir(dir, 0o700)
     @@dir = dir
     File.write("#{dir}/sway.conf", SWAY_CONFIG)
@@ -116,22 +116,22 @@ module AppIds
 
   def self.next : String
     @@count += 1
-    "org.example.ApprtSpec.App#{@@count}"
+    "org.example.DesktopKitSpec.App#{@@count}"
   end
 end
 
 # Application that records its hooks; it quits on activation unless
 # *on_activated* is replaced.
-class TestApp < Apprt::App
+class TestApp < DesktopKit::App
   getter events = [] of String
   getter? off_thread = false
   property on_activated : TestApp -> = ->(app : TestApp) { app.quit }
   property on_reloaded : TestApp -> = ->(app : TestApp) { }
   property on_scheme : TestApp -> = ->(app : TestApp) { }
-  getter contexts = [] of Apprt::SurfaceContext
+  getter contexts = [] of DesktopKit::SurfaceContext
   # Makes the content of new surfaces; a text entry by default.
-  property make_content : Apprt::SurfaceContext -> Apprt::Content = ->(context : Apprt::SurfaceContext) do
-    Apprt::WidgetContent.new(Apprt::Widget.new(Apprt::C.gtk_entry_new)).as(Apprt::Content)
+  property make_content : DesktopKit::SurfaceContext -> DesktopKit::Content = ->(context : DesktopKit::SurfaceContext) do
+    DesktopKit::WidgetContent.new(DesktopKit::Widget.new(DesktopKit::C.gtk_entry_new)).as(DesktopKit::Content)
   end
 
   # Closed surfaces are released at once unless a spec sets
@@ -144,10 +144,10 @@ class TestApp < Apprt::App
   # Without windows or a hold, GApplication quits as soon as it is idle.
   protected def on_startup : Nil
     record "startup"
-    Apprt::C.g_application_hold(to_unsafe)
+    DesktopKit::C.g_application_hold(to_unsafe)
   end
 
-  protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+  protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
     @contexts << context
     make_content.call(context)
   end
@@ -162,7 +162,7 @@ class TestApp < Apprt::App
     on_reloaded.call(self)
   end
 
-  protected def on_color_scheme(scheme : Apprt::ColorScheme) : Nil
+  protected def on_color_scheme(scheme : DesktopKit::ColorScheme) : Nil
     record "scheme #{scheme.to_s.downcase}"
     on_scheme.call(self)
   end
@@ -172,7 +172,7 @@ class TestApp < Apprt::App
   end
 
   def record(event : String) : Nil
-    @off_thread = true unless Apprt::UIThread.current? && Thread.current.name == "gtk"
+    @off_thread = true unless DesktopKit::UIThread.current? && Thread.current.name == "gtk"
     @events << event
   end
 end
@@ -210,7 +210,7 @@ end
 def settle(duration : Time::Span = 200.milliseconds) : Nil
   deadline = Time.instant + duration
   while Time.instant < deadline
-    Apprt::C.g_main_context_iteration(Pointer(Void).null, 0)
+    DesktopKit::C.g_main_context_iteration(Pointer(Void).null, 0)
     sleep 1.millisecond
   end
 end
@@ -221,16 +221,16 @@ def eventually(timeout : Time::Span = 5.seconds, &condition : -> Bool) : Bool
   deadline = Time.instant + timeout
   until condition.call
     return false if Time.instant >= deadline
-    Apprt::C.g_main_context_iteration(Pointer(Void).null, 0)
+    DesktopKit::C.g_main_context_iteration(Pointer(Void).null, 0)
     sleep 1.millisecond
   end
   true
 end
 
 # Triggers *action* from *window*, as its menu and shortcuts do.
-def trigger(window : Apprt::Window, action : Apprt::Action) : Nil
+def trigger(window : DesktopKit::Window, action : DesktopKit::Action) : Nil
   parameter = action.to_variant.try(&.to_unsafe) || Pointer(Void).null
   name = "#{action.scope.prefix}.#{action.name}"
-  Apprt::C.gtk_widget_activate_action_variant(window.widget, name, parameter).should eq 1
+  DesktopKit::C.gtk_widget_activate_action_variant(window.widget, name, parameter).should eq 1
   settle
 end

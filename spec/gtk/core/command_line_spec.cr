@@ -12,9 +12,9 @@ private class OpenApp < TestApp
 end
 
 private class StatusApp < TestApp
-  getter command_lines = [] of Apprt::CommandLine
+  getter command_lines = [] of DesktopKit::CommandLine
 
-  protected def on_command_line(command_line : Apprt::CommandLine) : Int32
+  protected def on_command_line(command_line : DesktopKit::CommandLine) : Int32
     @command_lines << command_line
     quit
     3

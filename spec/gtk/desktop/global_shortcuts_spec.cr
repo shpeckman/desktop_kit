@@ -5,24 +5,24 @@ require "./fake_portal"
 class ShortcutApp < TestApp
   getter failures = [] of {String, String}
 
-  protected def on_binding_failed(binding : Apprt::Binding, message : String) : Nil
+  protected def on_binding_failed(binding : DesktopKit::Binding, message : String) : Nil
     @failures << {binding.trigger.to_s, message}
   end
 end
 
 private def xdg(trigger : String) : String
-  Apprt::Trigger.parse(trigger).to_xdg
+  DesktopKit::Trigger.parse(trigger).to_xdg
 end
 
-private def global_bindings : Array(Apprt::Binding)
+private def global_bindings : Array(DesktopKit::Binding)
   [
-    Apprt::Binding.new("ctrl+shift+n", Apprt::Action::NewWindow.new, global: true),
-    Apprt::Binding.new("ctrl+shift+t", Apprt::Action::NewTab.new, global: true),
-    Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
+    DesktopKit::Binding.new("ctrl+shift+n", DesktopKit::Action::NewWindow.new, global: true),
+    DesktopKit::Binding.new("ctrl+shift+t", DesktopKit::Action::NewTab.new, global: true),
+    DesktopKit::Binding.new("ctrl+q", DesktopKit::Action::Quit.new),
   ]
 end
 
-describe "Apprt::App global bindings" do
+describe "DesktopKit::App global bindings" do
   before_all { GtkHarness.start }
 
   it "registers the application id with the portal before it runs" do
@@ -85,7 +85,7 @@ describe "Apprt::App global bindings" do
       app.bindings = global_bindings
       run_steps(app) do
         eventually { portal.shortcuts.size == 2 }.should be_true
-        app.bindings = [] of Apprt::Binding
+        app.bindings = [] of DesktopKit::Binding
         eventually { portal.closed.size == 1 }.should be_true
         portal.sessions.size.should eq 1
         app.bindings = global_bindings.first(1)

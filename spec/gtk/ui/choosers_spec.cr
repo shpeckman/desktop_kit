@@ -36,7 +36,7 @@ private def dismiss(type : String) : Nil
     ChoosersSpecLib.g_list_model_get_item(list, index.to_u32)
   end
   windows.each do |window|
-    Apprt::C.g_signal_emit_by_name(window, "response", -6) if String.new(ChoosersSpecLib.g_type_name_from_instance(window)) == type
+    DesktopKit::C.g_signal_emit_by_name(window, "response", -6) if String.new(ChoosersSpecLib.g_type_name_from_instance(window)) == type
     ChoosersSpecLib.g_object_unref(window)
   end
 end
@@ -49,7 +49,7 @@ describe "Window choosers" do
       window = app.new_window
       settle
       results = [] of Path?
-      window.open_file(folder: Path["/tmp"], filters: [Apprt::FileFilter.new("Text", ["*.txt"], ["text/plain"])]) { |path| results << path }
+      window.open_file(folder: Path["/tmp"], filters: [DesktopKit::FileFilter.new("Text", ["*.txt"], ["text/plain"])]) { |path| results << path }
       eventually { toplevels.includes?("GtkFileChooserDialog") }.should be_true
       dismiss("GtkFileChooserDialog")
       eventually { results.size == 1 }.should be_true
@@ -68,8 +68,8 @@ describe "Window choosers" do
     run_steps(TestApp.new) do |app|
       window = app.new_window
       settle
-      colors = [] of Apprt::Color?
-      window.choose_color(color: Apprt::Color.new(1.0, 0.0, 0.0)) { |color| colors << color }
+      colors = [] of DesktopKit::Color?
+      window.choose_color(color: DesktopKit::Color.new(1.0, 0.0, 0.0)) { |color| colors << color }
       eventually { toplevels.includes?("GtkColorChooserDialog") }.should be_true
       dismiss("GtkColorChooserDialog")
       eventually { colors.size == 1 }.should be_true
@@ -88,14 +88,14 @@ describe "Window choosers" do
     run_steps(TestApp.new) do |app|
       window = app.new_window
       settle
-      window.show_about(Apprt::About.new("Editor", version: "1.2", developers: ["Ann <ann@example.org>"], license: :mit))
+      window.show_about(DesktopKit::About.new("Editor", version: "1.2", developers: ["Ann <ann@example.org>"], license: :mit))
       settle
-      dialog = Apprt::C.adw_application_window_get_visible_dialog(window.widget)
+      dialog = DesktopKit::C.adw_application_window_get_visible_dialog(window.widget)
       dialog.null?.should be_false
       String.new(ChoosersSpecLib.adw_about_dialog_get_application_name(dialog)).should eq "Editor"
       String.new(ChoosersSpecLib.adw_about_dialog_get_version(dialog)).should eq "1.2"
-      ChoosersSpecLib.adw_about_dialog_get_license_type(dialog).should eq Apprt::C::GtkLicense::MitX11.value
-      Apprt::C.adw_dialog_force_close(dialog)
+      ChoosersSpecLib.adw_about_dialog_get_license_type(dialog).should eq DesktopKit::C::GtkLicense::MitX11.value
+      DesktopKit::C.adw_dialog_force_close(dialog)
     end
   end
 

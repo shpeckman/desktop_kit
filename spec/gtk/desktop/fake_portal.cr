@@ -1,7 +1,7 @@
 # spec/gtk/desktop/fake_portal.cr
 require "../harness"
 
-# The parts of `org.freedesktop.portal.Desktop` that apprt calls: the host
+# The parts of `org.freedesktop.portal.Desktop` that desktop_kit calls: the host
 # registry, global shortcuts and OpenURI. Like the portal process, it runs on a
 # thread and bus connection of its own, so it answers while the app under
 # test starts, runs and shuts down; it records the calls until `#stop`.
@@ -14,8 +14,8 @@ class FakePortal
   # One `OpenURI` call and the options it passed.
   record Opened, uri : String, ask : Bool?, writable : Bool?, activation_token : String?
 
-  NAME      = Apprt::Portal::BUS_NAME
-  PATH      = Apprt::Portal::OBJECT_PATH
+  NAME      = DesktopKit::Portal::BUS_NAME
+  PATH      = DesktopKit::Portal::OBJECT_PATH
   REGISTRY  = "org.freedesktop.host.portal.Registry"
   SHORTCUTS = "org.freedesktop.portal.GlobalShortcuts"
   SESSION   = "org.freedesktop.portal.Session"
@@ -67,8 +67,8 @@ class FakePortal
   private PRIMARY_OWNER = 1_u32
 
   private METHOD_CALL = ->(connection : Void*, sender : UInt8*, path : UInt8*, interface : UInt8*, method : UInt8*, parameters : Void*, invocation : Void*, data : Void*) do
-    Apprt::Handles.get(data, FakePortal).call(String.new(sender), String.new(path), String.new(interface), String.new(method),
-      Apprt::Variant.from_raw(parameters), invocation)
+    DesktopKit::Handles.get(data, FakePortal).call(String.new(sender), String.new(path), String.new(interface), String.new(method),
+      DesktopKit::Variant.from_raw(parameters), invocation)
     nil
   end
 
@@ -78,10 +78,10 @@ class FakePortal
   @closed = [] of String
   @shortcuts = [] of Shortcut
   @opened = [] of Opened
-  @context : Void* = Apprt::C.g_main_context_new
+  @context : Void* = DesktopKit::C.g_main_context_new
   @connection = Pointer(Void).null
   @node = Pointer(Void).null
-  @vtable = Pointer(Apprt::C::GDBusInterfaceVTable).malloc(1)
+  @vtable = Pointer(DesktopKit::C::GDBusInterfaceVTable).malloc(1)
   @handle = Pointer(Void).null
   @registrations = [] of UInt32
   @session_objects = {} of String => UInt32
@@ -145,20 +145,20 @@ class FakePortal
   # desktop does when the user presses it.
   def activate(id : String) : Nil
     session = sessions.last
-    parameters = Apprt::Variant.new({Apprt::Variant::ObjectPath.new(session), id, 0_u64, {} of String => Apprt::Variant})
-    Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_emit_signal(@connection, nil, PATH, SHORTCUTS, "Activated", parameters, error)
+    parameters = DesktopKit::Variant.new({DesktopKit::Variant::ObjectPath.new(session), id, 0_u64, {} of String => DesktopKit::Variant})
+    DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_emit_signal(@connection, nil, PATH, SHORTCUTS, "Activated", parameters, error)
     end
   end
 
   def stop : Nil
     @quit.set(true)
-    Apprt::C.g_main_context_wakeup(@context)
+    DesktopKit::C.g_main_context_wakeup(@context)
     @stopped.receive
-    Apprt::C.g_main_context_unref(@context)
+    DesktopKit::C.g_main_context_unref(@context)
   end
 
-  protected def call(sender : String, path : String, interface : String, method : String, parameters : Apprt::Variant, invocation : Void*) : Nil
+  protected def call(sender : String, path : String, interface : String, method : String, parameters : DesktopKit::Variant, invocation : Void*) : Nil
     case {interface, method}
     when {REGISTRY, "Register"}
       @lock.synchronize { @registered << parameters[0].get(String) }
@@ -169,29 +169,29 @@ class FakePortal
       session = "#{PATH}/session/#{sender.lchop(':').tr(".", "_")}/#{token}"
       @session_objects[session] = export(session, SESSION)
       @lock.synchronize { @sessions << session }
-      respond(invocation, sender, options, 0_u32, {"session_handle" => Apprt::Variant.new(session)})
+      respond(invocation, sender, options, 0_u32, {"session_handle" => DesktopKit::Variant.new(session)})
     when {SHORTCUTS, "BindShortcuts"}
-      respond(invocation, sender, parameters[3], @response, {"shortcuts" => Apprt::Variant.new(bind(parameters[1]))})
+      respond(invocation, sender, parameters[3], @response, {"shortcuts" => DesktopKit::Variant.new(bind(parameters[1]))})
     when {OPEN_URI, "OpenURI"}
       options = parameters[2]
       opened = Opened.new(parameters[1].get(String), options["ask"]?.try(&.get(Bool)), options["writable"]?.try(&.get(Bool)),
         options["activation_token"]?.try(&.get(String)))
       @lock.synchronize { @opened << opened }
-      respond(invocation, sender, options, @response, {} of String => Apprt::Variant)
+      respond(invocation, sender, options, @response, {} of String => DesktopKit::Variant)
     when {SESSION, "Close"}
       reply(invocation, nil)
-      @session_objects.delete(path).try { |id| Apprt::C.g_dbus_connection_unregister_object(@connection, id) }
+      @session_objects.delete(path).try { |id| DesktopKit::C.g_dbus_connection_unregister_object(@connection, id) }
       @lock.synchronize { @closed << path }
     else
-      Apprt::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.UnknownMethod", method)
+      DesktopKit::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.UnknownMethod", method)
     end
   rescue ex
-    Apprt::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.Failed", ex.message || ex.class.name)
+    DesktopKit::C.g_dbus_method_invocation_return_dbus_error(invocation, "org.freedesktop.DBus.Error.Failed", ex.message || ex.class.name)
   end
 
   # Records the `a(sa{sv})` *list* and returns the shortcuts it binds.
-  private def bind(list : Apprt::Variant) : Array({String, Hash(String, Apprt::Variant)})
-    bound = [] of {String, Hash(String, Apprt::Variant)}
+  private def bind(list : DesktopKit::Variant) : Array({String, Hash(String, DesktopKit::Variant)})
+    bound = [] of {String, Hash(String, DesktopKit::Variant)}
     list.size.times do |index|
       id = list[index][0].get(String)
       options = list[index][1]
@@ -199,30 +199,30 @@ class FakePortal
         options["preferred_trigger"]?.try(&.get(String)) || "")
       @lock.synchronize { @shortcuts << shortcut }
       next if @deny.includes?(id)
-      bound << {id, {"description" => Apprt::Variant.new(shortcut.description), "trigger_description" => Apprt::Variant.new(id)}}
+      bound << {id, {"description" => DesktopKit::Variant.new(shortcut.description), "trigger_description" => DesktopKit::Variant.new(id)}}
     end
     bound
   end
 
   # Answers a request method with its request handle, then emits the
   # request's `Response` to *sender*.
-  private def respond(invocation : Void*, sender : String, options : Apprt::Variant, code : UInt32, results : Hash(String, Apprt::Variant)) : Nil
+  private def respond(invocation : Void*, sender : String, options : DesktopKit::Variant, code : UInt32, results : Hash(String, DesktopKit::Variant)) : Nil
     token = options["handle_token"]?.try(&.get(String)) || "request"
-    request = Apprt::Portal.request_path(sender, token)
-    reply(invocation, Apprt::Variant.new({Apprt::Variant::ObjectPath.new(request)}))
-    Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_emit_signal(@connection, sender, request, "org.freedesktop.portal.Request", "Response",
-        Apprt::Variant.new({code, results}), error)
+    request = DesktopKit::Portal.request_path(sender, token)
+    reply(invocation, DesktopKit::Variant.new({DesktopKit::Variant::ObjectPath.new(request)}))
+    DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_emit_signal(@connection, sender, request, "org.freedesktop.portal.Request", "Response",
+        DesktopKit::Variant.new({code, results}), error)
     end
   end
 
-  private def reply(invocation : Void*, value : Apprt::Variant?) : Nil
-    Apprt::C.g_dbus_method_invocation_return_value(invocation, value.try(&.to_unsafe) || Pointer(Void).null)
+  private def reply(invocation : Void*, value : DesktopKit::Variant?) : Nil
+    DesktopKit::C.g_dbus_method_invocation_return_value(invocation, value.try(&.to_unsafe) || Pointer(Void).null)
   end
 
   # The portal thread: serves on `@context` until `#stop`.
   private def run(ready : Channel(Exception?)) : Nil
-    Apprt::C.g_main_context_push_thread_default(@context)
+    DesktopKit::C.g_main_context_push_thread_default(@context)
     begin
       start
     rescue ex
@@ -231,44 +231,44 @@ class FakePortal
     end
     ready.send(nil)
     until @quit.get
-      Apprt::C.g_main_context_iteration(@context, 1)
+      DesktopKit::C.g_main_context_iteration(@context, 1)
     end
   ensure
     finish
-    Apprt::C.g_main_context_pop_thread_default(@context)
+    DesktopKit::C.g_main_context_pop_thread_default(@context)
     @stopped.send(nil)
   end
 
   private def start : Nil
-    flags = Apprt::C::GDBusConnectionFlags::AuthenticationClient | Apprt::C::GDBusConnectionFlags::MessageBusConnection
-    @connection = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_new_for_address_sync(ENV["DBUS_SESSION_BUS_ADDRESS"], flags, nil, nil, error)
+    flags = DesktopKit::C::GDBusConnectionFlags::AuthenticationClient | DesktopKit::C::GDBusConnectionFlags::MessageBusConnection
+    @connection = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_new_for_address_sync(ENV["DBUS_SESSION_BUS_ADDRESS"], flags, nil, nil, error)
     end
-    @node = Apprt::GLibError.check! { |error| Apprt::C.g_dbus_node_info_new_for_xml(XML, error) }
-    @handle = Apprt::Handles.retain(self)
+    @node = DesktopKit::GLibError.check! { |error| DesktopKit::C.g_dbus_node_info_new_for_xml(XML, error) }
+    @handle = DesktopKit::Handles.retain(self)
     {REGISTRY, SHORTCUTS, OPEN_URI}.each { |interface| @registrations << export(PATH, interface) }
-    reply = Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
-        "RequestName", Apprt::Variant.new({NAME, DO_NOT_QUEUE}), nil, Apprt::C::GDBusCallFlags::None, -1, nil, error)
+    reply = DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_call_sync(@connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+        "RequestName", DesktopKit::Variant.new({NAME, DO_NOT_QUEUE}), nil, DesktopKit::C::GDBusCallFlags::None, -1, nil, error)
     end
-    owner = Apprt::Variant.take(reply)[0].get(UInt32)
+    owner = DesktopKit::Variant.take(reply)[0].get(UInt32)
     raise "FakePortal: #{NAME} is taken" unless owner == PRIMARY_OWNER
   end
 
   private def export(path : String, interface : String) : UInt32
-    info = Apprt::C.g_dbus_node_info_lookup_interface(@node, interface)
-    Apprt::GLibError.check! do |error|
-      Apprt::C.g_dbus_connection_register_object(@connection, path, info, @vtable, @handle, nil, error)
+    info = DesktopKit::C.g_dbus_node_info_lookup_interface(@node, interface)
+    DesktopKit::GLibError.check! do |error|
+      DesktopKit::C.g_dbus_connection_register_object(@connection, path, info, @vtable, @handle, nil, error)
     end
   end
 
   # Closing the connection releases the bus name.
   private def finish : Nil
     return if @connection.null?
-    (@registrations + @session_objects.values).each { |id| Apprt::C.g_dbus_connection_unregister_object(@connection, id) }
-    Apprt::C.g_dbus_connection_close_sync(@connection, nil, nil)
-    Apprt::C.g_object_unref(@connection)
-    Apprt::C.g_dbus_node_info_unref(@node) unless @node.null?
-    Apprt::Handles.release(@handle) unless @handle.null?
+    (@registrations + @session_objects.values).each { |id| DesktopKit::C.g_dbus_connection_unregister_object(@connection, id) }
+    DesktopKit::C.g_dbus_connection_close_sync(@connection, nil, nil)
+    DesktopKit::C.g_object_unref(@connection)
+    DesktopKit::C.g_dbus_node_info_unref(@node) unless @node.null?
+    DesktopKit::Handles.release(@handle) unless @handle.null?
   end
 end

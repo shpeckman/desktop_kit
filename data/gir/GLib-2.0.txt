@@ -1,5 +1,5 @@
 # data/gir/GLib-2.0.txt
-# GLib symbols of Apprt::C (src/apprt/c/glib.cr); see tools/gir/generator.cr.
+# GLib symbols of DesktopKit::C (src/desktop_kit/c/glib.cr); see tools/gir/generator.cr.
 
 # errors
 GError

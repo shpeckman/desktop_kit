@@ -1,7 +1,7 @@
 # spec/gtk/desktop/dbus_spec.cr
 require "../harness"
 
-describe Apprt::DBus do
+describe DesktopKit::DBus do
   before_all { GtkHarness.start }
 
   it "calls methods synchronously and asynchronously" do
@@ -13,11 +13,11 @@ describe Apprt::DBus do
         reply_type: "(as)")
       names[0].get(Array(String)).should contain(bus.unique_name)
 
-      reply = nil.as(Apprt::Variant?)
-      failure = nil.as(Apprt::GLibError?)
+      reply = nil.as(DesktopKit::Variant?)
+      failure = nil.as(DesktopKit::GLibError?)
       done = false
       bus.call("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetNameOwner",
-        Apprt::Variant.new({"org.freedesktop.DBus"})) do |value, error|
+        DesktopKit::Variant.new({"org.freedesktop.DBus"})) do |value, error|
         reply, failure, done = value, error, true
       end
       eventually { done }.should be_true
@@ -37,10 +37,10 @@ describe Apprt::DBus do
   it "emits signals to its subscribers" do
     app = TestApp.new
     run_steps(app) do
-      bus = Apprt::DBus.session
-      received = [] of Apprt::DBus::Signal
+      bus = DesktopKit::DBus.session
+      received = [] of DesktopKit::DBus::Signal
       subscription = bus.subscribe(interface: "org.example.Spec", member: "Ping") { |signal| received << signal }
-      bus.emit("/org/example/spec", "org.example.Spec", "Ping", Apprt::Variant.new({42_u32}))
+      bus.emit("/org/example/spec", "org.example.Spec", "Ping", DesktopKit::Variant.new({42_u32}))
       eventually { received.size == 1 }.should be_true
       signal = received.first
       signal.sender.should eq(bus.unique_name)
@@ -48,10 +48,10 @@ describe Apprt::DBus do
       signal.args[0].get(UInt32).should eq(42)
       subscription.cancel
       subscription.active?.should be_false
-      bus.emit("/org/example/spec", "org.example.Spec", "Ping", Apprt::Variant.new({43_u32}))
+      bus.emit("/org/example/spec", "org.example.Spec", "Ping", DesktopKit::Variant.new({43_u32}))
       settle
       received.size.should eq(1)
-      expect_raises(ArgumentError) { bus.emit("/", "org.example.Spec", "Ping", Apprt::Variant.new(1)) }
+      expect_raises(ArgumentError) { bus.emit("/", "org.example.Spec", "Ping", DesktopKit::Variant.new(1)) }
     end
   end
 end

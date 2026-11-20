@@ -2,11 +2,11 @@
 require "../harness"
 
 # Content that records the search hooks and reports two matches.
-class SearchContent < Apprt::WidgetContent
+class SearchContent < DesktopKit::WidgetContent
   getter events = [] of String
 
   def initialize
-    super(Apprt::Widget.new(Apprt::C.gtk_entry_new))
+    super(DesktopKit::Widget.new(DesktopKit::C.gtk_entry_new))
   end
 
   protected def on_search(needle : String) : Nil
@@ -26,20 +26,20 @@ end
 
 private def search_app : TestApp
   TestApp.new.tap do |app|
-    app.make_content = ->(context : Apprt::SurfaceContext) { SearchContent.new.as(Apprt::Content) }
+    app.make_content = ->(context : DesktopKit::SurfaceContext) { SearchContent.new.as(DesktopKit::Content) }
   end
 end
 
-private def overlay(surface : Apprt::Surface) : Apprt::SearchOverlay
+private def overlay(surface : DesktopKit::Surface) : DesktopKit::SearchOverlay
   surface.@search.not_nil!
 end
 
-private def label(widget : Apprt::Widget) : String
-  String.new(Apprt::C.gtk_label_get_text(widget))
+private def label(widget : DesktopKit::Widget) : String
+  String.new(DesktopKit::C.gtk_label_get_text(widget))
 end
 
-private def entry_text(surface : Apprt::Surface) : String
-  String.new(Apprt::C.gtk_editable_get_text(overlay(surface).@entry))
+private def entry_text(surface : DesktopKit::Surface) : String
+  String.new(DesktopKit::C.gtk_editable_get_text(overlay(surface).@entry))
 end
 
 describe "Surface search" do
@@ -52,19 +52,19 @@ describe "Surface search" do
       content = surface.content.as(SearchContent)
       surface.search_active?.should be_false
 
-      trigger(window, Apprt::Action::StartSearch.new)
+      trigger(window, DesktopKit::Action::StartSearch.new)
       surface.search_active?.should be_true
       overlay(surface).widget.visible?.should be_true
 
-      Apprt::C.gtk_editable_set_text(overlay(surface).@entry, "foo")
+      DesktopKit::C.gtk_editable_set_text(overlay(surface).@entry, "foo")
       eventually { content.events.includes?("search foo") }.should be_true
       label(overlay(surface).@matches).should eq "1/2"
 
-      trigger(window, Apprt::Action::NavigateSearch.new(direction: :next))
-      trigger(window, Apprt::Action::NavigateSearch.new(direction: :previous))
+      trigger(window, DesktopKit::Action::NavigateSearch.new(direction: :next))
+      trigger(window, DesktopKit::Action::NavigateSearch.new(direction: :previous))
       content.events.last(2).should eq ["next", "previous"]
 
-      trigger(window, Apprt::Action::EndSearch.new)
+      trigger(window, DesktopKit::Action::EndSearch.new)
       surface.search_active?.should be_false
       overlay(surface).widget.visible?.should be_false
       label(overlay(surface).@matches).should eq ""
@@ -76,7 +76,7 @@ describe "Surface search" do
     run_steps(search_app) do |app|
       window = app.new_window
       surface = window.active_surface.not_nil!
-      trigger(window, Apprt::Action::Search.new(needle: "bar"))
+      trigger(window, DesktopKit::Action::Search.new(needle: "bar"))
       surface.search_active?.should be_true
       entry_text(surface).should eq "bar"
       eventually { surface.content.as(SearchContent).events.includes?("search bar") }.should be_true
@@ -90,10 +90,10 @@ describe "Surface search" do
       surface.start_search("x")
       keys = overlay(surface).@keys
       handled = 0
-      Apprt::C.g_signal_emit_by_name(keys, "key-pressed", 0xff0d_u32, 36_u32, 0_u32, pointerof(handled))
-      Apprt::C.g_signal_emit_by_name(keys, "key-pressed", 0xff0d_u32, 36_u32, 1_u32, pointerof(handled))
+      DesktopKit::C.g_signal_emit_by_name(keys, "key-pressed", 0xff0d_u32, 36_u32, 0_u32, pointerof(handled))
+      DesktopKit::C.g_signal_emit_by_name(keys, "key-pressed", 0xff0d_u32, 36_u32, 1_u32, pointerof(handled))
       content.events.last(2).should eq ["next", "previous"]
-      Apprt::C.g_signal_emit_by_name(overlay(surface).@entry, "stop-search")
+      DesktopKit::C.g_signal_emit_by_name(overlay(surface).@entry, "stop-search")
       surface.search_active?.should be_false
       content.events.last.should eq "end"
     end
@@ -115,8 +115,8 @@ describe "Surface search" do
     run_steps(search_app) do |app|
       window = app.new_window
       surface = window.active_surface.not_nil!
-      Apprt::C.gtk_widget_activate_action_variant(window.widget, "split.end-search", nil)
-      Apprt::C.gtk_widget_activate_action_variant(window.widget, "split.navigate-search", Apprt::Action::NavigateSearch.new(direction: :next).to_variant.not_nil!.to_unsafe)
+      DesktopKit::C.gtk_widget_activate_action_variant(window.widget, "split.end-search", nil)
+      DesktopKit::C.gtk_widget_activate_action_variant(window.widget, "split.navigate-search", DesktopKit::Action::NavigateSearch.new(direction: :next).to_variant.not_nil!.to_unsafe)
       settle
       surface.content.as(SearchContent).events.should be_empty
     end
@@ -128,10 +128,10 @@ describe "Surface search" do
       surface.start_search
       bar = overlay(surface)
       eventually { bar.widget.width > 0 }
-      Apprt::C.g_signal_emit_by_name(bar.@drag, "drag-begin", 10.0, 10.0)
-      Apprt::C.g_signal_emit_by_name(bar.@drag, "drag-end", -600.0, 400.0)
-      Apprt::C.gtk_widget_get_halign(bar.widget).should eq Apprt::C::GtkAlign::Start
-      Apprt::C.gtk_widget_get_valign(bar.widget).should eq Apprt::C::GtkAlign::End
+      DesktopKit::C.g_signal_emit_by_name(bar.@drag, "drag-begin", 10.0, 10.0)
+      DesktopKit::C.g_signal_emit_by_name(bar.@drag, "drag-end", -600.0, 400.0)
+      DesktopKit::C.gtk_widget_get_halign(bar.widget).should eq DesktopKit::C::GtkAlign::Start
+      DesktopKit::C.gtk_widget_get_valign(bar.widget).should eq DesktopKit::C::GtkAlign::End
     end
   end
 end
@@ -152,7 +152,7 @@ describe "Surface#hover_text" do
       label(right).should eq "https://example.com"
 
       motion = surface.@hover_motion[0]
-      Apprt::C.g_signal_emit_by_name(motion, "enter", 1.0, 1.0)
+      DesktopKit::C.g_signal_emit_by_name(motion, "enter", 1.0, 1.0)
       left.visible?.should be_false
       right.visible?.should be_true
 

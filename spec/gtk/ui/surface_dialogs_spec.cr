@@ -1,21 +1,21 @@
 # spec/gtk/ui/surface_dialogs_spec.cr
 require "../harness"
 
-private def dialog(window : Apprt::Window) : Void*
-  Apprt::C.adw_application_window_get_visible_dialog(window.widget)
+private def dialog(window : DesktopKit::Window) : Void*
+  DesktopKit::C.adw_application_window_get_visible_dialog(window.widget)
 end
 
-private def heading(window : Apprt::Window) : String?
+private def heading(window : DesktopKit::Window) : String?
   dialog = dialog(window)
-  Apprt::Native.string?(Apprt::C.adw_alert_dialog_get_heading(dialog)) unless dialog.null?
+  DesktopKit::Native.string?(DesktopKit::C.adw_alert_dialog_get_heading(dialog)) unless dialog.null?
 end
 
 # Closes the visible dialog of *window* with *response*.
-private def respond(window : Apprt::Window, response : String) : Nil
+private def respond(window : DesktopKit::Window, response : String) : Nil
   dialog = dialog(window)
   dialog.null?.should be_false
-  Apprt::C.adw_alert_dialog_set_close_response(dialog, response)
-  Apprt::C.adw_dialog_force_close(dialog)
+  DesktopKit::C.adw_alert_dialog_set_close_response(dialog, response)
+  DesktopKit::C.adw_dialog_force_close(dialog)
   settle
 end
 
@@ -69,7 +69,7 @@ end
 private def run_activated(app : TestApp, &block : TestApp ->) : Nil
   failure = nil.as(Exception?)
   app.on_activated = ->(app : TestApp) do
-    Apprt::Idle.add do
+    DesktopKit::Idle.add do
       block.call(app)
     rescue ex
       failure = ex
@@ -127,7 +127,7 @@ describe "App#config_errors" do
     shown = nil.as(String?)
     app.on_activated = ->(app : TestApp) do
       window = app.new_window
-      Apprt::Idle.add do
+      DesktopKit::Idle.add do
         settle
         shown = heading(window)
         app.quit
@@ -147,7 +147,7 @@ describe "Surface#show_on_screen_keyboard" do
       window = app.new_window
       surface = window.active_surface.not_nil!
       surface.show_on_screen_keyboard.should be_false
-      trigger(window, Apprt::Action::ShowOnScreenKeyboard.new)
+      trigger(window, DesktopKit::Action::ShowOnScreenKeyboard.new)
     end
   end
 end

@@ -1,5 +1,5 @@
 # data/gir/Adw-1.txt
-# Adw symbols of Apprt::C (src/apprt/c/adw.cr); see tools/gir/generator.cr.
+# Adw symbols of DesktopKit::C (src/desktop_kit/c/adw.cr); see tools/gir/generator.cr.
 
 # application and style
 adw_init

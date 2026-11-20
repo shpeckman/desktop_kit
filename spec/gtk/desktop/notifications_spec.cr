@@ -2,12 +2,12 @@
 require "./fake_notifications"
 
 private def application_name : String
-  Apprt::Native.string?(Apprt::C.g_get_application_name) || ""
+  DesktopKit::Native.string?(DesktopKit::C.g_get_application_name) || ""
 end
 
 # Opens a window split in two and returns its surfaces once the second has
 # the focus.
-private def split_window(app : TestApp) : {Apprt::Window, Apprt::Surface, Apprt::Surface}
+private def split_window(app : TestApp) : {DesktopKit::Window, DesktopKit::Surface, DesktopKit::Surface}
   window = app.new_window
   first = window.active_surface.not_nil!
   second = first.split(:right)
@@ -15,7 +15,7 @@ private def split_window(app : TestApp) : {Apprt::Window, Apprt::Surface, Apprt:
   {window, first, second}
 end
 
-describe Apprt::Surface do
+describe DesktopKit::Surface do
   before_all { GtkHarness.start }
 
   it "sends a notification and presents the surface when it is clicked" do
@@ -115,16 +115,16 @@ describe Apprt::Surface do
       first = window.active_surface.not_nil!
       other = window.new_tab.active_surface.not_nil!
       eventually { other.focused? }.should be_true
-      trigger(window, Apprt::Action::PresentSurface.new(first.id))
+      trigger(window, DesktopKit::Action::PresentSurface.new(first.id))
       eventually { first.focused? }.should be_true
       window.active_tab.should eq first.tab
-      trigger(window, Apprt::Action::PresentSurface.new(0))
+      trigger(window, DesktopKit::Action::PresentSurface.new(0))
       first.focused?.should be_true
     end
   end
 end
 
-describe Apprt::App do
+describe DesktopKit::App do
   before_all { GtkHarness.start }
 
   it "sends notifications of its own, by method and by action" do
@@ -134,7 +134,7 @@ describe Apprt::App do
         surface = window.active_surface.not_nil!
         eventually { surface.focused? }.should be_true
         app.notify("Hello", "from the app")
-        trigger(window, Apprt::Action::DesktopNotification.new("Done", "Build passed"))
+        trigger(window, DesktopKit::Action::DesktopNotification.new("Done", "Build passed"))
         eventually { fake.sent.size == 2 }.should be_true
         fake.sent.map { |sent| {sent.summary, sent.body} }.should eq [{"Hello", "from the app"}, {"Done", "Build passed"}]
         fake.click(fake.sent.last.id)

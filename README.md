@@ -1,7 +1,6 @@
-# apprt
+# desktop_kit
 
-Native application runtime for Crystal programs on Linux, ported from
-[Ghostty](https://github.com/ghostty-org/ghostty)'s `src/apprt`: GTK 4 and
+Native application runtime for Crystal programs on Linux: GTK 4 and
 libadwaita windows, tabs, splits and surfaces driven by typed actions, with
 desktop notifications, global shortcuts, DBus IPC and systemd integration.
 
@@ -38,28 +37,28 @@ Add the dependency to your `shard.yml`:
 
 ```yaml
 dependencies:
-  apprt:
-    github: shpeckman/apprt
+  desktop_kit:
+    github: shpeckman/desktop_kit
 ```
 
 Run `shards install`, then:
 
 ```crystal
-require "apprt"
+require "desktop_kit"
 ```
 
 ## API
 
 ### Applications
 
-Subclass `Apprt::App`, return the content of new surfaces from
+Subclass `DesktopKit::App`, return the content of new surfaces from
 `#new_surface`, override the hooks it needs and call `#run`:
 
 ```crystal
-class Hello < Apprt::App
-  protected def new_surface(context : Apprt::SurfaceContext) : Apprt::Content
+class Hello < DesktopKit::App
+  protected def new_surface(context : DesktopKit::SurfaceContext) : DesktopKit::Content
     # A widget from the application's own GTK bindings.
-    Apprt::WidgetContent.new(Apprt::Widget.new(LibGtk.gtk_label_new("Hello")))
+    DesktopKit::WidgetContent.new(DesktopKit::Widget.new(LibGtk.gtk_label_new("Hello")))
   end
 
   protected def on_startup
@@ -70,7 +69,7 @@ class Hello < Apprt::App
     new_window
   end
 
-  protected def on_color_scheme(scheme : Apprt::ColorScheme)
+  protected def on_color_scheme(scheme : DesktopKit::ColorScheme)
     puts "now #{scheme}"
   end
 end
@@ -110,7 +109,7 @@ Hooks, all called on the GTK thread:
 | `on_user_idle(idle)`       | when the user turns idle after `#idle_timeout`, and when they return |
 | `on_shutdown`              | when quitting, while the windows still exist        |
 
-`on_command_line` receives an `Apprt::CommandLine`: `#arguments` (without
+`on_command_line` receives an `DesktopKit::CommandLine`: `#arguments` (without
 the program name), `#directory` (the launching process's working
 directory) and `#remote?` (launched by another process). `#path(argument)`
 resolves a file argument against `#directory`, or from a `file://` URI. By
@@ -119,7 +118,7 @@ default the hook calls `on_open` with the arguments as files, or
 `on_activate`. Override `on_command_line` to parse options:
 
 ```crystal
-protected def on_command_line(command_line : Apprt::CommandLine) : Int32
+protected def on_command_line(command_line : DesktopKit::CommandLine) : Int32
   if command_line.arguments.first? == "--version"
     puts "1.0"
     return 0
@@ -150,7 +149,7 @@ These methods are callable from any thread:
   before `#run` show once the application is active.
 - `#bell=`, `#bell_sound=` and `#bell_volume=` set what a ringing bell
   does (see Bell).
-- `#appearance=` requests `Apprt::Appearance::System` (follow the desktop,
+- `#appearance=` requests `DesktopKit::Appearance::System` (follow the desktop,
   the default), `Light` or `Dark`.
 - `#idle_timeout=` sets how long the user may leave the keyboard and
   pointer alone before `on_user_idle(true)`; `nil`, the default, reports
@@ -158,7 +157,7 @@ These methods are callable from any thread:
   the last report.
 
 On the GTK thread, two methods hook into its main loop and return an
-`Apprt::Source`, which `#cancel` stops; quitting cancels every source:
+`DesktopKit::Source`, which `#cancel` stops; quitting cancels every source:
 
 - `#after(delay) { ... }` runs the block once *delay* passed.
 - `#watch(fd, conditions = :read) { |condition| ... }` calls the block
@@ -181,10 +180,10 @@ reloads it; the signals return to their default action afterwards.
 ### Windows, tabs and surfaces
 
 A window holds tabs; a tab holds one or more surfaces laid out in splits.
-A surface shows a `Apprt::Content`, which `#new_surface` creates: return
-an `Apprt::WidgetContent` to show a widget, or a subclass of `Content`.
+A surface shows a `DesktopKit::Content`, which `#new_surface` creates: return
+an `DesktopKit::WidgetContent` to show a widget, or a subclass of `Content`.
 Each call must return a new content; `Content#surface` is the surface
-showing it. The `Apprt::SurfaceContext` tells where the surface opens:
+showing it. The `DesktopKit::SurfaceContext` tells where the surface opens:
 `kind` is `Window`, `Tab`, `Split` or `Restore` (a saved session reopens),
 `parent` is the surface it opens from, if any, and `session_state` is what
 the saved surface's content returned from `Content#session_state`.
@@ -207,7 +206,7 @@ elsewhere.
 | `Tab#surfaces`                   | the surfaces from left or top to right or bottom                  |
 | `Tab#active_surface`, `#zoomed?` | the focused surface, whether one surface fills the tab            |
 | `Tab#window`, `#close`           | the window showing the tab, closes it                             |
-| `Surface#split(direction)`       | opens a surface beside it, in an `Apprt::Direction`, and focuses it |
+| `Surface#split(direction)`       | opens a surface beside it, in an `DesktopKit::Direction`, and focuses it |
 | `Surface#focus`, `#close`        | focuses the surface and selects its tab, closes it                |
 | `Surface#present`                | focuses the surface and raises its window (`PresentSurface`)      |
 | `Surface#tab`, `#window`, `#id`  | where it is shown, its identifier, unique in the process          |
@@ -219,7 +218,7 @@ elsewhere.
 | `Surface#confirm_clipboard(request, text) { \|allowed\| }` | asks the user to allow a clipboard `Paste`, `Read` or `Write` of *text* |
 | `Surface#show_on_screen_keyboard` | asks the input method to show the on-screen keyboard of a `Canvas` (`ShowOnScreenKeyboard`); returns whether it did |
 | `Window#toast(message, timeout)` | shows a message at the bottom of the window, 3 seconds by default |
-| `Window#decoration=`             | `Apprt::Decoration`: `Auto`, `Client`, `Server` or `None`         |
+| `Window#decoration=`             | `DesktopKit::Decoration`: `Auto`, `Client`, `Server` or `None`         |
 | `Window#background_blur=`        | blurs what lies behind the window's transparent parts             |
 | `Window#urgent=`, `#active?`     | asks for the user's attention while inactive, whether it is active |
 | `Window#confirm(heading, body)`  | asks a yes/no question in a dialog and yields the answer          |
@@ -236,11 +235,11 @@ elsewhere.
 | `Window#activate(token)`         | raises and focuses it with an activation token from another application |
 | `Window#monitor_size`            | the logical size of its monitor, `nil` while not shown            |
 | `Window#suspended?`              | whether the desktop stopped showing it (`on_window_suspended`)    |
-| `Window#pack_start`, `#pack_end` | adds a widget, or a button with an `Apprt::Icon` performing an action, to the header bar |
-| `Surface#icon=`                  | sets an `Apprt::Icon` for its pane header and, while active, its tab; `nil` removes it |
+| `Window#pack_start`, `#pack_end` | adds a widget, or a button with an `DesktopKit::Icon` performing an action, to the header bar |
+| `Surface#icon=`                  | sets an `DesktopKit::Icon` for its pane header and, while active, its tab; `nil` removes it |
 | `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
 | `Window#key_tables`              | the names of its active key tables, innermost last                |
-| `Surface#progress=`              | shows an `Apprt::Progress` on its pane, tab and the taskbar; `nil` hides it |
+| `Surface#progress=`              | shows an `DesktopKit::Progress` on its pane, tab and the taskbar; `nil` hides it |
 | `Surface#hover_text=`            | shows text, such as a hovered link's target, at the bottom of its pane; `nil` hides it |
 | `Surface#show_size(text)`        | shows *text*, such as the new size after a resize, in the middle of its pane for a moment |
 | `Surface#start_search(needle)`, `#end_search`, `#search_active?` | opens and closes its search bar (`StartSearch`, `Search(needle)`, `EndSearch`) |
@@ -261,7 +260,7 @@ the same object, so its state survives; it is released, and `#closed?`
 becomes true, only once the timeout passes. `Redo` closes what `Undo`
 reopened last.
 
-`Apprt::Progress.new(value, state)` describes a long task: *value* from 0
+`DesktopKit::Progress.new(value, state)` describes a long task: *value* from 0
 to 1, or `nil` for an indeterminate bar, and `state` `Normal`, `Error` or
 `Paused`. `Surface#progress=` shows it as a bar at the top of the pane and
 a loading indicator on the tab, and sends the mean of all surfaces'
@@ -282,39 +281,39 @@ window closed first. Keyword arguments, all optional:
 | `#open_files`    | `title`, `folder`, `filters`                | `Array(Path)`  |
 | `#save_file`     | `title`, `folder`, `name`, `filters`        | `Path?`        |
 | `#choose_folder` | `title`, `folder`                           | `Path?`        |
-| `#choose_color`  | `title`, `color`, `alpha` (default `true`)  | `Apprt::Color?` |
+| `#choose_color`  | `title`, `color`, `alpha` (default `true`)  | `DesktopKit::Color?` |
 | `#choose_font`   | `title`, `font`                             | `String?`      |
 
-`Apprt::FileFilter.new(name, patterns, mime_types)` lists files matching
-any glob or MIME type under *name*. `Apprt::Color` holds `red`, `green`,
+`DesktopKit::FileFilter.new(name, patterns, mime_types)` lists files matching
+any glob or MIME type under *name*. `DesktopKit::Color` holds `red`, `green`,
 `blue` and `alpha` from 0.0 to 1.0. Fonts are Pango descriptions such as
 `"Monospace Bold 12"`. The save dialog asks before replacing a file.
 
 ```crystal
-window.open_file(filters: [Apprt::FileFilter.new("Images", mime_types: ["image/*"])]) do |path|
+window.open_file(filters: [DesktopKit::FileFilter.new("Images", mime_types: ["image/*"])]) do |path|
   viewer.load(path) if path
 end
-window.show_about(Apprt::About.new("Viewer", version: "1.0",
+window.show_about(DesktopKit::About.new("Viewer", version: "1.0",
   developers: ["Ann <ann@example.org>"], website: "https://example.org", license: :gpl30))
 ```
 
-`Apprt::About` takes the application `name` and optionally `version`,
+`DesktopKit::About` takes the application `name` and optionally `version`,
 `icon` (an icon name), `developer`, `developers`, `comments`, `website`,
 `issue_url`, `copyright` and `license` (`About::License`).
 
 #### Menus
 
-An `Apprt::Menu` holds sections of items; each item has a label and
+An `DesktopKit::Menu` holds sections of items; each item has a label and
 either an action to perform or a submenu. `Menu.build` fills one;
 `#section` starts a new section below a separator:
 
 ```crystal
-app.window_menu = Apprt::Menu.build do |menu|
-  menu.item "New Window", Apprt::Action::NewWindow.new
+app.window_menu = DesktopKit::Menu.build do |menu|
+  menu.item "New Window", DesktopKit::Action::NewWindow.new
   menu.section
   menu.submenu "Split" do |split|
-    split.item "Right", Apprt::Action::NewSplit.new(:right)
-    split.item "Down", Apprt::Action::NewSplit.new(:down)
+    split.item "Right", DesktopKit::Action::NewSplit.new(:right)
+    split.item "Down", DesktopKit::Action::NewSplit.new(:down)
   end
   menu.item "Settings", OpenSettings.new
 end
@@ -330,7 +329,7 @@ so tab and split actions act on it.
 
 #### Window style
 
-`App#window_style=` takes an `Apprt::WindowStyle`; the defaults give GTK's
+`App#window_style=` takes an `DesktopKit::WindowStyle`; the defaults give GTK's
 plain look, with the header bar on and the other options off:
 
 | Option              | Effect                                                         |
@@ -346,16 +345,16 @@ The style applies to open windows at once. `on_window` adds header bar
 content to each new window:
 
 ```crystal
-class Hello < Apprt::App
+class Hello < DesktopKit::App
   protected def on_startup : Nil
-    self.window_style = Apprt::WindowStyle.new(
+    self.window_style = DesktopKit::WindowStyle.new(
       pane_headers: true, cards: true, tabs_in_header: true,
       opacity: 0.85, unfocused_opacity: 0.7)
   end
 
-  protected def on_window(window : Apprt::Window) : Nil
+  protected def on_window(window : DesktopKit::Window) : Nil
     window.subtitle = System.hostname
-    window.pack_end(Apprt::Action::ToggleCommandPalette.new, "system-search-symbolic", "Commands")
+    window.pack_end(DesktopKit::Action::ToggleCommandPalette.new, "system-search-symbolic", "Commands")
     window.background_blur = true
   end
 end
@@ -363,7 +362,7 @@ end
 
 The surface widget carries the CSS class `surface`, plus `active` on each
 tab's active surface; the pane header is `.surface-header`. Windows carry
-`apprt-window`. `App#css=` can restyle them.
+`desktop-kit-window`. `App#css=` can restyle them.
 
 Closing asks the user first when a surface it closes has
 `Surface#confirm_close = true`: a split, a tab, a window, all windows or
@@ -385,7 +384,7 @@ end
 window.prompt("Rename Session", text: session.name) { |name| session.name = name }
 ```
 
-An `Apprt::Icon` is a themed icon name (`String`, such as
+An `DesktopKit::Icon` is a themed icon name (`String`, such as
 `"utilities-terminal"`) or the `Path` of an image file:
 
 ```crystal
@@ -403,13 +402,13 @@ a Wayland compositor with the wlr layer shell protocol, such as sway, KDE
 Plasma, Hyprland or niri; GNOME has none, and `App#panels?` is then false.
 
 ```crystal
-quick = Apprt::Panel.new(edge: :top, height: 400, layer: :overlay,
+quick = DesktopKit::Panel.new(edge: :top, height: 400, layer: :overlay,
   focus: :on_demand, hide_on_focus_loss: true, name: "quick")
 app.new_panel(quick, shown: false)
-app.bindings = [Apprt::Binding.new("super+grave", Apprt::Action::TogglePanel.new("quick"), global: true)]
+app.bindings = [DesktopKit::Binding.new("super+grave", DesktopKit::Action::TogglePanel.new("quick"), global: true)]
 ```
 
-`Apprt::IPC.send(app_id, Apprt::Action::TogglePanel.new("quick"))` toggles it
+`DesktopKit::IPC.send(app_id, DesktopKit::Action::TogglePanel.new("quick"))` toggles it
 from another process. `Window#panel=` moves and resizes an open panel;
 `Window#panel` is `nil` for ordinary windows. `App#outputs` lists the
 monitors' names for `output`.
@@ -424,7 +423,7 @@ monitors' names for `output`.
 | `focus`              | `:not_allowed`  | keyboard focus: `:not_allowed`, `:exclusive` (always, as the desktop permits) or `:on_demand` (on click) |
 | `exclusive_zone`     | `nil`           | pixels other windows and panels keep clear of; see below                                      |
 | `hide_on_focus_loss` | `false`         | hides the panel when it loses the focus; implies `focus: :on_demand`                         |
-| `name`               | `"apprt-panel"` | layer namespace, for `TogglePanel` and compositor rules                                       |
+| `name`               | `"desktop-kit-panel"` | layer namespace, for `TogglePanel` and compositor rules                                       |
 
 | `edge`          | placement                                   | size from         |
 |-----------------|---------------------------------------------|-------------------|
@@ -444,7 +443,7 @@ panel take the desktop's own shortcuts, like kitty's `--grab-keyboard`.
 
 #### Preferences
 
-`Apprt::Preferences` builds a preferences dialog from pages of groups of
+`DesktopKit::Preferences` builds a preferences dialog from pages of groups of
 rows. Each row edits one value and passes every change to its block:
 
 | Row                                                        | Value   | Edits it with           |
@@ -463,10 +462,10 @@ values, so the dialog shows the latest ones when presented again.
 outside them.
 
 ```crystal
-prefs = Apprt::Preferences.new("Preferences")
+prefs = DesktopKit::Preferences.new("Preferences")
 prefs.page("General", icon: "preferences-system-symbolic") do |page|
   page.group("Appearance", description: "How windows look") do |group|
-    group.switch("Pane headers", value: true) { |on| app.window_style = Apprt::WindowStyle.new(pane_headers: on) }
+    group.switch("Pane headers", value: true) { |on| app.window_style = DesktopKit::WindowStyle.new(pane_headers: on) }
     group.spin("Opacity", value: 1.0, range: 0.2..1.0, step: 0.05, digits: 2) { |value| settings.opacity = value }
     group.choice("Colours", ["System", "Light", "Dark"]) { |index| settings.scheme = index }
   end
@@ -480,14 +479,14 @@ prefs.present(window)
 `ToggleCommandPalette` opens a search over the application's commands,
 `App#commands`, with the shortcut of each; Enter or a click performs the
 selected one on the window, Up and Down move the selection and Escape
-closes it. An `Apprt::Command` has a `title`, an `action` and an optional
-`description` that the search also matches. `Apprt::Command.defaults`
+closes it. An `DesktopKit::Command` has a `title`, an `action` and an optional
+`description` that the search also matches. `DesktopKit::Command.defaults`
 lists the built-in actions that need no input, and is the set until
 `App#commands=` replaces it:
 
 ```crystal
-app.commands = Apprt::Command.defaults + [
-  Apprt::Command.new("Open Settings", OpenSettings.new, "preferences"),
+app.commands = DesktopKit::Command.defaults + [
+  DesktopKit::Command.new("Open Settings", OpenSettings.new, "preferences"),
 ]
 ```
 
@@ -515,7 +514,7 @@ nearest to the pointer. Files and text dropped on a surface go to
 `Content#on_drop`:
 
 ```crystal
-class Editor < Apprt::WidgetContent
+class Editor < DesktopKit::WidgetContent
   protected def on_drop(files : Array(Path)) : Bool
     files.each { |file| open_file(file) }
     true
@@ -535,7 +534,7 @@ match, Shift+Return the previous one, Escape closes it. The content does
 the searching:
 
 ```crystal
-class Editor < Apprt::WidgetContent
+class Editor < DesktopKit::WidgetContent
   protected def on_search(needle : String) : Nil
     @matches = find_all(needle)
     surface.search_total = needle.empty? ? nil : @matches.size
@@ -554,7 +553,7 @@ end
 
 #### Bell
 
-`Surface#ring_bell` does what the `Apprt::Bell` flags in `App#bell` say;
+`Surface#ring_bell` does what the `DesktopKit::Bell` flags in `App#bell` say;
 the default is `System | Attention | Title`:
 
 | Flag        | Effect                                                            |
@@ -571,12 +570,12 @@ A sound file that cannot play is logged as a warning.
 
 ### Canvas
 
-`Apprt::Canvas` is a `Content` that draws with OpenGL. Subclass it,
+`DesktopKit::Canvas` is a `Content` that draws with OpenGL. Subclass it,
 implement `#on_render` and override the input hooks you need; each
 `#new_surface` call returns a new canvas.
 
 ```crystal
-class Scene < Apprt::Canvas
+class Scene < DesktopKit::Canvas
   def initialize
     super(api: :gl, version: {3, 3})
   end
@@ -585,7 +584,7 @@ class Scene < Apprt::Canvas
     # draw into the bound framebuffer: width × height pixels
   end
 
-  protected def on_key(event : Apprt::KeyEvent) : Bool
+  protected def on_key(event : DesktopKit::KeyEvent) : Bool
     return false unless event.pressed?
     puts event.text || event.keyval
     queue_render
@@ -630,11 +629,11 @@ framebuffers: `#buffer_age` tells, during `#on_render`, how many frames
 ago the bound one was last drawn, or 0 when its contents are undefined, so
 a canvas can redraw only what changed since then. `#frame` numbers the
 frame drawn last, and `#on_presented(timing)` reports when the display
-showed a frame: an `Apprt::FrameTiming` with `frame`, `presented` (a
+showed a frame: an `DesktopKit::FrameTiming` with `frame`, `presented` (a
 `Time::Span` on `CLOCK_MONOTONIC`) and `refresh_interval`, both `nil` when
 the compositor does not tell.
 
-`Apprt::GLContext.new(api:, version:)` makes a context for drawing off
+`DesktopKit::GLContext.new(api:, version:)` makes a context for drawing off
 screen, for example into textures, with no canvas; it shares objects with
 every canvas of the display. `#make_current`, `#current?`, `#api` and
 `GLContext.clear_current` manage it; `Canvas#gl_context` is a canvas's
@@ -659,9 +658,9 @@ coordinates and precise scroll deltas are logical units times `#scale`.
 Call `#ime_cursor(x, y, width, height)` with the text cursor's rectangle
 in framebuffer pixels so the input method places its popup there.
 
-`Apprt::KeyEvent` holds `pressed?`, `repeat?` (a press of a key already
+`DesktopKit::KeyEvent` holds `pressed?`, `repeat?` (a press of a key already
 down, as keyboard repeat sends), `keyval` (a GDK keysym), `keycode`,
-`key` (the physical key, an `Apprt::Key`), `layout` (the index of the
+`key` (the physical key, an `DesktopKit::Key`), `layout` (the index of the
 keyboard layout in use),
 `mods` (the modifiers held, counting a modifier key in its own press but
 not in its release), `consumed_mods` (the modifiers the layout used to
@@ -674,12 +673,12 @@ is composing). A key the
 input method uses for a composition reaches `#on_key` with
 `composing? = true`; text it finishes comes through `#on_commit`, or as
 the event's `text` when one key finishes it. Using a key while composing
-ends the composition. `Apprt::MouseButtonEvent` holds `pressed?`,
+ends the composition. `DesktopKit::MouseButtonEvent` holds `pressed?`,
 `button` (`Left`, `Middle`, `Right`, `Back`, `Forward`; other buttons keep
 their number), `x`, `y`, `mods` and `time` (milliseconds of the display's
-clock, for double clicks); `Apprt::MouseMotionEvent` holds `x`, `y`, `mods`
+clock, for double clicks); `DesktopKit::MouseMotionEvent` holds `x`, `y`, `mods`
 and `time`;
-`Apprt::ScrollEvent` holds `dx`, `dy`, `precise?` (pixel deltas from a
+`DesktopKit::ScrollEvent` holds `dx`, `dy`, `precise?` (pixel deltas from a
 touchpad rather than wheel steps) and `mods`.
 
 #### Canvas drag and drop
@@ -696,7 +695,7 @@ refuses:
 | `on_drop(drop, x, y) : Bool`               | when it drops; true takes the drop (default false)              |
 | `on_drag_end(drag, action)`                | when a drag from `#drag` ends; `None` when cancelled            |
 
-An `Apprt::Drop` offers `mime_types`, `actions` (the `Apprt::DragAction`
+An `DesktopKit::Drop` offers `mime_types`, `actions` (the `DesktopKit::DragAction`
 flags `Copy`, `Move`, `Link` its source allows) and `local?` (a drag from
 this application). Once `on_drop` returned true, `read(mime_type)
 { |bytes| }` fetches the data (`nil` when it is not offered) and
@@ -704,41 +703,41 @@ this application). Once `on_drop` returned true, `read(mime_type)
 
 `#drag(mime_types, actions = :copy, icon = nil) { |request| }` starts a
 drag with the pointer; call it while a button is held. It returns the
-`Apprt::Drag` (its `mime_types` and the `action` the target under the
+`DesktopKit::Drag` (its `mime_types` and the `action` the target under the
 pointer would perform), or `nil` while the canvas is not on screen. The
-data is produced on demand: the block gets an `Apprt::Drag::Request` for
+data is produced on demand: the block gets an `DesktopKit::Drag::Request` for
 each MIME type a target asks for and answers it once with
-`reply(bytes)` or `fail`, now or later. An `Apprt::Drag::Icon` holds
+`reply(bytes)` or `fail`, now or later. An `DesktopKit::Drag::Icon` holds
 straight RGBA pixels and the pointer's spot on them.
 
 ```crystal
-protected def on_drop_accept(drop : Apprt::Drop) : Bool
+protected def on_drop_accept(drop : DesktopKit::Drop) : Bool
   drop.mime_types.includes?("text/uri-list")
 end
 
-protected def on_drop(drop : Apprt::Drop, x : Float64, y : Float64) : Bool
+protected def on_drop(drop : DesktopKit::Drop, x : Float64, y : Float64) : Bool
   drop.read("text/uri-list") do |bytes|
     open_uris(String.new(bytes)) if bytes
-    drop.finish(bytes ? Apprt::DragAction::Copy : Apprt::DragAction::None)
+    drop.finish(bytes ? DesktopKit::DragAction::Copy : DesktopKit::DragAction::None)
   end
   true
 end
 
-protected def on_mouse_motion(event : Apprt::MouseMotionEvent) : Nil
+protected def on_mouse_motion(event : DesktopKit::MouseMotionEvent) : Nil
   return unless @pressed_on_link
   drag(["text/uri-list", "text/plain;charset=utf-8"]) { |request| request.reply(@link.to_slice) }
   @pressed_on_link = false
 end
 ```
 
-`Apprt::Key` names a key by its position on a US keyboard, whatever the
+`DesktopKit::Key` names a key by its position on a US keyboard, whatever the
 layout, with the W3C UI Events `code` names: `KeyA` is the key right of
 Caps Lock even where it types `q`. Use it for bindings that follow the
 keyboard's shape, such as WASD movement; `keyval` and `text` follow the
 layout. Keys the table does not know are `Unidentified`.
 
 ```crystal
-protected def on_key(event : Apprt::KeyEvent) : Bool
+protected def on_key(event : DesktopKit::KeyEvent) : Bool
   case event.key
   when .key_w? then move(:up)
   when .key_s? then move(:down)
@@ -750,7 +749,7 @@ end
 
 ### Clipboard
 
-`Apprt::Clipboard.write(text, kind = :standard)` puts text on a
+`DesktopKit::Clipboard.write(text, kind = :standard)` puts text on a
 clipboard; `.read(kind = :standard) { |text| }` yields its text later, or
 `nil` when it holds none. `kind` is `Standard` (copy and paste) or
 `Primary` (the selection, pasted by middle-click). Use them on the GTK
@@ -767,9 +766,9 @@ Other data travels by MIME type:
   wrote, while it still owns the clipboard; `nil` otherwise.
 
 ```crystal
-Apprt::Clipboard.write([{"text/html", html.to_slice}, {"text/plain;charset=utf-8", text.to_slice}])
-if Apprt::Clipboard.offered.includes?("text/html")
-  Apprt::Clipboard.read("text/html") { |bytes| paste(bytes) if bytes }
+DesktopKit::Clipboard.write([{"text/html", html.to_slice}, {"text/plain;charset=utf-8", text.to_slice}])
+if DesktopKit::Clipboard.offered.includes?("text/html")
+  DesktopKit::Clipboard.read("text/html") { |bytes| paste(bytes) if bytes }
 end
 ```
 
@@ -794,27 +793,27 @@ desktop's notification service.
 
 Everything the runtime does on request is an action: a typed value that
 menus, buttons, key bindings and other processes trigger through GTK's
-action system. `Apprt::App#perform` carries actions out, with one overload
-per action type. Its *target* is the `Apprt::App` for `app` actions, the
-`Apprt::Window` for `window` actions, the `Apprt::Tab` for `tab` actions
-and the `Apprt::Surface` for `split` actions; a window triggers its tab and
+action system. `DesktopKit::App#perform` carries actions out, with one overload
+per action type. Its *target* is the `DesktopKit::App` for `app` actions, the
+`DesktopKit::Window` for `window` actions, the `DesktopKit::Tab` for `tab` actions
+and the `DesktopKit::Surface` for `split` actions; a window triggers its tab and
 split actions on its selected tab and that tab's focused surface.
 
-Declare an action with `Apprt.action`; the payload becomes the struct's
+Declare an action with `DesktopKit.action`; the payload becomes the struct's
 constructor arguments and getters:
 
 ```crystal
-Apprt.action Refresh, "refresh", payload: {force: Bool}
+DesktopKit.action Refresh, "refresh", payload: {force: Bool}
 
-Apprt.action Zoom, "zoom", scope: :split, payload: {step: Step} do
+DesktopKit.action Zoom, "zoom", scope: :split, payload: {step: Step} do
   enum Step
     In
     Out
   end
 end
 
-class Viewer < Apprt::App
-  protected def perform(target : Apprt::App, action : Refresh) : Bool
+class Viewer < DesktopKit::App
+  protected def perform(target : DesktopKit::App, action : Refresh) : Bool
     puts "refreshing, force: #{action.force}"
     true
   end
@@ -826,22 +825,22 @@ end
 | *name*     | the struct, here `Refresh`                                           |
 | *gname*    | the action name: letters, digits, `-` and `.`, unique per scope      |
 | `scope:`   | `:app` (default), `:window`, `:tab` or `:split`                      |
-| `payload:` | named fields of types `Apprt::Variant` carries; flags enums are not  |
-| `ipc:`     | whether `Apprt::IPC.send` may send it; `:app` actions only           |
+| `payload:` | named fields of types `DesktopKit::Variant` carries; flags enums are not  |
+| `ipc:`     | whether `DesktopKit::IPC.send` may send it; `:app` actions only           |
 | block      | definitions added to the struct, such as its payload enums           |
 
 `perform` returns whether it handled the action; actions nobody handles are
 logged as warnings. Redefine a built-in overload, such as
-`perform(target : Apprt::App, action : Apprt::Action::Quit)`, to change
+`perform(target : DesktopKit::App, action : DesktopKit::Action::Quit)`, to change
 what it does, and call `super` to keep the default.
 
 Each action has a detailed name, `#detailed_name`, in the GTK format
 `<prefix>.<name>[::<string> or (<parameter>)]`. The prefix is `app`, `win`,
-`tab` or `split` by scope, so `Apprt::Action::NewSplit.new(:right)` is
+`tab` or `split` by scope, so `DesktopKit::Action::NewSplit.new(:right)` is
 `split.new-split::right`. Buttons and menus trigger an action through its
 detailed name.
 
-Built-in actions, all nested in `Apprt::Action`:
+Built-in actions, all nested in `DesktopKit::Action`:
 
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -871,20 +870,20 @@ the URL with the desktop's default handler through the OpenURI portal, and
 with `xdg-open` when no portal answers or the request fails; file paths
 and `file://` URLs always go to `xdg-open`. A request the user cancels
 opens nothing.
-`direction` is an `Apprt::Direction` (`Left`, `Right`, `Up`, `Down`) unless
+`direction` is an `DesktopKit::Direction` (`Left`, `Right`, `Up`, `Down`) unless
 the action lists its own values.
 
 ### Key bindings
 
-`Apprt::App#bindings=` sets the key bindings, callable from any thread and
+`DesktopKit::App#bindings=` sets the key bindings, callable from any thread and
 replacing the previous set:
 
 ```crystal
 app.bindings = [
-  Apprt::Binding.new("ctrl+q", Apprt::Action::Quit.new),
-  Apprt::Binding.new("ctrl+shift+e", Apprt::Action::NewSplit.new(:right)),
-  Apprt::Binding.new("ctrl+a>n", Apprt::Action::NewTab.new),
-  Apprt::Binding.new("super+grave", Apprt::Action::NewWindow.new, global: true),
+  DesktopKit::Binding.new("ctrl+q", DesktopKit::Action::Quit.new),
+  DesktopKit::Binding.new("ctrl+shift+e", DesktopKit::Action::NewSplit.new(:right)),
+  DesktopKit::Binding.new("ctrl+a>n", DesktopKit::Action::NewTab.new),
+  DesktopKit::Binding.new("super+grave", DesktopKit::Action::NewWindow.new, global: true),
 ]
 ```
 
@@ -909,12 +908,12 @@ over the window's while active:
 ```crystal
 app.key_tables = {
   "resize" => [
-    Apprt::Binding.new("h", Apprt::Action::ResizeSplit.new(:left, 20)),
-    Apprt::Binding.new("l", Apprt::Action::ResizeSplit.new(:right, 20)),
-    Apprt::Binding.new("esc", Apprt::Action::DeactivateKeyTable.new),
+    DesktopKit::Binding.new("h", DesktopKit::Action::ResizeSplit.new(:left, 20)),
+    DesktopKit::Binding.new("l", DesktopKit::Action::ResizeSplit.new(:right, 20)),
+    DesktopKit::Binding.new("esc", DesktopKit::Action::DeactivateKeyTable.new),
   ],
 }
-app.bindings = [Apprt::Binding.new("ctrl+r", Apprt::Action::ActivateKeyTable.new("resize"))]
+app.bindings = [DesktopKit::Binding.new("ctrl+r", DesktopKit::Action::ActivateKeyTable.new("resize"))]
 ```
 
 `ActivateKeyTable` pushes a table onto the window's stack, up to eight
@@ -937,7 +936,7 @@ the desktop launched it in. The `on_binding_failed` hook receives each
 global binding the desktop does not bind and the reason; by default it logs
 a warning. Desktops without the portal fail every global binding.
 
-`Apprt::Trigger.parse` reads a trigger: modifiers and a key joined by `+`.
+`DesktopKit::Trigger.parse` reads a trigger: modifiers and a key joined by `+`.
 
 | Part      | Accepted                                                                                           |
 |-----------|----------------------------------------------------------------------------------------------------|
@@ -960,8 +959,8 @@ action name in words; the dialog's search matches the titles.
 
 ### Translation
 
-`Apprt.translator=` sets the function that translates apprt's own texts:
-labels, tooltips, dialog texts and the titles of `Command.defaults` and
+`DesktopKit.translator=` sets the function that translates desktop_kit's own
+texts: labels, tooltips, dialog texts and the titles of `Command.defaults` and
 `Menu.window`. It receives the English text and returns the one to show;
 the default returns it unchanged, and a translator that raises keeps the
 English text. Set it before creating the application, as the default
@@ -969,11 +968,11 @@ commands and window menu are built then:
 
 ```crystal
 GERMAN = {"Quit" => "Beenden", "New Tab" => "Neuer Tab"}
-Apprt.translator = ->(text : String) { GERMAN[text]? || text }
+DesktopKit.translator = ->(text : String) { GERMAN[text]? || text }
 ```
 
 Texts the application passes, such as its own command titles or the
-`title:` of `Window#open_file`, are shown as given. The texts apprt
+`title:` of `Window#open_file`, are shown as given. The texts desktop_kit
 translates:
 
 | Text |
@@ -1069,15 +1068,15 @@ translates:
 
 ### IPC
 
-`Apprt::IPC.send(app_id, action)` triggers an `ipc: true` action in the
+`DesktopKit::IPC.send(app_id, action)` triggers an `ipc: true` action in the
 running single instance of the application *app_id*, such as
-`Apprt::Action::NewWindow`; other actions fail to compile. It blocks until
-the application answers and raises `Apprt::GLibError` when none runs, and
+`DesktopKit::Action::NewWindow`; other actions fail to compile. It blocks until
+the application answers and raises `DesktopKit::GLibError` when none runs, and
 `ArgumentError` for an invalid id. Call it from another process, or from
 a thread other than the target application's GTK thread:
 
 ```crystal
-Apprt::IPC.send("org.example.Hello", Apprt::Action::NewWindow.new)
+DesktopKit::IPC.send("org.example.Hello", DesktopKit::Action::NewWindow.new)
 ```
 
 Only `ipc: true` actions are exported on the session bus; other processes
@@ -1086,7 +1085,7 @@ action works as usual.
 
 ### Tray icon
 
-`App#tray=` shows an `Apprt::Tray` in the desktop's system tray while the
+`App#tray=` shows an `DesktopKit::Tray` in the desktop's system tray while the
 application runs; `nil` removes it. Assigning a new one updates the shown
 icon, title, tooltip and menu. Callable from any thread.
 
@@ -1104,18 +1103,18 @@ extension; without a host nothing shows. With `quit_delay = nil` the
 application keeps running with only its tray icon.
 
 ```crystal
-app.tray = Apprt::Tray.new(icon: "mail-unread-symbolic", title: "Mail", tooltip: "3 new",
-  menu: Apprt::Menu.build { |menu|
-    menu.item "New Window", Apprt::Action::NewWindow.new
+app.tray = DesktopKit::Tray.new(icon: "mail-unread-symbolic", title: "Mail", tooltip: "3 new",
+  menu: DesktopKit::Menu.build { |menu|
+    menu.item "New Window", DesktopKit::Action::NewWindow.new
     menu.section
-    menu.item "Quit", Apprt::Action::Quit.new
+    menu.item "Quit", DesktopKit::Action::Quit.new
   },
-  activate: Apprt::Action::NewWindow.new)
+  activate: DesktopKit::Action::NewWindow.new)
 ```
 
 ### D-Bus
 
-`Apprt::DBus` is a message bus connection: `DBus.session`, `DBus.system`
+`DesktopKit::DBus` is a message bus connection: `DBus.session`, `DBus.system`
 or `App#dbus` (the running application's own, `nil` before it registers).
 Arguments and replies are tuple `Variant`s.
 
@@ -1150,27 +1149,27 @@ other contents still reload. Under systemd the reload runs between
 
 Under systemd (`Type=notify` or `Type=notify-reload`), the application
 reports `READY=1` after its first activation, `RELOADING=1` around each
-reload and `STOPPING=1` when it quits. `Apprt::Systemd.notify(state)` sends
+reload and `STOPPING=1` when it quits. `DesktopKit::Systemd.notify(state)` sends
 other states, such as `"STATUS=Indexing"`, and returns `false` outside
 systemd.
 
-`Apprt::Systemd.start_scope` moves a child process into its own transient
+`DesktopKit::Systemd.start_scope` moves a child process into its own transient
 scope of the user's service manager, so that systemd accounts, limits and
 kills it apart from the application:
 
 ```crystal
 process = Process.new("make")
 unit = "app-#{app.id}-transient-#{process.pid}.scope"
-Apprt::Systemd.start_scope(process.pid, unit, memory_high: 4_u64 << 30, tasks_max: 512_u64, oom_kill: true)
+DesktopKit::Systemd.start_scope(process.pid, unit, memory_high: 4_u64 << 30, tasks_max: 512_u64, oom_kill: true)
 ```
 
 It returns once the process is in the scope, or `false` after *timeout*
-(250 ms), and raises `Apprt::GLibError` when the session bus or the service
+(250 ms), and raises `DesktopKit::GLibError` when the session bus or the service
 manager refuses.
 
 ### Variants
 
-`Apprt::Variant` is an immutable GLib `GVariant`, the value type of action
+`DesktopKit::Variant` is an immutable GLib `GVariant`, the value type of action
 parameters, DBus messages and portal options. Values convert by their
 Crystal type:
 
@@ -1181,40 +1180,40 @@ Crystal type:
 | `Int64`, `UInt64`               | `x`, `t`  |
 | `Float64`                       | `d`       |
 | `String`                        | `s`       |
-| `Apprt::Variant::ObjectPath`    | `o`       |
+| `DesktopKit::Variant::ObjectPath`    | `o`       |
 | enum (not `@[Flags]`)           | `s`, the member name in snake case |
-| `Apprt::Variant`                | `v`       |
+| `DesktopKit::Variant`                | `v`       |
 | `T?`                            | `mT`      |
 | `Array(T)`                      | `aT`      |
 | `Hash(K, V)`                    | `a{KV}`   |
 | `Tuple(T, U, ...)`              | `(TU...)` |
 
 ```crystal
-options = Apprt::Variant.new({"modal" => Apprt::Variant.new(true)})
+options = DesktopKit::Variant.new({"modal" => DesktopKit::Variant.new(true)})
 options.type_string                       # => "a{sv}"
 options["modal"]?.try(&.get(Bool))        # => true
-Apprt::Variant.parse("(1, 'a')").get(Tuple(Int32, String)) # => {1, "a"}
-Apprt::Variant.signature(Array(String))   # => "as"
+DesktopKit::Variant.parse("(1, 'a')").get(Tuple(Int32, String)) # => {1, "a"}
+DesktopKit::Variant.signature(Array(String))   # => "as"
 ```
 
 `#get` raises `TypeCastError` when the variant holds another type;
-`.parse` raises `Apprt::GLibError` on bad input.
+`.parse` raises `DesktopKit::GLibError` on bad input.
 
 ### Widgets
 
-`Apprt::Widget` is a borrowed handle to a GTK widget: size, scale,
+`DesktopKit::Widget` is a borrowed handle to a GTK widget: size, scale,
 visibility, focus, cursor, tooltip and CSS classes. It holds no reference;
 GTK's widget tree owns the widget. Use it on the GTK thread only.
 
 ### Errors
 
-`Apprt::GLibError` carries the GLib error domain (`#domain`, a string such
+`DesktopKit::GLibError` carries the GLib error domain (`#domain`, a string such
 as `"g-io-error-quark"`) and `#code`.
 
 Exceptions raised inside callbacks that GTK runs are logged to the
-`"apprt"` `Log` source instead of crossing into C.
+`"desktop_kit"` `Log` source instead of crossing into C.
 
 ## License
 
-MIT. Parts are ported from Ghostty (MIT, © Mitchell Hashimoto, Ghostty
-contributors); see `LICENSE`.
+MIT; see `LICENSE`, which also holds the notices of third-party code
+included here.

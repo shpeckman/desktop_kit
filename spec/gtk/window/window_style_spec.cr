@@ -19,21 +19,21 @@ lib WindowStyleSpecLib
   fun adw_tab_view_get_shortcuts(view : Void*) : UInt32
 end
 
-private def css_class?(widget : Apprt::Widget, name : String) : Bool
+private def css_class?(widget : DesktopKit::Widget, name : String) : Bool
   WindowStyleSpecLib.gtk_widget_has_css_class(widget, name) != 0
 end
 
-private def host(surface : Apprt::Surface) : Apprt::Widget
+private def host(surface : DesktopKit::Surface) : DesktopKit::Widget
   surface.@host
 end
 
-private def header(surface : Apprt::Surface) : Apprt::Widget
+private def header(surface : DesktopKit::Surface) : DesktopKit::Widget
   surface.@header
 end
 
 private def icon_string(icon : Void*) : String
   pointer = WindowStyleSpecLib.g_icon_to_string(icon)
-  String.new(pointer).tap { Apprt::C.g_free(pointer) }
+  String.new(pointer).tap { DesktopKit::C.g_free(pointer) }
 end
 
 # A red 1x1 PNG.
@@ -41,14 +41,14 @@ private ICON_PNG = Base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 
 # Writes the icon to a file in the temporary directory and returns its path.
 private def icon_file : Path
-  Path[Dir.tempdir, "apprt-icon.png"].tap { |path| File.write(path, ICON_PNG) }
+  Path[Dir.tempdir, "desktop-kit-icon.png"].tap { |path| File.write(path, ICON_PNG) }
 end
 
 # Returns the icons of the images below *widget*.
 private def image_icons(widget : Void*, icons = [] of String) : Array(String)
   child = WindowStyleSpecLib.gtk_widget_get_first_child(widget)
   until child.null?
-    if Apprt::C.g_type_check_instance_is_a(child, WindowStyleSpecLib.gtk_image_get_type) != 0
+    if DesktopKit::C.g_type_check_instance_is_a(child, WindowStyleSpecLib.gtk_image_get_type) != 0
       gicon = WindowStyleSpecLib.gtk_image_get_gicon(child)
       icons << icon_string(gicon) unless gicon.null?
     end
@@ -58,34 +58,34 @@ private def image_icons(widget : Void*, icons = [] of String) : Array(String)
   icons
 end
 
-private def header_title(surface : Apprt::Surface) : String
+private def header_title(surface : DesktopKit::Surface) : String
   String.new(WindowStyleSpecLib.gtk_label_get_label(surface.@header_title))
 end
 
 # Returns the header buttons of *surface* in order.
-private def header_buttons(surface : Apprt::Surface) : Array(Void*)
+private def header_buttons(surface : DesktopKit::Surface) : Array(Void*)
   buttons = [] of Void*
   child = WindowStyleSpecLib.gtk_widget_get_first_child(header(surface))
   until child.null?
-    buttons << child if Apprt::C.g_type_check_instance_is_a(child, WindowStyleSpecLib.gtk_button_get_type) != 0
+    buttons << child if DesktopKit::C.g_type_check_instance_is_a(child, WindowStyleSpecLib.gtk_button_get_type) != 0
     child = WindowStyleSpecLib.gtk_widget_get_next_sibling(child)
   end
   buttons
 end
 
-private def inside?(widget : Apprt::Widget, ancestor : Apprt::Widget) : Bool
+private def inside?(widget : DesktopKit::Widget, ancestor : DesktopKit::Widget) : Bool
   WindowStyleSpecLib.gtk_widget_is_ancestor(widget, ancestor) != 0
 end
 
-describe Apprt::WindowStyle do
+describe DesktopKit::WindowStyle do
   it "rejects opacities outside 0..1" do
-    expect_raises(ArgumentError, "opacity 1.5 outside 0..1") { Apprt::WindowStyle.new(opacity: 1.5) }
-    expect_raises(ArgumentError, "unfocused_opacity -0.1 outside 0..1") { Apprt::WindowStyle.new(unfocused_opacity: -0.1) }
+    expect_raises(ArgumentError, "opacity 1.5 outside 0..1") { DesktopKit::WindowStyle.new(opacity: 1.5) }
+    expect_raises(ArgumentError, "unfocused_opacity -0.1 outside 0..1") { DesktopKit::WindowStyle.new(unfocused_opacity: -0.1) }
   end
 
   it "has no style sheet by default" do
-    Apprt::WindowStyle.new.to_css.should be_empty
-    css = Apprt::WindowStyle.new(cards: true, opacity: 0.8, unfocused_opacity: 0.5).to_css
+    DesktopKit::WindowStyle.new.to_css.should be_empty
+    css = DesktopKit::WindowStyle.new(cards: true, opacity: 0.8, unfocused_opacity: 0.5).to_css
     css.should contain "alpha(@window_bg_color, 0.8)"
     css.should contain "border-radius"
     css.should contain ".surface:not(.active) { opacity: 0.5; }"
@@ -97,28 +97,28 @@ describe "window style" do
 
   it "shows pane headers that act on their surface" do
     app = TestApp.new
-    app.window_style = Apprt::WindowStyle.new(pane_headers: true)
+    app.window_style = DesktopKit::WindowStyle.new(pane_headers: true)
     run_steps(app) do
       window = app.new_window
       tab = window.tabs.first
       surface = tab.surfaces.first
       settle
       header(surface).visible?.should be_true
-      header_title(surface).should eq Apprt::Native.string?(Apprt::C.g_get_application_name)
+      header_title(surface).should eq DesktopKit::Native.string?(DesktopKit::C.g_get_application_name)
       surface.title = "shell"
       header_title(surface).should eq "shell"
       surface.title_override = "custom"
       header_title(surface).should eq "custom"
       buttons = header_buttons(surface)
       buttons.size.should eq 4
-      Apprt::C.g_signal_emit_by_name(buttons[0], "clicked")
+      DesktopKit::C.g_signal_emit_by_name(buttons[0], "clicked")
       settle
       tab.surfaces.size.should eq 2
       second = tab.surfaces.last
-      Apprt::C.g_signal_emit_by_name(header_buttons(second)[3], "clicked")
+      DesktopKit::C.g_signal_emit_by_name(header_buttons(second)[3], "clicked")
       settle
       tab.surfaces.should eq [surface]
-      app.window_style = Apprt::WindowStyle.new
+      app.window_style = DesktopKit::WindowStyle.new
       settle
       header(surface).visible?.should be_false
     end
@@ -141,12 +141,12 @@ describe "window style" do
       first = tab.surfaces.first
       settle
       css_class?(host(first), "active").should be_true
-      trigger(window, Apprt::Action::NewSplit.new(:right))
+      trigger(window, DesktopKit::Action::NewSplit.new(:right))
       settle
       second = tab.surfaces.last
       css_class?(host(first), "active").should be_false
       css_class?(host(second), "active").should be_true
-      trigger(window, Apprt::Action::GotoSplit.new(:previous))
+      trigger(window, DesktopKit::Action::GotoSplit.new(:previous))
       settle
       css_class?(host(first), "active").should be_true
       css_class?(host(second), "active").should be_false
@@ -160,16 +160,16 @@ describe "window style" do
       tab = window.tabs.first
       surface = tab.surfaces.first
       settle
-      page = Apprt::C.adw_tab_view_get_selected_page(window.@tab_view)
+      page = DesktopKit::C.adw_tab_view_get_selected_page(window.@tab_view)
       WindowStyleSpecLib.adw_tab_page_get_icon(page).null?.should be_true
       surface.icon = "utilities-terminal"
       surface.icon.should eq "utilities-terminal"
       WindowStyleSpecLib.adw_tab_page_get_icon(page).null?.should be_false
       surface.@header_icon.visible?.should be_true
-      trigger(window, Apprt::Action::NewSplit.new(:right))
+      trigger(window, DesktopKit::Action::NewSplit.new(:right))
       settle
       WindowStyleSpecLib.adw_tab_page_get_icon(page).null?.should be_true
-      trigger(window, Apprt::Action::GotoSplit.new(:previous))
+      trigger(window, DesktopKit::Action::GotoSplit.new(:previous))
       settle
       WindowStyleSpecLib.adw_tab_page_get_icon(page).null?.should be_false
       surface.icon = nil
@@ -184,7 +184,7 @@ describe "window style" do
       window = app.new_window
       surface = window.tabs.first.surfaces.first
       settle
-      page = Apprt::C.adw_tab_view_get_selected_page(window.@tab_view)
+      page = DesktopKit::C.adw_tab_view_get_selected_page(window.@tab_view)
       path = icon_file
       surface.icon = path
       surface.icon.should eq path
@@ -202,13 +202,13 @@ describe "window style" do
       settle
       tab_bar = window.@tab_bar
       inside?(tab_bar, window.@header).should be_false
-      app.window_style = Apprt::WindowStyle.new(tabs_in_header: true)
+      app.window_style = DesktopKit::WindowStyle.new(tabs_in_header: true)
       settle
       inside?(tab_bar, window.@header).should be_true
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 0
       other = app.new_window
       inside?(other.@tab_bar, other.@header).should be_true
-      app.window_style = Apprt::WindowStyle.new
+      app.window_style = DesktopKit::WindowStyle.new
       settle
       inside?(tab_bar, window.@header).should be_false
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 1
@@ -220,15 +220,15 @@ describe "window style" do
     run_steps(app) do
       window = app.new_window
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 1
-      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq Apprt::C::AdwTabViewShortcuts::AllShortcuts.value
-      app.window_style = Apprt::WindowStyle.new(header_bar: false)
+      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq DesktopKit::C::AdwTabViewShortcuts::AllShortcuts.value
+      app.window_style = DesktopKit::WindowStyle.new(header_bar: false)
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 0
       WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq 0
       other = app.new_window
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(other.@toolbar).should eq 0
-      app.window_style = Apprt::WindowStyle.new
+      app.window_style = DesktopKit::WindowStyle.new
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 1
-      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq Apprt::C::AdwTabViewShortcuts::AllShortcuts.value
+      WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq DesktopKit::C::AdwTabViewShortcuts::AllShortcuts.value
     end
   end
 
@@ -242,12 +242,12 @@ describe "window style" do
       String.new(WindowStyleSpecLib.adw_window_title_get_subtitle(window.@title_widget)).should eq "Mac Studio"
       window.subtitle = nil
       String.new(WindowStyleSpecLib.adw_window_title_get_subtitle(window.@title_widget)).should be_empty
-      label = Apprt::Widget.new(Apprt::C.gtk_label_new("host"))
+      label = DesktopKit::Widget.new(DesktopKit::C.gtk_label_new("host"))
       window.pack_start(label)
       inside?(label, window.@header).should be_true
-      window.pack_end(Apprt::Action::ToggleCommandPalette.new, "system-search-symbolic", "Commands")
+      window.pack_end(DesktopKit::Action::ToggleCommandPalette.new, "system-search-symbolic", "Commands")
       path = icon_file
-      window.pack_start(Apprt::Action::NewTab.new, path, "New tab")
+      window.pack_start(DesktopKit::Action::NewTab.new, path, "New tab")
       settle
       icons = image_icons(window.@header.to_unsafe)
       icons.should contain "system-search-symbolic"
@@ -259,7 +259,7 @@ describe "window style" do
     app = WindowHookApp.new
     run_steps(app) do
       app.new_window
-      trigger(app.windows.first, Apprt::Action::NewWindow.new)
+      trigger(app.windows.first, DesktopKit::Action::NewWindow.new)
       settle
       app.hooked.size.should eq 2
     end
@@ -267,9 +267,9 @@ describe "window style" do
 end
 
 class WindowHookApp < TestApp
-  getter hooked = [] of Apprt::Window
+  getter hooked = [] of DesktopKit::Window
 
-  protected def on_window(window : Apprt::Window) : Nil
+  protected def on_window(window : DesktopKit::Window) : Nil
     @hooked << window
   end
 end

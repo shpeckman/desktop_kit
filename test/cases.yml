@@ -1,12 +1,12 @@
 # cases.yml
-# The cases of the apprt live tests; see README.md. Shots allow a color
+# The cases of the desktop_kit live tests; see README.md. Shots allow a color
 # difference of 2: KDE antialiases the window's bottom corners slightly
 # differently from sway.
 
 # The global binding fires through the desktop's global shortcuts portal
 # while the window has the focus. Global bindings have no window shortcut,
 # so the tab can only come from the portal's Activated signal. The sleep
-# lets the portal bind the shortcut first: apprt has no hook for a
+# lets the portal bind the shortcut first: desktop_kit has no hook for a
 # successful bind.
 global-shortcut:
   modes: [kde]
@@ -242,7 +242,7 @@ header-menu:
     - expect tab
     - close
 
-# The same menu with Dutch texts from `Apprt.translator`.
+# The same menu with Dutch texts from `DesktopKit.translator`.
 translation:
   modes: [kde, sway]
   dutch: true

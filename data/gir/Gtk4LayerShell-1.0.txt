@@ -1,5 +1,5 @@
 # data/gir/Gtk4LayerShell-1.0.txt
-# Gtk4LayerShell symbols of Apprt::C (src/apprt/c/gtk4layershell.cr); see tools/gir/generator.cr.
+# Gtk4LayerShell symbols of DesktopKit::C (src/desktop_kit/c/gtk4layershell.cr); see tools/gir/generator.cr.
 
 GtkLayerShellEdge
 GtkLayerShellLayer

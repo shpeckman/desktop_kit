@@ -1,5 +1,5 @@
 # src/main.cr
-# The live test harness of apprt: see README.md.
-require "./apprt/test/subject"
+# The live test harness of desktop_kit: see README.md.
+require "./desktop_kit/test/subject"
 
-exit Livetest.run(ARGV, Apprt::Test::Subject.new)
+exit Livetest.run(ARGV, DesktopKit::Test::Subject.new)

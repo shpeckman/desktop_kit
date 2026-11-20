@@ -1,7 +1,7 @@
 # spec/pure/window/split_tree_spec.cr
 require "../../spec_helper"
 
-private alias Tree = Apprt::SplitTree(String)
+private alias Tree = DesktopKit::SplitTree(String)
 
 private def handle(tree : Tree, view : String) : Int32
   tree.locate(view) || fail "#{view} not in tree"
@@ -30,7 +30,7 @@ private def grid : Tree
   ac.split(handle(ac, "B"), :down, "D", 0.3)
 end
 
-describe Apprt::SplitTree do
+describe DesktopKit::SplitTree do
   it "tells splits from leaves" do
     Tree.new.split?.should be_false
     Tree.new("A").split?.should be_false
@@ -122,7 +122,7 @@ describe Apprt::SplitTree do
   end
 
   it "hides leaves without space" do
-    {Apprt::Direction::Right, Apprt::Direction::Down}.each do |direction|
+    {DesktopKit::Direction::Right, DesktopKit::Direction::Down}.each do |direction|
       Tree.new("A").split(Tree::ROOT, direction, "B", 0.0)
         .to_diagram.should eq(lines("+---+", "| B |", "+---+"))
       Tree.new("A").split(Tree::ROOT, direction, "B", 1.0)
@@ -185,12 +185,12 @@ describe Apprt::SplitTree do
       "+---++---+"))
     a, b, c, d = %w(A B C D).map { |view| handle(tree, view) }
 
-    tree.goto(c, Apprt::Direction::Right).should eq(d)
-    tree.goto(d, Apprt::Direction::Left).should eq(a)
-    tree.goto(a, Apprt::Direction::Left).should eq(b)
-    tree.goto(b, Apprt::Direction::Right).should eq(a)
-    tree.goto(c, Apprt::Direction::Down).should eq(a)
-    Tree.new("A").goto(Tree::ROOT, Apprt::Direction::Up).should be_nil
+    tree.goto(c, DesktopKit::Direction::Right).should eq(d)
+    tree.goto(d, DesktopKit::Direction::Left).should eq(a)
+    tree.goto(a, DesktopKit::Direction::Left).should eq(b)
+    tree.goto(b, DesktopKit::Direction::Right).should eq(a)
+    tree.goto(c, DesktopKit::Direction::Down).should eq(a)
+    Tree.new("A").goto(Tree::ROOT, DesktopKit::Direction::Up).should be_nil
   end
 
   it "equalizes by leaves along each axis" do
