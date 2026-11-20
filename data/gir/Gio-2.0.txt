@@ -69,6 +69,11 @@ g_bus_get_finish
 g_bus_get_sync
 g_bus_own_name
 g_bus_unown_name
+g_bus_watch_name_on_connection
+g_bus_unwatch_name
+GBusNameAppearedCallback
+GBusNameVanishedCallback
+GBusNameWatcherFlags
 g_dbus_connection_call
 g_dbus_connection_call_finish
 g_dbus_connection_call_sync

@@ -302,7 +302,7 @@ module Apprt
     #   draft.clear if discard
     # end
     # ```
-    def confirm(heading : String, body : String? = nil, *, confirm : String = "OK", cancel : String = "Cancel",
+    def confirm(heading : String, body : String? = nil, *, confirm : String = Apprt.tr("OK"), cancel : String = Apprt.tr("Cancel"),
                 destructive : Bool = false, &block : Bool ->) : Nil
       return if @closed
       Dialogs.confirm(@widget, heading, body, confirm, cancel, destructive, &block)
@@ -317,8 +317,8 @@ module Apprt
     # ```
     # window.prompt("Rename Session", text: session.name) { |name| session.name = name }
     # ```
-    def prompt(heading : String, body : String? = nil, *, text : String = "", confirm : String = "OK",
-               cancel : String = "Cancel", &block : String ->) : Nil
+    def prompt(heading : String, body : String? = nil, *, text : String = "", confirm : String = Apprt.tr("OK"),
+               cancel : String = Apprt.tr("Cancel"), &block : String ->) : Nil
       return if @closed
       Dialogs.prompt(@widget, heading, body, text, confirm, cancel, &block)
     end
@@ -498,12 +498,12 @@ module Apprt
       header = @header
       C.gtk_box_append(@title_box, @title_widget)
       C.adw_header_bar_set_title_widget(header, @title_box)
-      C.adw_header_bar_pack_start(header, button("tab-new-symbolic", "New Tab", Action::NewTab.new))
+      C.adw_header_bar_pack_start(header, button("tab-new-symbolic", Apprt.tr("New Tab"), Action::NewTab.new))
       C.gtk_menu_button_set_icon_name(@menu_button, "open-menu-symbolic")
       self.menu = @app.window_menu
-      @menu_button.tooltip = "Main Menu"
+      @menu_button.tooltip = Apprt.tr("Main Menu")
       C.adw_header_bar_pack_end(header, @menu_button)
-      C.adw_header_bar_pack_end(header, button("view-grid-symbolic", "View Open Tabs", Action::ToggleTabOverview.new))
+      C.adw_header_bar_pack_end(header, button("view-grid-symbolic", Apprt.tr("View Open Tabs"), Action::ToggleTabOverview.new))
 
       tab_bar = @tab_bar
       C.adw_tab_bar_set_view(tab_bar, @tab_view)

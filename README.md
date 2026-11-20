@@ -322,7 +322,7 @@ end
 
 `App#window_menu=` replaces the header menu of every window, open ones
 too; `Menu.window`, the default, holds the window, tab, split, title and
-close actions. A content's context menu comes from its
+close actions and the keyboard shortcuts. A content's context menu comes from its
 `Content#context_menu(x, y)` hook, called on a right click at *x*, *y*
 (logical pixels from its top left): return a menu to show it there, or
 `nil`, the default, to pass the click on. The surface is focused first,
@@ -846,7 +846,7 @@ Built-in actions, all nested in `Apprt::Action`:
 | Scope    | Actions (payload)                                                                                                                                                                                                                                                                            |
 |----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)` (ipc), `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `TogglePanel(panel : String)` (ipc), `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
-| `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
+| `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `ShowShortcuts`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
 | `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard`, `StartSearch`, `EndSearch`, `Search(needle)`, `NavigateSearch(direction : Previous/Next)` |
 
@@ -953,6 +953,120 @@ shortcut (`#to_xdg`, `"SHIFT+CTRL+t"`, as global shortcut portals expect),
 a label for the user (`#label`, `"Shift+Ctrl+T"`) and back to text
 (`#to_s`, `"shift+ctrl+t"`).
 
+`ShowShortcuts` opens a dialog over the window listing every binding,
+grouped by the scope of its action, then each key table. A binding's title
+is that of the command in `App#commands` with the same action, else the
+action name in words; the dialog's search matches the titles.
+
+### Translation
+
+`Apprt.translator=` sets the function that translates apprt's own texts:
+labels, tooltips, dialog texts and the titles of `Command.defaults` and
+`Menu.window`. It receives the English text and returns the one to show;
+the default returns it unchanged, and a translator that raises keeps the
+English text. Set it before creating the application, as the default
+commands and window menu are built then:
+
+```crystal
+GERMAN = {"Quit" => "Beenden", "New Tab" => "Neuer Tab"}
+Apprt.translator = ->(text : String) { GERMAN[text]? || text }
+```
+
+Texts the application passes, such as its own command titles or the
+`title:` of `Window#open_file`, are shown as given. The texts apprt
+translates:
+
+| Text |
+|------|
+| Allow |
+| An application is attempting to read from the clipboard. The current clipboard contents are shown below. |
+| An application is attempting to write to the clipboard. The text it would copy is shown below. |
+| Application |
+| Authorize Clipboard Access |
+| Cancel |
+| Change Surface Title |
+| Change Tab Title |
+| Change Tab Title… |
+| Change Title |
+| Change Title… |
+| Change Window Title |
+| Change Window Title… |
+| Close |
+| Close All Windows |
+| Close All Windows? |
+| Close Other Tabs |
+| Close Split |
+| Close Split? |
+| Close Tab |
+| Close Tab? |
+| Close Tabs to the Right |
+| Close Window |
+| Close Window? |
+| Command Palette |
+| Configuration Errors |
+| Copy Title |
+| Deny |
+| End Search |
+| Equalize Splits |
+| Find… |
+| Focus Next Split |
+| Focus Previous Split |
+| GTK Inspector |
+| Global shortcut |
+| Hide All Windows |
+| Ignore |
+| Key table |
+| Keyboard Shortcuts |
+| Leave blank to restore the default title. |
+| Main Menu |
+| Move Tab to New Window |
+| New Tab |
+| New Window |
+| Next Match |
+| Next Tab |
+| OK |
+| One or more configuration errors were found. Please review the errors below, and either reload your configuration or ignore these errors. |
+| Open File |
+| Open Files |
+| Pasting this text may be dangerous as it looks like some commands may be executed. |
+| Preferences |
+| Previous Match |
+| Previous Tab |
+| Quit |
+| Quit? |
+| Read-only |
+| Redo Close |
+| Reload Configuration |
+| Reset Window Size |
+| Save File |
+| Select Color |
+| Select Folder |
+| Select Font |
+| Show On-Screen Keyboard |
+| Some windows ask before closing |
+| Split |
+| Split Down |
+| Split Left |
+| Split Right |
+| Split Up |
+| Tab |
+| Tab Overview |
+| Toggle Background Opacity |
+| Toggle Fullscreen |
+| Toggle Maximize |
+| Toggle Read-Only |
+| Toggle Split Zoom |
+| Toggle Window Decorations |
+| Undo Close |
+| Unsaved work in this split will be lost. |
+| Unsaved work in this tab will be lost. |
+| Unsaved work in this window will be lost. |
+| Unsaved work will be lost. |
+| View Open Tabs |
+| Warning: Potentially Unsafe Paste |
+| Window |
+| Zoom Split |
+
 ### IPC
 
 `Apprt::IPC.send(app_id, action)` triggers an `ipc: true` action in the
@@ -969,6 +1083,35 @@ Apprt::IPC.send("org.example.Hello", Apprt::Action::NewWindow.new)
 Only `ipc: true` actions are exported on the session bus; other processes
 calling any other action get an error. Inside the application every
 action works as usual.
+
+### Tray icon
+
+`App#tray=` shows an `Apprt::Tray` in the desktop's system tray while the
+application runs; `nil` removes it. Assigning a new one updates the shown
+icon, title, tooltip and menu. Callable from any thread.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `icon` | `String` | icon name from the icon theme |
+| `title` | `String` | name of the item, shown in its tooltip |
+| `tooltip` | `String?` | tooltip text below the title |
+| `menu` | `Menu?` | menu shown on click; a `Menu` like the header menu's |
+| `activate` | `Action?` | performed on a primary click; without it a primary click shows the menu |
+
+Actions run as if performed in the active window. The tray shows through a
+StatusNotifierItem host, such as KDE Plasma's or GNOME's AppIndicator
+extension; without a host nothing shows. With `quit_delay = nil` the
+application keeps running with only its tray icon.
+
+```crystal
+app.tray = Apprt::Tray.new(icon: "mail-unread-symbolic", title: "Mail", tooltip: "3 new",
+  menu: Apprt::Menu.build { |menu|
+    menu.item "New Window", Apprt::Action::NewWindow.new
+    menu.section
+    menu.item "Quit", Apprt::Action::Quit.new
+  },
+  activate: Apprt::Action::NewWindow.new)
+```
 
 ### D-Bus
 

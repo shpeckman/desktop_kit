@@ -147,6 +147,10 @@ module Apprt
     fun adw_preferences_group_set_description(self_ : Void*, description : UInt8*)
     fun adw_preferences_row_set_title(self_ : Void*, title : UInt8*)
     fun adw_action_row_set_subtitle(self_ : Void*, subtitle : UInt8*)
+    fun adw_action_row_new : Void*
+    fun adw_action_row_add_suffix(self_ : Void*, widget : Void*)
+    fun adw_preferences_row_set_use_markup(self_ : Void*, use_markup : Int32)
+    fun adw_preferences_dialog_set_search_enabled(self_ : Void*, search_enabled : Int32)
     fun adw_switch_row_new : Void*
     fun adw_switch_row_get_active(self_ : Void*) : Int32
     fun adw_switch_row_set_active(self_ : Void*, is_active : Int32)

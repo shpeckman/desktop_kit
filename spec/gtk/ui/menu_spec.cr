@@ -55,7 +55,7 @@ describe "App#window_menu=" do
   it "shows the default menu and replaces it in open and new windows" do
     run_steps(TestApp.new) do |app|
       window = app.new_window
-      sections(window).should eq 4
+      sections(window).should eq 5
       app.window_menu = Apprt::Menu.build { |menu| menu.item "New Tab", Apprt::Action::NewTab.new }
       settle
       sections(window).should eq 1

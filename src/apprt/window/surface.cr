@@ -81,14 +81,6 @@ module Apprt
     @closed = false
     @icon : Icon?
 
-    # Icons, tooltips and actions of the buttons in the pane header.
-    private HEADER_BUTTONS = [
-      {"view-dual-symbolic", "Split Right", Action::NewSplit.new(:right)},
-      {"view-paged-symbolic", "Split Down", Action::NewSplit.new(:down)},
-      {"view-fullscreen-symbolic", "Zoom Split", Action::ToggleSplitZoom.new},
-      {"window-close-symbolic", "Close Split", Action::CloseSurface.new},
-    ]
-
     protected def initialize(@app : App, @content : Content)
       raise ArgumentError.new("the content already belongs to a surface") if @content.surface?
       @id = @@last_id += 1
@@ -354,7 +346,7 @@ module Apprt
       C.gtk_overlay_add_overlay(overlay, @progress_bar)
       @read_only_badge.add_css_class("osd")
       @read_only_badge.add_css_class("surface-read-only")
-      @read_only_badge.tooltip = "Read-only"
+      @read_only_badge.tooltip = Apprt.tr("Read-only")
       @read_only_badge.visible = false
       C.gtk_widget_set_halign(@read_only_badge, C::GtkAlign::End)
       C.gtk_widget_set_valign(@read_only_badge, C::GtkAlign::Start)
@@ -388,7 +380,12 @@ module Apprt
       C.gtk_label_set_ellipsize(@header_title, C::PANGO_ELLIPSIZE_END)
       @header_title.hexpand = true
       C.gtk_box_append(@header, @header_title)
-      HEADER_BUTTONS.each do |icon, tooltip, action|
+      {
+        {"view-dual-symbolic", Apprt.tr("Split Right"), Action::NewSplit.new(:right)},
+        {"view-paged-symbolic", Apprt.tr("Split Down"), Action::NewSplit.new(:down)},
+        {"view-fullscreen-symbolic", Apprt.tr("Zoom Split"), Action::ToggleSplitZoom.new},
+        {"window-close-symbolic", Apprt.tr("Close Split"), Action::CloseSurface.new},
+      }.each do |icon, tooltip, action|
         button = Widget.new(C.gtk_button_new_from_icon_name(icon))
         C.gtk_button_set_has_frame(button, 0)
         button.focusable = false

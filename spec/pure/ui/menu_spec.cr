@@ -23,6 +23,6 @@ describe Apprt::Menu do
   end
 
   it "has a default window menu of window, split, title and close sections" do
-    Apprt::Menu.window.sections.map(&.size).should eq [2, 4, 3, 2]
+    Apprt::Menu.window.sections.map(&.size).should eq [2, 4, 3, 2, 1]
   end
 end

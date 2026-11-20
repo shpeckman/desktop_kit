@@ -16,37 +16,43 @@ module Apprt
 
       def heading : String
         case self
-        in .app?     then "Quit?"
-        in .windows? then "Close All Windows?"
-        in .window?  then "Close Window?"
-        in .tab?     then "Close Tab?"
-        in .split?   then "Close Split?"
+        in .app?     then Apprt.tr("Quit?")
+        in .windows? then Apprt.tr("Close All Windows?")
+        in .window?  then Apprt.tr("Close Window?")
+        in .tab?     then Apprt.tr("Close Tab?")
+        in .split?   then Apprt.tr("Close Split?")
         end
       end
 
       def body : String
         case self
-        in .app?, .windows? then "Unsaved work will be lost."
-        in .window?         then "Unsaved work in this window will be lost."
-        in .tab?            then "Unsaved work in this tab will be lost."
-        in .split?          then "Unsaved work in this split will be lost."
+        in .app?, .windows? then Apprt.tr("Unsaved work will be lost.")
+        in .window?         then Apprt.tr("Unsaved work in this window will be lost.")
+        in .tab?            then Apprt.tr("Unsaved work in this tab will be lost.")
+        in .split?          then Apprt.tr("Unsaved work in this split will be lost.")
         end
       end
 
       def verb : String
-        app? ? "Quit" : "Close"
+        app? ? Apprt.tr("Quit") : Apprt.tr("Close")
       end
     end
 
-    # The heading and body of the clipboard confirmation per request.
-    private CLIPBOARD = {
-      Clipboard::Request::Paste => {"Warning: Potentially Unsafe Paste",
-                                    "Pasting this text may be dangerous as it looks like some commands may be executed."},
-      Clipboard::Request::Read => {"Authorize Clipboard Access",
-                                   "An application is attempting to read from the clipboard. The current clipboard contents are shown below."},
-      Clipboard::Request::Write => {"Authorize Clipboard Access",
-                                    "An application is attempting to write to the clipboard. The text it would copy is shown below."},
-    }
+    # Returns the heading and body of the clipboard confirmation for
+    # *request*.
+    private def self.clipboard_texts(request : Clipboard::Request) : {String, String}
+      case request
+      in .paste?
+        {Apprt.tr("Warning: Potentially Unsafe Paste"),
+         Apprt.tr("Pasting this text may be dangerous as it looks like some commands may be executed.")}
+      in .read?
+        {Apprt.tr("Authorize Clipboard Access"),
+         Apprt.tr("An application is attempting to read from the clipboard. The current clipboard contents are shown below.")}
+      in .write?
+        {Apprt.tr("Authorize Clipboard Access"),
+         Apprt.tr("An application is attempting to write to the clipboard. The text it would copy is shown below.")}
+      end
+    end
 
     private CHOSEN = ->(dialog : Void*, result : Void*, data : Void*) do
       block = Handles.get(data, Proc(String, Nil))
@@ -71,8 +77,8 @@ module Apprt
     # Asks whether to allow *request* with the clipboard *text* it concerns
     # and yields `true` when the user allows it.
     def self.confirm_clipboard(parent : Widget, request : Clipboard::Request, text : String, &done : Bool ->) : Nil
-      heading, body = CLIPBOARD[request]
-      dialog = alert(heading, body, "Allow", "Deny", destructive: true)
+      heading, body = clipboard_texts(request)
+      dialog = alert(heading, body, Apprt.tr("Allow"), Apprt.tr("Deny"), destructive: true)
       C.adw_alert_dialog_set_extra_child(dialog, text_view(text, 500, 200)[0])
       choose(dialog, parent) { |response| done.call(response == "ok") }
     end
@@ -81,11 +87,11 @@ module Apprt
     # their own without one, and yields `true` when the user asks to reload.
     # Returns the dialog and the text buffer that holds the errors.
     def self.config_errors(parent : Widget?, errors : Array(String), &done : Bool ->) : {Void*, Void*}
-      dialog = C.adw_alert_dialog_new("Configuration Errors",
-        "One or more configuration errors were found. Please review the errors below, " \
-        "and either reload your configuration or ignore these errors.")
-      C.adw_alert_dialog_add_response(dialog, "ignore", "Ignore")
-      C.adw_alert_dialog_add_response(dialog, "reload", "Reload Configuration")
+      dialog = C.adw_alert_dialog_new(Apprt.tr("Configuration Errors"),
+        Apprt.tr("One or more configuration errors were found. Please review the errors below, " \
+                 "and either reload your configuration or ignore these errors."))
+      C.adw_alert_dialog_add_response(dialog, "ignore", Apprt.tr("Ignore"))
+      C.adw_alert_dialog_add_response(dialog, "reload", Apprt.tr("Reload Configuration"))
       C.adw_alert_dialog_set_response_appearance(dialog, "reload", C::AdwResponseAppearance::Suggested)
       C.adw_alert_dialog_set_default_response(dialog, "ignore")
       C.adw_alert_dialog_set_close_response(dialog, "ignore")
@@ -118,15 +124,20 @@ module Apprt
     # Asks whether to close what *kind* names and yields `true` when the
     # user agrees.
     def self.confirm_close(parent : Widget, kind : Close, &done : Bool ->) : Nil
-      confirm(parent, kind.heading, kind.body, kind.verb, "Cancel", destructive: true, &done)
+      confirm(parent, kind.heading, kind.body, kind.verb, Apprt.tr("Cancel"), destructive: true, &done)
     end
 
     # Asks for a new title of what *kind* names, starting from *current*, and
     # yields it, or `nil` for a blank entry. Yields nothing when the user
     # cancels.
     def self.prompt_title(parent : Widget, kind : Action::PromptTitle::Kind, current : String?, &done : String? ->) : Nil
-      prompt(parent, "Change #{kind} Title", "Leave blank to restore the default title.", current || "", "OK",
-        "Cancel") do |text|
+      heading = case kind
+                in .surface? then Apprt.tr("Change Surface Title")
+                in .tab?     then Apprt.tr("Change Tab Title")
+                in .window?  then Apprt.tr("Change Window Title")
+                end
+      prompt(parent, heading, Apprt.tr("Leave blank to restore the default title."), current || "", Apprt.tr("OK"),
+        Apprt.tr("Cancel")) do |text|
         title = text.strip
         done.call(title.empty? ? nil : title)
       end

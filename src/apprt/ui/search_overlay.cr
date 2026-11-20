@@ -10,10 +10,9 @@ module Apprt
     private KEY_RETURN    = 0xff0d_u32
     private KEY_KP_ENTER  = 0xff8d_u32
     private SHIFT_MASK    =      1_u32
-    private PLACEHOLDER   = "Find…"
-    private MARGIN        =  8
-    private ENTRY_CHARS   = 20
-    private MATCHES_CHARS =  6
+    private MARGIN        =          8
+    private ENTRY_CHARS   =         20
+    private MATCHES_CHARS =          6
 
     getter widget : Widget
     getter? active = false
@@ -73,7 +72,7 @@ module Apprt
       {% for side in %w(start end top bottom) %}
         C.gtk_widget_set_margin_{{side.id}}(@widget, MARGIN)
       {% end %}
-      C.gtk_search_entry_set_placeholder_text(@entry, PLACEHOLDER)
+      C.gtk_search_entry_set_placeholder_text(@entry, Apprt.tr("Find…"))
       C.gtk_editable_set_width_chars(@entry, ENTRY_CHARS)
       C.gtk_box_append(@widget, @entry)
       @matches.add_css_class("dim-label")
@@ -82,10 +81,10 @@ module Apprt
       C.gtk_box_append(@widget, @matches)
       buttons = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 0))
       buttons.add_css_class("linked")
-      C.gtk_box_append(buttons, button("go-up-symbolic", "Previous Match") { @surface.navigate_search(false) })
-      C.gtk_box_append(buttons, button("go-down-symbolic", "Next Match") { @surface.navigate_search(true) })
+      C.gtk_box_append(buttons, button("go-up-symbolic", Apprt.tr("Previous Match")) { @surface.navigate_search(false) })
+      C.gtk_box_append(buttons, button("go-down-symbolic", Apprt.tr("Next Match")) { @surface.navigate_search(true) })
       C.gtk_box_append(@widget, buttons)
-      close = button("window-close-symbolic", "End Search") { @surface.end_search }
+      close = button("window-close-symbolic", Apprt.tr("End Search")) { @surface.end_search }
       C.gtk_button_set_has_frame(close, 0)
       C.gtk_box_append(@widget, close)
       sync_matches

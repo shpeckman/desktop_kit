@@ -4,7 +4,7 @@ module Apprt
   # one value and reporting changes to its block.
   #
   # ```
-  # prefs = Apprt::Preferences.new("Preferences")
+  # prefs = Apprt::Preferences.new(Apprt.tr("Preferences"))
   # prefs.page("General", icon: "preferences-system-symbolic") do |page|
   #   page.group("Appearance") do |group|
   #     group.switch("Dark mode", value: true) { |dark| app.appearance = ... }
@@ -197,7 +197,7 @@ module Apprt
     @dialog : Void* = Pointer(Void).null
 
     # Creates an empty dialog titled *title*.
-    def initialize(@title : String = "Preferences")
+    def initialize(@title : String = Apprt.tr("Preferences"))
     end
 
     # Adds a page titled *title* with the themed icon *icon* and yields it.

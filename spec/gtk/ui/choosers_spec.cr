@@ -22,8 +22,9 @@ private def toplevels : Array(String)
 end
 
 # Answers dialogs of *type* with Cancel, as the user dismissing them.
-# Waits first: GTK crashes when a file chooser goes while it still loads
-# its folder.
+# Waits first: GTK 4.18 crashes when a file chooser goes while its recent
+# files query runs (the query's callback touches the freed
+# `GtkFileSystemModel`).
 private def dismiss(type : String) : Nil
   settle
   list = ChoosersSpecLib.gtk_window_get_toplevels

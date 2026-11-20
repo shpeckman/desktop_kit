@@ -55,6 +55,9 @@ module Apprt
     # Opens the command palette of the window, or closes it when open.
     Apprt.action ToggleCommandPalette, "toggle-command-palette", scope: :window
 
+    # Shows the keyboard shortcuts of the application over the window.
+    Apprt.action ShowShortcuts, "show-shortcuts", scope: :window
+
     # Lays the key table *table* of `App#key_tables` over the window's
     # bindings. Does nothing when it is already the innermost table.
     Apprt.action ActivateKeyTable, "activate-key-table", scope: :window, payload: {table: String}

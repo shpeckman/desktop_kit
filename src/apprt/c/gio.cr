@@ -34,6 +34,11 @@ module Apprt
     end
 
     @[Flags]
+    enum GBusNameWatcherFlags : UInt32
+      AutoStart = 1
+    end
+
+    @[Flags]
     enum GDBusCallFlags : UInt32
       NoAutoStart                   = 1
       AllowInteractiveAuthorization = 2
@@ -87,6 +92,8 @@ module Apprt
     alias GBusAcquiredCallback = Void*, UInt8*, Void* -> Void
     alias GBusNameAcquiredCallback = Void*, UInt8*, Void* -> Void
     alias GBusNameLostCallback = Void*, UInt8*, Void* -> Void
+    alias GBusNameAppearedCallback = Void*, UInt8*, UInt8*, Void* -> Void
+    alias GBusNameVanishedCallback = Void*, UInt8*, Void* -> Void
     alias GDBusSignalCallback = Void*, UInt8*, UInt8*, UInt8*, UInt8*, Void*, Void* -> Void
     alias GDBusInterfaceMethodCallFunc = Void*, UInt8*, UInt8*, UInt8*, UInt8*, Void*, Void*, Void* -> Void
     alias GDBusInterfaceGetPropertyFunc = Void*, UInt8*, UInt8*, UInt8*, UInt8*, GError**, Void* -> Void*
@@ -151,6 +158,8 @@ module Apprt
     fun g_bus_get_sync(bus_type : GBusType, cancellable : Void*, error : GError**) : Void*
     fun g_bus_own_name(bus_type : GBusType, name : UInt8*, flags : GBusNameOwnerFlags, bus_acquired_handler : GBusAcquiredCallback, name_acquired_handler : GBusNameAcquiredCallback, name_lost_handler : GBusNameLostCallback, user_data : Void*, user_data_free_func : GDestroyNotify) : UInt32
     fun g_bus_unown_name(owner_id : UInt32)
+    fun g_bus_watch_name_on_connection(connection : Void*, name : UInt8*, flags : GBusNameWatcherFlags, name_appeared_handler : GBusNameAppearedCallback, name_vanished_handler : GBusNameVanishedCallback, user_data : Void*, user_data_free_func : GDestroyNotify) : UInt32
+    fun g_bus_unwatch_name(watcher_id : UInt32)
     fun g_dbus_connection_call(connection : Void*, bus_name : UInt8*, object_path : UInt8*, interface_name : UInt8*, method_name : UInt8*, parameters : Void*, reply_type : Void*, flags : GDBusCallFlags, timeout_msec : Int32, cancellable : Void*, callback : GAsyncReadyCallback, user_data : Void*)
     fun g_dbus_connection_call_finish(connection : Void*, res : Void*, error : GError**) : Void*
     fun g_dbus_connection_call_sync(connection : Void*, bus_name : UInt8*, object_path : UInt8*, interface_name : UInt8*, method_name : UInt8*, parameters : Void*, reply_type : Void*, flags : GDBusCallFlags, timeout_msec : Int32, cancellable : Void*, error : GError**) : Void*

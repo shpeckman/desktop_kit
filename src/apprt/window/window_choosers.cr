@@ -12,7 +12,7 @@ module Apprt
     #   editor.load(path) if path
     # end
     # ```
-    def open_file(*, title : String = "Open File", folder : Path? = nil,
+    def open_file(*, title : String = Apprt.tr("Open File"), folder : Path? = nil,
                   filters : Enumerable(FileFilter) = [] of FileFilter, &block : Path? ->) : Nil
       return if @closed
       Choosers.open_file(@widget, title, folder, filters, &block)
@@ -20,7 +20,7 @@ module Apprt
 
     # Asks the user for files to open, as `#open_file` does, and yields
     # their paths, none when they cancel.
-    def open_files(*, title : String = "Open Files", folder : Path? = nil,
+    def open_files(*, title : String = Apprt.tr("Open Files"), folder : Path? = nil,
                    filters : Enumerable(FileFilter) = [] of FileFilter, &block : Array(Path) ->) : Nil
       return if @closed
       Choosers.open_files(@widget, title, folder, filters, &block)
@@ -30,7 +30,7 @@ module Apprt
     # and yields the path, or `nil` when they cancel.
     #
     # The dialog asks before replacing an existing file.
-    def save_file(*, title : String = "Save File", folder : Path? = nil, name : String? = nil,
+    def save_file(*, title : String = Apprt.tr("Save File"), folder : Path? = nil, name : String? = nil,
                   filters : Enumerable(FileFilter) = [] of FileFilter, &block : Path? ->) : Nil
       return if @closed
       Choosers.save_file(@widget, title, folder, name, filters, &block)
@@ -38,14 +38,14 @@ module Apprt
 
     # Asks the user for a folder, starting in *folder*, and yields its path,
     # or `nil` when they cancel.
-    def choose_folder(*, title : String = "Select Folder", folder : Path? = nil, &block : Path? ->) : Nil
+    def choose_folder(*, title : String = Apprt.tr("Select Folder"), folder : Path? = nil, &block : Path? ->) : Nil
       return if @closed
       Choosers.choose_folder(@widget, title, folder, &block)
     end
 
     # Asks the user for a color, starting from *color*, and yields it, or
     # `nil` when they cancel. With *alpha* they also pick an opacity.
-    def choose_color(*, title : String = "Select Color", color : Color? = nil, alpha : Bool = true,
+    def choose_color(*, title : String = Apprt.tr("Select Color"), color : Color? = nil, alpha : Bool = true,
                      &block : Color? ->) : Nil
       return if @closed
       Choosers.choose_color(@widget, title, color, alpha, &block)
@@ -54,7 +54,7 @@ module Apprt
     # Asks the user for a font, starting from *font*, and yields it, or
     # `nil` when they cancel. Fonts are descriptions such as
     # `"Monospace Bold 12"`: family, style options and size in points.
-    def choose_font(*, title : String = "Select Font", font : String? = nil, &block : String? ->) : Nil
+    def choose_font(*, title : String = Apprt.tr("Select Font"), font : String? = nil, &block : String? ->) : Nil
       return if @closed
       Choosers.choose_font(@widget, title, font, &block)
     end

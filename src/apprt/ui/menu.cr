@@ -35,20 +35,22 @@ module Apprt
     # Returns the window menu apprt shows by default.
     def self.window : Menu
       build do |menu|
-        menu.item "New Window", Action::NewWindow.new
-        menu.item "New Tab", Action::NewTab.new
+        menu.item Apprt.tr("New Window"), Action::NewWindow.new
+        menu.item Apprt.tr("New Tab"), Action::NewTab.new
         menu.section
-        menu.item "Split Up", Action::NewSplit.new(:up)
-        menu.item "Split Down", Action::NewSplit.new(:down)
-        menu.item "Split Left", Action::NewSplit.new(:left)
-        menu.item "Split Right", Action::NewSplit.new(:right)
+        menu.item Apprt.tr("Split Up"), Action::NewSplit.new(:up)
+        menu.item Apprt.tr("Split Down"), Action::NewSplit.new(:down)
+        menu.item Apprt.tr("Split Left"), Action::NewSplit.new(:left)
+        menu.item Apprt.tr("Split Right"), Action::NewSplit.new(:right)
         menu.section
-        menu.item "Change Title…", Action::PromptTitle.new(:surface)
-        menu.item "Change Tab Title…", Action::PromptTitle.new(:tab)
-        menu.item "Change Window Title…", Action::PromptTitle.new(:window)
+        menu.item Apprt.tr("Change Title…"), Action::PromptTitle.new(:surface)
+        menu.item Apprt.tr("Change Tab Title…"), Action::PromptTitle.new(:tab)
+        menu.item Apprt.tr("Change Window Title…"), Action::PromptTitle.new(:window)
         menu.section
-        menu.item "Close Tab", Action::CloseTab.new(:this)
-        menu.item "Close Window", Action::CloseWindow.new
+        menu.item Apprt.tr("Close Tab"), Action::CloseTab.new(:this)
+        menu.item Apprt.tr("Close Window"), Action::CloseWindow.new
+        menu.section
+        menu.item Apprt.tr("Keyboard Shortcuts"), Action::ShowShortcuts.new
       end
     end
 

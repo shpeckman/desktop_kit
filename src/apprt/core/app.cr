@@ -416,6 +416,7 @@ module Apprt
       watch_user_idle
       @dark_handler = Signals.notify(C.adw_style_manager_get_default, "dark", -> { color_scheme_changed })
       on_startup
+      sync_tray
       color_scheme_changed
     end
 
@@ -470,6 +471,7 @@ module Apprt
       release_open_uri
       release_user_idle
       release_logout_inhibit
+      release_tray
       Source.cancel_all
       undo_stack.clear
       stop_quit_timer
