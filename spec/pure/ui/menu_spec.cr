@@ -22,7 +22,7 @@ describe DesktopKit::Menu do
     menu.item("New Window", DesktopKit::Action::NewWindow.new).empty?.should be_false
   end
 
-  it "has a default window menu of window, split, title and close sections" do
-    DesktopKit::Menu.window.sections.map(&.size).should eq [2, 4, 3, 2, 1]
+  it "has a default window menu of window, split, title, close and view sections" do
+    DesktopKit::Menu.window.sections.map(&.size).should eq [2, 4, 3, 2, 2]
   end
 end

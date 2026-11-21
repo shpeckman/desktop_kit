@@ -98,6 +98,9 @@ gtk_orientable_get_orientation
 gtk_box_new
 gtk_box_append
 gtk_box_remove
+gtk_box_insert_child_after
+gtk_window_controls_new
+GtkPackType
 gtk_label_new
 gtk_label_set_text
 gtk_entry_new

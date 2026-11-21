@@ -257,8 +257,8 @@ elsewhere.
 | `Surface#start_search(needle)`, `#end_search`, `#search_active?` | opens and closes its search bar (`StartSearch`, `Search(needle)`, `EndSearch`) |
 | `Surface#search_total=`, `#search_selected=` | the match count and the current match (from 0) the search bar shows |
 
-A window has a header bar with a new tab button, a tab overview button and
-a menu, `App#window_menu` (see Menus); the tab bar shows
+A window has a header bar with a menu button at its start,
+`App#window_menu` (see Menus); the tab bar shows
 while there is more than one tab. Closing the last surface of a tab closes
 the tab, and closing the last tab closes the window. Once closed,
 `#closed?` is true, `Window#new_tab` and `Surface#split` raise
@@ -363,7 +363,7 @@ end
 
 `App#window_menu=` replaces the header menu of every window, open ones
 too; `Menu.window`, the default, holds the window, tab, split, title and
-close actions and the keyboard shortcuts. A content's context menu comes from its
+close actions, the tab overview and the command palette. A content's context menu comes from its
 `Content#context_menu(x, y)` hook, called on a right click at *x*, *y*
 (logical pixels from its top left): return a menu to show it there, or
 `nil`, the default, to pass the click on. The surface is focused first,
@@ -380,7 +380,7 @@ plain look, with the header bar on and the other options off:
 | `cards`             | surfaces as rounded cards with gaps between them               |
 | `gap`               | space around each card, in pixels (4)                          |
 | `radius`            | corner radius of the cards, in pixels (12)                     |
-| `tabs_in_header`    | the tab bar in the header bar, in place of the window title, always shown |
+| `tabs_in_header`    | the tab bar in the header bar, in place of the window title, always shown and as wide as the header bar leaves room for |
 | `header_bar`        | the header bar with the title, the tabs and their buttons; `false` leaves windows without a title bar of their own and passes libadwaita's tab keys (Ctrl+Tab, Ctrl+Page Up, Alt+1 …) to the content |
 | `opacity`           | opacity of the window background, 0 to 1, also over a system theme that paints it; pair it with `Window#background_blur=` |
 | `unfocused_opacity` | opacity of the surfaces of a split other than the tab's active one, 0 to 1 |

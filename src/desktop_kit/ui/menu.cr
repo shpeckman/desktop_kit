@@ -50,7 +50,8 @@ module DesktopKit
         menu.item DesktopKit.tr("Close Tab"), Action::CloseTab.new(:this)
         menu.item DesktopKit.tr("Close Window"), Action::CloseWindow.new
         menu.section
-        menu.item DesktopKit.tr("Keyboard Shortcuts"), Action::ShowShortcuts.new
+        menu.item DesktopKit.tr("View Open Tabs"), Action::ToggleTabOverview.new
+        menu.item DesktopKit.tr("Command Palette"), Action::ToggleCommandPalette.new
       end
     end
 

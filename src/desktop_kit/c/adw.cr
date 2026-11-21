@@ -60,6 +60,9 @@ module DesktopKit
     fun adw_header_bar_new : Void*
     fun adw_header_bar_pack_start(self_ : Void*, child : Void*)
     fun adw_header_bar_pack_end(self_ : Void*, child : Void*)
+    fun adw_header_bar_remove(self_ : Void*, child : Void*)
+    fun adw_header_bar_set_show_start_title_buttons(self_ : Void*, setting : Int32)
+    fun adw_header_bar_set_show_end_title_buttons(self_ : Void*, setting : Int32)
     fun adw_header_bar_set_title_widget(self_ : Void*, title_widget : Void*)
     fun adw_window_title_new(title : UInt8*, subtitle : UInt8*) : Void*
     fun adw_window_title_set_title(self_ : Void*, title : UInt8*)

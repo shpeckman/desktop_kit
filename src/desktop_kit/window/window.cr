@@ -48,6 +48,8 @@ module DesktopKit
     @pending_fit : {Widget, Int32, Int32}? = nil
     @opaque = false
     @tabs_in_header = false
+    # The window buttons of the title box, there while the tabs are.
+    @title_controls : {Widget, Widget}? = nil
     @subtitle : String?
     @app_id : String?
     @idle_cookie = 0_u32
@@ -128,15 +130,34 @@ module DesktopKit
       inside = style.tabs_in_header?
       return if inside == @tabs_in_header
       @tabs_in_header = inside
+      # The header bar centers its title widget: an expanding one gets the
+      # width less twice the wider side, so the tabs would leave a gap on
+      # the narrower one. With the tabs inside, the title box takes the
+      # menu button and the window buttons, leaving both sides empty.
       C.g_object_ref(@tab_bar)
+      C.g_object_ref(@menu_button)
       if inside
         C.adw_toolbar_view_remove(@toolbar, @tab_bar)
+        C.adw_header_bar_remove(@header, @menu_button)
+        controls = {window_controls(:start), window_controls(:end)}
+        @title_controls = controls
+        C.gtk_box_append(@title_box, controls[0])
+        C.gtk_box_append(@title_box, @menu_button)
         C.gtk_box_append(@title_box, @tab_bar)
+        C.gtk_box_append(@title_box, controls[1])
       else
         C.gtk_box_remove(@title_box, @tab_bar)
+        C.gtk_box_remove(@title_box, @menu_button)
+        @title_controls.try &.each { |controls| C.gtk_box_remove(@title_box, controls) }
+        @title_controls = nil
         C.adw_toolbar_view_add_top_bar(@toolbar, @tab_bar)
+        # After what the application packed at the start meanwhile.
+        C.adw_header_bar_pack_start(@header, @menu_button)
       end
+      C.g_object_unref(@menu_button)
       C.g_object_unref(@tab_bar)
+      C.adw_header_bar_set_show_start_title_buttons(@header, inside ? 0 : 1)
+      C.adw_header_bar_set_show_end_title_buttons(@header, inside ? 0 : 1)
       @tab_bar.hexpand = inside
       @title_box.hexpand = inside
       # The tabs name the window there: its title would say it twice.
@@ -573,12 +594,10 @@ module DesktopKit
       header = @header
       C.gtk_box_append(@title_box, @title_widget)
       C.adw_header_bar_set_title_widget(header, @title_box)
-      C.adw_header_bar_pack_start(header, button("tab-new-symbolic", DesktopKit.tr("New Tab"), Action::NewTab.new))
       C.gtk_menu_button_set_icon_name(@menu_button, "open-menu-symbolic")
       self.menu = @app.window_menu
       @menu_button.tooltip = DesktopKit.tr("Main Menu")
-      C.adw_header_bar_pack_end(header, @menu_button)
-      C.adw_header_bar_pack_end(header, button("view-grid-symbolic", DesktopKit.tr("View Open Tabs"), Action::ToggleTabOverview.new))
+      C.adw_header_bar_pack_start(header, @menu_button)
 
       tab_bar = @tab_bar
       C.adw_tab_bar_set_view(tab_bar, @tab_view)
@@ -616,6 +635,15 @@ module DesktopKit
 
     private def overview_page : Widget
       Widget.new(C.gtk_widget_get_last_child(@overview))
+    end
+
+    # Returns the window buttons of *side*, hidden while the desktop's
+    # button layout leaves that side empty.
+    private def window_controls(side : C::GtkPackType) : Widget
+      controls = C.gtk_window_controls_new(side)
+      flags = C::GBindingFlags::SyncCreate | C::GBindingFlags::InvertBoolean
+      C.g_object_bind_property(controls, "empty", controls, "visible", flags)
+      Widget.new(controls)
     end
 
     private def button(icon : Icon, tooltip : String, action : Action) : Void*

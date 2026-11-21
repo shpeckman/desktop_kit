@@ -227,6 +227,9 @@ describe "window style" do
       inside?(tab_bar, window.@header).should be_true
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 0
       window.@title_widget.visible?.should be_false
+      inside?(window.@menu_button, window.@title_box).should be_true
+      # All but the header bar's own padding: nothing stays at its sides.
+      eventually { window.@header.width > 0 && window.@header.width - window.@title_box.width <= 16 }
       other = app.new_window
       inside?(other.@tab_bar, other.@header).should be_true
       app.window_style = DesktopKit::WindowStyle.new
@@ -234,6 +237,8 @@ describe "window style" do
       inside?(tab_bar, window.@header).should be_false
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 1
       window.@title_widget.visible?.should be_true
+      inside?(window.@menu_button, window.@title_box).should be_false
+      inside?(window.@menu_button, window.@header).should be_true
     end
   end
 

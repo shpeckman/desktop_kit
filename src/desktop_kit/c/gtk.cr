@@ -19,6 +19,11 @@ module DesktopKit
       Idle    = 8
     end
 
+    enum GtkPackType : Int32
+      Start = 0
+      End   = 1
+    end
+
     enum GtkPropagationPhase : Int32
       None    = 0
       Capture = 1
@@ -227,6 +232,8 @@ module DesktopKit
     fun gtk_box_new(orientation : GtkOrientation, spacing : Int32) : Void*
     fun gtk_box_append(box : Void*, child : Void*)
     fun gtk_box_remove(box : Void*, child : Void*)
+    fun gtk_box_insert_child_after(box : Void*, child : Void*, sibling : Void*)
+    fun gtk_window_controls_new(side : GtkPackType) : Void*
     fun gtk_label_new(str : UInt8*) : Void*
     fun gtk_label_set_text(self_ : Void*, str : UInt8*)
     fun gtk_entry_new : Void*
