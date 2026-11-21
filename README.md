@@ -223,7 +223,7 @@ elsewhere.
 | `Surface#show_on_screen_keyboard` | asks the input method to show the on-screen keyboard of a `Canvas` (`ShowOnScreenKeyboard`); returns whether it did |
 | `Window#toast(message, timeout)` | shows a message at the bottom of the window, 3 seconds by default |
 | `Window#decoration=`             | `DesktopKit::Decoration`: `Auto`, `Client`, `Server` or `None`         |
-| `Window#background_blur=`        | blurs what lies behind the window's transparent parts             |
+| `Window#background_blur=`        | blurs what lies behind the window's transparent parts, where the compositor offers `ext_background_effect_v1` or KWin's blur protocol |
 | `Window#urgent=`, `#active?`     | asks for the user's attention while inactive, whether it is active |
 | `Window#confirm(heading, body)`  | asks a yes/no question in a dialog and yields the answer          |
 | `Window#prompt(heading, body)`   | asks for a line of text in a dialog and yields it                 |
@@ -385,8 +385,18 @@ plain look, with the header bar on and the other options off:
 | `opacity`           | opacity of the window background, 0 to 1, also over a system theme that paints it; pair it with `Window#background_blur=` |
 | `unfocused_opacity` | opacity of the surfaces of a split other than the tab's active one, 0 to 1 |
 
-The style applies to open windows at once. `on_window` adds header bar
-content to each new window:
+The style applies to open windows at once.
+
+Shapes and colors are the system theme's: the tabs, the header bar and
+its buttons, the window's corners and every color come from the GTK theme
+and the user's `~/.config/gtk-4.0/gtk.css`, which also restyle what the
+options lay out (a card's corners and border). Two options hold over
+them, since a theme would otherwise undo what the application asked for:
+an `opacity` below 1 makes the window, its header bar and its tab bar
+translucent even when the theme paints them, and `cards` hides the line
+a theme draws between the surfaces of a split, whose gap divides them.
+
+`on_window` adds header bar content to each new window:
 
 ```crystal
 class Hello < DesktopKit::App
