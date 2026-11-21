@@ -3,6 +3,7 @@
 
 # application and style
 adw_init
+adw_is_initialized
 adw_application_new
 adw_style_manager_get_default
 adw_style_manager_get_dark

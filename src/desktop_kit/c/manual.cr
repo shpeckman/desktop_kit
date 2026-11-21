@@ -14,8 +14,9 @@ module DesktopKit
     end
 
     # GLib and GTK constants (GIR <constant>s, which the generator skips);
-    # TYPE_INT, TYPE_UINT64 and TYPE_STRING are G_TYPE_MAKE_FUNDAMENTAL(6),
-    # (11) and (16).
+    # TYPE_BOOLEAN, TYPE_INT, TYPE_UINT64 and TYPE_STRING are
+    # G_TYPE_MAKE_FUNDAMENTAL(5), (6), (11) and (16).
+    TYPE_BOOLEAN                        =  20_u64
     TYPE_INT                            =  24_u64
     TYPE_UINT64                         =  44_u64
     TYPE_STRING                         =  64_u64

@@ -349,3 +349,7 @@ gtk_widget_set_parent
 gtk_gesture_set_state
 GtkEventSequenceState
 GtkLicense
+
+# initialization and settings
+gtk_init_check
+gtk_settings_get_default

@@ -44,6 +44,7 @@ module DesktopKit
     end
 
     fun adw_init
+    fun adw_is_initialized : Int32
     fun adw_application_new(application_id : UInt8*, flags : GApplicationFlags) : Void*
     fun adw_style_manager_get_default : Void*
     fun adw_style_manager_get_dark(self_ : Void*) : Int32

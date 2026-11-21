@@ -409,6 +409,7 @@ module DesktopKit
       # the command line handler.
       argv = Native.strv([PROGRAM_NAME].concat(arguments))
       register_with_portal
+      clear_prefer_dark_theme
       # GLib 2.84 g_application_run resets status = 0 each loop iteration:
       # a local launch's status comes back through @exit_status.
       @exit_status = nil
@@ -417,6 +418,20 @@ module DesktopKit
     ensure
       C.g_object_unref(@application) unless @application.null?
       @application = Pointer(Void).null
+    end
+
+    # KDE writes `gtk-application-prefer-dark-theme` into GTK 4's settings.ini
+    # under a dark color scheme and libadwaita warns about it when it
+    # initializes, which AdwApplication does before the startup handlers
+    # run: GTK is initialized here to clear it first. Only before libadwaita
+    # is initialized: afterwards it owns the setting and warns on any change.
+    private def clear_prefer_dark_theme : Nil
+      return if C.adw_is_initialized != 0 || C.gtk_init_check == 0
+      value = C::GValue.new
+      C.g_value_init(pointerof(value), C::TYPE_BOOLEAN)
+      C.g_value_set_boolean(pointerof(value), 0)
+      C.g_object_set_property(C.gtk_settings_get_default, "gtk-application-prefer-dark-theme", pointerof(value))
+      C.g_value_unset(pointerof(value))
     end
 
     private def startup : Nil

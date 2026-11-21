@@ -434,5 +434,7 @@ module DesktopKit
     fun gtk_popover_popdown(popover : Void*)
     fun gtk_widget_set_parent(widget : Void*, parent : Void*)
     fun gtk_gesture_set_state(gesture : Void*, state : GtkEventSequenceState) : Int32
+    fun gtk_init_check : Int32
+    fun gtk_settings_get_default : Void*
   end
 end
