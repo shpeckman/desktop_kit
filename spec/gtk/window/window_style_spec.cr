@@ -85,11 +85,14 @@ describe DesktopKit::WindowStyle do
 
   it "has no style sheet by default" do
     DesktopKit::WindowStyle.new.to_css.should be_empty
-    DesktopKit::WindowStyle.new.opacity_css.should be_empty
+    DesktopKit::WindowStyle.new.override_css.should be_empty
     style = DesktopKit::WindowStyle.new(cards: true, opacity: 0.8, unfocused_opacity: 0.5)
-    style.opacity_css.should contain "alpha(@window_bg_color, 0.8)"
+    style.override_css.should contain "alpha(@window_bg_color, 0.8)"
+    style.override_css.should contain "paned > separator"
+    DesktopKit::WindowStyle.new(opacity: 0.8).override_css.should_not contain "paned > separator"
     css = style.to_css
     css.should_not contain "@window_bg_color"
+    css.should_not contain "paned > separator"
     css.should contain "border-radius"
     css.should contain ".surface:not(.active) { opacity: 0.5; }"
   end

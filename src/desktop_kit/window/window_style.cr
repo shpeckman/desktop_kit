@@ -57,7 +57,7 @@ module DesktopKit
 
     # :nodoc:
     # The style sheet of the options, for windows with the `desktop-kit-window`
-    # class; empty for the defaults. Leaves out what `#opacity_css` holds.
+    # class; empty for the defaults. Leaves out what `#override_css` holds.
     def to_css : String
       String.build do |css|
         if @cards
@@ -66,7 +66,6 @@ module DesktopKit
                  "box-shadow: 0 0 0 1px alpha(@borders, 0.6); }\n"
           css << "window.desktop-kit-window .surface-header { padding: #{@gap // 2}px #{@gap}px #{@gap // 2}px #{@gap + 6}px; }\n"
           css << "window.desktop-kit-window tabview { margin: 0 #{@gap}px #{@gap}px #{@gap}px; }\n"
-          css << "window.desktop-kit-window paned > separator { background: none; box-shadow: none; }\n"
         end
         if @unfocused_opacity < 1.0
           css << "window.desktop-kit-window .surface:not(.active) { opacity: #{@unfocused_opacity}; }\n"
@@ -75,14 +74,21 @@ module DesktopKit
     end
 
     # :nodoc:
-    # The style sheet of `#opacity`, empty for an opaque background. Apart
-    # from `#to_css`: it loads over the user's gtk.css, since a theme that
-    # paints the window itself would leave the option without effect.
-    def opacity_css : String
-      return "" unless @opacity < 1.0
-      "window.desktop-kit-window { background-color: alpha(@window_bg_color, #{@opacity}); }\n" \
-      "window.desktop-kit-window headerbar, window.desktop-kit-window tabbar .box, " \
-      "window.desktop-kit-window toolbarview > .top-bar { background: none; box-shadow: none; }\n"
+    # The rules that hold over the user's gtk.css, which a theme installed
+    # there would otherwise undo: the background's `#opacity`, lost when the
+    # theme paints the window itself, and no line between cards, whose gap
+    # is the divider. Empty when neither applies. Apart from `#to_css`.
+    def override_css : String
+      String.build do |css|
+        if @opacity < 1.0
+          css << "window.desktop-kit-window { background-color: alpha(@window_bg_color, #{@opacity}); }\n"
+          css << "window.desktop-kit-window headerbar, window.desktop-kit-window tabbar .box, " \
+                 "window.desktop-kit-window toolbarview > .top-bar { background: none; box-shadow: none; }\n"
+        end
+        if @cards
+          css << "window.desktop-kit-window paned > separator { background: none; box-shadow: none; }\n"
+        end
+      end
     end
   end
 
@@ -109,7 +115,7 @@ module DesktopKit
       # Provider ivar is `@runtime_style`: `@style` collided with a spec
       # subclass ivar (subclasses share the ivar namespace).
       C.gtk_css_provider_load_from_string(@runtime_style, Surface::STYLE + Window::STYLE + @window_style.to_css)
-      C.gtk_css_provider_load_from_string(@opacity_style, @window_style.opacity_css)
+      C.gtk_css_provider_load_from_string(@override_style, @window_style.override_css)
     end
   end
 end

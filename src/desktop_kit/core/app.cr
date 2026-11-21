@@ -48,7 +48,7 @@ module DesktopKit
     @actions = Pointer(Void).null
     @provider = Pointer(Void).null
     @runtime_style = Pointer(Void).null
-    @opacity_style = Pointer(Void).null
+    @override_style = Pointer(Void).null
     @dark_handler = 0_u64
     @running = Atomic(Bool).new(false)
     @ready = false
@@ -426,13 +426,13 @@ module DesktopKit
       Signals.connect(@provider, "parsing-error", ->(section : Void*, error : Void*) { css_error(section, error) })
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
       @runtime_style = C.gtk_css_provider_new
-      @opacity_style = C.gtk_css_provider_new
+      @override_style = C.gtk_css_provider_new
       load_runtime_style
       # Application priority: the system theme and the user's gtk.css
-      # restyle what the runtime style lays out. Only the opacity the
-      # application asked for goes over them.
+      # restyle what the runtime style lays out. Only the rules of
+      # WindowStyle#override_css go over them.
       C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_APPLICATION)
-      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @opacity_style, C::STYLE_PROVIDER_PRIORITY_USER)
+      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @override_style, C::STYLE_PROVIDER_PRIORITY_USER)
       # Before load_css/apply_appearance: mutators act only while running.
       @running.set(true)
       @actions = C.g_simple_action_group_new
@@ -531,10 +531,10 @@ module DesktopKit
         C.g_object_unref(@runtime_style)
         @runtime_style = Pointer(Void).null
       end
-      unless @opacity_style.null?
-        C.gtk_style_context_remove_provider_for_display(C.gdk_display_get_default, @opacity_style)
-        C.g_object_unref(@opacity_style)
-        @opacity_style = Pointer(Void).null
+      unless @override_style.null?
+        C.gtk_style_context_remove_provider_for_display(C.gdk_display_get_default, @override_style)
+        C.g_object_unref(@override_style)
+        @override_style = Pointer(Void).null
       end
     end
 
