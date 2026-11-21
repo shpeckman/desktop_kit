@@ -413,6 +413,16 @@ module DesktopKit
       true
     end
 
+    # Whether resizing *from* in *direction* makes it larger: a float grows
+    # right and down, a split towards its divider.
+    protected def grows?(from : Surface, direction : Direction) : Bool
+      return direction.right? || direction.down? if floating?(from)
+      tree = @view.tree
+      handle = tree.locate(from) || return false
+      side = tree.side(handle, SplitTree::Layout.of(direction)) || return false
+      side.left? == (direction.right? || direction.down?)
+    end
+
     protected def equalize : Bool
       tree = @view.tree
       return false unless tree.split?

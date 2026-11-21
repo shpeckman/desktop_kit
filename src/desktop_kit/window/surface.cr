@@ -328,6 +328,12 @@ module DesktopKit
       @tab.try(&.tile(self)) || false
     end
 
+    # Returns whether `Action::ResizeSplit` in *direction* makes the surface
+    # larger. False when nothing would resize it along that axis.
+    def grows?(direction : Direction) : Bool
+      @tab.try(&.grows?(self, direction)) || false
+    end
+
     # Returns whether the surface shares its split with other surfaces, one
     # shown at a time.
     def stacked? : Bool

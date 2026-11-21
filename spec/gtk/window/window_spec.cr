@@ -494,6 +494,11 @@ describe DesktopKit::Tab do
       (host(first).width - host(second).width).abs.should be <= 8
       before = position(first)
       first.focus
+      first.grows?(:right).should be_true
+      first.grows?(:left).should be_false
+      second.grows?(:left).should be_true
+      second.grows?(:right).should be_false
+      first.grows?(:down).should be_false
       trigger(window, DesktopKit::Action::ResizeSplit.new(:right, 80_u32))
       eventually { divided?(first) && (position(first) - before - 80).abs <= 4 }.should be_true
       trigger(window, DesktopKit::Action::ResizeSplit.new(:left, 40_u32))

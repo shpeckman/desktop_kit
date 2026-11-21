@@ -916,8 +916,10 @@ only while the window shows one surface and is neither maximized nor
 fullscreen. A window that is not on screen yet opens at that size. `SetWindowTheme` sets the appearance of the whole application.
 `ToggleFloat` floats the focused split over its tab, or splits a float back
 in; `MoveFloat` moves a float by *amount* pixels, stopping at the tab's
-edges. On a float, `ResizeSplit` grows it to the right or down and shrinks
-it to the left or up, its top-left corner kept.
+edges. `ResizeSplit` moves the divider of the nearest split along
+*direction*'s axis; on a float it grows it to the right or down and shrinks
+it to the left or up, its top-left corner kept. `Surface#grows?(direction)`
+tells whether that makes the surface larger.
 `GotoTab` counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and
 `LAST`; previous and next wrap around, as `MoveTab` does. `GotoStacked`
 counts the same way within the focused surface's stack.

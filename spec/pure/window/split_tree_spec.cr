@@ -233,6 +233,17 @@ describe DesktopKit::SplitTree do
     Tree.new("A").resize(Tree::ROOT, :horizontal, 0.5).should eq(Tree.new("A"))
   end
 
+  it "tells the side of the nearest split along an axis" do
+    tree = ab
+    tree.side(handle(tree, "A"), :horizontal).should eq(Tree::Side::Left)
+    tree.side(handle(tree, "B"), :horizontal).should eq(Tree::Side::Right)
+    tree.side(handle(tree, "B"), :vertical).should be_nil
+    nested = tree.split(handle(tree, "A"), :right, "C")
+    nested.side(handle(nested, "C"), :horizontal).should eq(Tree::Side::Right)
+    nested.side(handle(nested, "A"), :horizontal).should eq(Tree::Side::Left)
+    Tree.new("A").side(Tree::ROOT, :horizontal).should be_nil
+  end
+
   it "resizes nested splits relative to the whole tree" do
     split_ab = Tree.new("A").split(Tree::ROOT, :down, "B")
     tree = split_ab.split(handle(split_ab, "B"), :down, "C")

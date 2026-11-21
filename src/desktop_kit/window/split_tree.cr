@@ -338,6 +338,16 @@ module DesktopKit
       with_ratio(parent, (split.ratio + delta / scale).clamp(0.0, 1.0))
     end
 
+    # Returns the side of the nearest split with *layout* above *from* that
+    # holds it, or `nil` without such a split.
+    def side(from : Int32, layout : Layout) : Side?
+      check(from)
+      parent = parent_split(layout, from, ROOT)
+      return if parent < 0
+      left = @nodes.unsafe_fetch(parent).as(Split).left
+      within?(from, left) ? Side::Left : Side::Right
+    end
+
     # Returns a tree where the split at *at* has *ratio*. Raises
     # `ArgumentError` for a leaf or a ratio outside `0..1`.
     def with_ratio(at : Int32, ratio : Float64) : SplitTree(V)
@@ -454,6 +464,13 @@ module DesktopKit
       return result unless result == DEADEND
       result = adjacent(from, node.child(side.opposite), side)
       result == BACKTRACK ? deepest(side.opposite, near) : result
+    end
+
+    # Whether *from* is *current* or below it.
+    private def within?(from : Int32, current : Int32) : Bool
+      return true if from == current
+      node = @nodes.unsafe_fetch(current)
+      node.is_a?(Split) && (within?(from, node.left) || within?(from, node.right))
     end
 
     # The split with *layout* nearest above *from*, or `DEADEND`/`BACKTRACK`.
