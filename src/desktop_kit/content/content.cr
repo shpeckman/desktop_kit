@@ -29,6 +29,20 @@ module DesktopKit
 
     # :showdoc:
     #
+    # Called once the surface showing the content closed for good: closed
+    # and past the reach of undo, or dropped with its window. Frees what
+    # the content holds, such as a child process.
+    protected def on_close : Nil
+    end
+
+    # Calls `#on_close` with an implicit receiver, which reaches overrides
+    # defined outside `DesktopKit`.
+    protected def close : Nil
+      on_close
+    end
+
+    # :showdoc:
+    #
     # Called when the user drops *files* on the surface; returns whether the
     # content took them. Content takes no drops by default.
     protected def on_drop(files : Array(Path)) : Bool

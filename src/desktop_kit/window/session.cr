@@ -22,8 +22,12 @@ module DesktopKit
       getter ratio : Float64? = nil
       getter left : Node? = nil
       getter right : Node? = nil
+      # The other surfaces of a stack in order, the node itself being the
+      # shown one at *index* among them all.
+      getter stack : Array(Node)? = nil
+      getter index : Int32? = nil
 
-      def initialize(@state : String?, @title : String?, @active : Bool, @zoomed : Bool)
+      def initialize(@state : String?, @title : String?, @active : Bool, @zoomed : Bool, @stack : Array(Node)? = nil, @index : Int32? = nil)
       end
 
       def initialize(layout : SplitTree::Layout, ratio : Float64, left : Node, right : Node, @zoomed : Bool)
@@ -37,18 +41,49 @@ module DesktopKit
         !@layout.nil?
       end
 
-      # Whether the node and every node below it is a surface or a split
-      # with a ratio strictly between 0 and 1 and both panes.
+      # Whether the node and every node below it is a surface, a stack of
+      # plain surfaces with its shown one's place, or a split with a ratio
+      # strictly between 0 and 1 and both panes.
       def valid? : Bool
         layout, ratio, left, right = @layout, @ratio, @left, @right
-        return left.nil? && right.nil? && ratio.nil? if layout.nil?
-        return false unless ratio && left && right
+        return leaf? && stack_valid? if layout.nil?
+        return false unless ratio && left && right && @stack.nil? && @index.nil?
         ratio > 0.0 && ratio < 1.0 && left.valid? && right.valid?
+      end
+
+      protected def plain? : Bool
+        leaf? && !@zoomed && @stack.nil? && @index.nil?
+      end
+
+      private def leaf? : Bool
+        @left.nil? && @right.nil? && @ratio.nil?
+      end
+
+      private def stack_valid? : Bool
+        stack, index = @stack, @index
+        return index.nil? if stack.nil?
+        return false unless index && !stack.empty? && 0 <= index <= stack.size
+        stack.all?(&.plain?)
       end
     end
 
-    record TabRecord, title : String?, root : Node do
+    # A floating surface and its bounds in fractions of the tab area.
+    record FloatRecord, surface : Node, x : Float64, y : Float64, width : Float64, height : Float64 do
       include JSON::Serializable
+
+      def valid? : Bool
+        !surface.split? && surface.valid? && Bounds.new(x, y, width, height).valid?
+      end
+    end
+
+    # A tab: its split tree and its floats from the bottom one up, left out
+    # when it has none.
+    record TabRecord, title : String?, root : Node, floats : Array(FloatRecord)? = nil do
+      include JSON::Serializable
+
+      def valid? : Bool
+        root.valid? && floats.try(&.all?(&.valid?)) != false
+      end
     end
 
     record WindowRecord, width : Int32, height : Int32, maximized : Bool, fullscreen : Bool,
@@ -56,7 +91,7 @@ module DesktopKit
       include JSON::Serializable
 
       def valid? : Bool
-        !tabs.empty? && tabs.all?(&.root.valid?)
+        !tabs.empty? && tabs.all?(&.valid?)
       end
     end
 
@@ -112,8 +147,14 @@ module DesktopKit
       C.gtk_window_get_default_size(window.widget, pointerof(width), pointerof(height))
       selected = window.active_tab.try { |tab| tabs.index(tab) } || 0
       records = tabs.map do |tab|
-        tree = tab.tree
-        TabRecord.new(tab.title_override, node(tree, SplitTree::ROOT, tab.active_surface))
+        state = tab.state
+        active = state.active
+        floats = state.floats.map do |float|
+          surface, bounds = float.surface, float.bounds
+          node = Node.new(surface.content.saved_session_state, surface.title_override, surface.same?(active), false)
+          FloatRecord.new(node, bounds.x, bounds.y, bounds.width, bounds.height)
+        end
+        TabRecord.new(state.title_override, node(state.tree, SplitTree::ROOT, active), floats.empty? ? nil : floats)
       end
       WindowRecord.new(width, height, window.maximized?, window.fullscreen?, selected, records)
     end
@@ -122,24 +163,38 @@ module DesktopKit
       zoomed = tree.zoomed == handle
       case value = tree[handle]
       in Surface
-        Node.new(value.content.saved_session_state, value.title_override, value.same?(active), zoomed)
+        leaf(value, active, zoomed)
+      in SplitTree::Stack(Surface)
+        others = value.views.reject(&.same?(value.view)).map { |surface| leaf(surface, active, false) }
+        leaf(value.view, active, zoomed, others, value.index)
       in SplitTree::Split
         Node.new(value.layout, value.ratio, node(tree, value.left, active), node(tree, value.right, active), zoomed)
       end
+    end
+
+    private def self.leaf(surface : Surface, active : Surface?, zoomed : Bool, stack : Array(Node)? = nil, index : Int32? = nil) : Node
+      Node.new(surface.content.saved_session_state, surface.title_override, surface.same?(active), zoomed, stack, index)
     end
 
     private def self.reopen(app : App, record : WindowRecord) : Nil
       window = app.open_window
       C.gtk_window_set_default_size(window.widget, record.width, record.height) if record.width > 0 && record.height > 0
       tabs = record.tabs.map do |tab_record|
-        nodes = [] of Surface | SplitTree::Split
+        nodes = [] of Surface | SplitTree::Split | SplitTree::Stack(Surface)
         zoomed = nil.as(Int32?)
         active = nil.as(Surface?)
         flatten(app, tab_record.root, nodes) do |handle, node, surface|
           zoomed = handle if node.zoomed?
           active = surface if surface && node.active?
         end
-        tab = Tab.new(app, SplitTree(Surface).new(nodes, zoomed), active)
+        tree = SplitTree(Surface).new(nodes, zoomed)
+        floats = (tab_record.floats || [] of FloatRecord).map do |float|
+          node = float.surface
+          surface = reopen_surface(app, node)
+          active = surface if node.active?
+          Tab::Floating.new(surface, Bounds.new(float.x, float.y, float.width, float.height))
+        end
+        tab = Tab.new(app, tree, active, floats)
         tab.title_override = tab_record.title
         window.add_tab(tab, nil)
       end
@@ -150,9 +205,10 @@ module DesktopKit
     end
 
     # Appends *node* and the nodes below it to *nodes* in preorder, opening
-    # a surface for each leaf, and yields each node's handle with its
-    # surface. Returns the node's handle.
-    private def self.flatten(app : App, node : Node, nodes : Array(Surface | SplitTree::Split), &block : Int32, Node, Surface? ->) : Int32
+    # a surface for each leaf and each member of a stack, and yields each
+    # node and stack member with its handle and surface. Returns the node's
+    # handle.
+    private def self.flatten(app : App, node : Node, nodes : Array(Surface | SplitTree::Split | SplitTree::Stack(Surface)), &block : Int32, Node, Surface? ->) : Int32
       handle = nodes.size
       layout, ratio, left, right = node.layout, node.ratio, node.left, node.right
       if layout && ratio && left && right
@@ -161,13 +217,24 @@ module DesktopKit
         left_handle = flatten(app, left, nodes, &block)
         right_handle = flatten(app, right, nodes, &block)
         nodes[handle] = SplitTree::Split.new(layout, ratio, left_handle, right_handle)
+      elsif (stack = node.stack) && (index = node.index)
+        shown = reopen_surface(app, node)
+        others = stack.map { |member| reopen_surface(app, member) }
+        nodes << SplitTree::Stack(Surface).new(others.dup.insert(index, shown), index)
+        block.call(handle, node, shown)
+        stack.zip(others) { |member, surface| block.call(handle, member, surface) }
       else
-        surface = app.create_surface(:restore, nil, node.state)
-        surface.title_override = node.title
+        surface = reopen_surface(app, node)
         nodes << surface
         block.call(handle, node, surface)
       end
       handle
+    end
+
+    private def self.reopen_surface(app : App, node : Node) : Surface
+      surface = app.create_surface(:restore, nil, node.state)
+      surface.title_override = node.title
+      surface
     end
   end
 end

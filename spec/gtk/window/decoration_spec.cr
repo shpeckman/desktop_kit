@@ -5,10 +5,15 @@ lib DecorationSpecLib
   fun gtk_widget_get_css_name(widget : Void*) : UInt8*
   fun gtk_widget_get_first_child(widget : Void*) : Void*
   fun gtk_widget_get_next_sibling(widget : Void*) : Void*
+  fun gtk_widget_has_css_class(widget : Void*, name : UInt8*) : Int32
 end
 
 private def decorated?(window : DesktopKit::Window) : Bool
   DesktopKit::C.gtk_window_get_decorated(window.widget) != 0
+end
+
+private def undecorated_class?(window : DesktopKit::Window) : Bool
+  DecorationSpecLib.gtk_widget_has_css_class(window.widget, "undecorated") != 0
 end
 
 # Returns the number of toasts the window shows.
@@ -35,8 +40,10 @@ describe "window extras" do
       decorated?(window).should be_true
       window.decoration = :none
       decorated?(window).should be_false
+      undecorated_class?(window).should be_true
       window.decoration = :client
       decorated?(window).should be_true
+      undecorated_class?(window).should be_false
     end
   end
 

@@ -64,6 +64,7 @@ GdkDragAction
 gdk_file_list_get_files
 gdk_content_provider_new_for_value
 gdk_paintable_snapshot
+gdk_texture_save_to_png
 
 # window protocol
 GdkToplevelState

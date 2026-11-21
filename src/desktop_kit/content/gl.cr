@@ -186,13 +186,22 @@ module DesktopKit
       # The texture's DMA-BUF export, when offloading.
       getter dmabuf : Dmabuf?
 
-      def initialize(@pool : CanvasBuffers, @context : GLContext, @width : Int32, @height : Int32, depth : UInt32, offload : Bool)
+      def initialize(@pool : CanvasBuffers, @context : GLContext, @width : Int32, @height : Int32, depth : UInt32, export : Bool,
+                     offload : Bool)
         GL.epoxy_glGenTextures.call(1, pointerof(@texture))
         GL.epoxy_glBindTexture.call(GL::TEXTURE_2D, @texture)
         GL.epoxy_glTexParameteri.call(GL::TEXTURE_2D, GL::TEXTURE_MIN_FILTER, GL::NEAREST)
         GL.epoxy_glTexParameteri.call(GL::TEXTURE_2D, GL::TEXTURE_MAG_FILTER, GL::NEAREST)
         GL.epoxy_glTexImage2D.call(GL::TEXTURE_2D, 0, GL::RGBA8, width, height, 0, GL::RGBA, GL::UNSIGNED_BYTE, Pointer(Void).null)
         GL.epoxy_glBindTexture.call(GL::TEXTURE_2D, 0_u32)
+        # Exported before the framebuffer exists, also when not offloading.
+        # On iris (Mesa 25.1.9), draws through a framebuffer attached before
+        # its texture's first export no longer reach the texture, while
+        # clears and reads do; attaching the texture again does not help.
+        # Seen with GSK's Vulkan renderer (GTK 4.18), which is handed plain
+        # GL textures: every reused buffer showed only its clear colour.
+        exported = Dmabuf.export(@texture) if export
+        offload ? (@dmabuf = exported) : exported.try(&.close)
         GL.epoxy_glGenFramebuffers.call(1, pointerof(@framebuffer))
         GL.epoxy_glBindFramebuffer.call(GL::FRAMEBUFFER, @framebuffer)
         GL.epoxy_glFramebufferTexture2D.call(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT0, GL::TEXTURE_2D, @texture, 0)
@@ -202,7 +211,6 @@ module DesktopKit
         status = GL.epoxy_glCheckFramebufferStatus.call(GL::FRAMEBUFFER)
         GL.epoxy_glBindFramebuffer.call(GL::FRAMEBUFFER, 0_u32)
         Log.warn { "canvas framebuffer incomplete: 0x#{status.to_s(16)}" } unless status == GL::FRAMEBUFFER_COMPLETE
-        @dmabuf = Dmabuf.export(@texture) if offload
       end
 
       # Closes the DMA-BUF export; later frames go as GL textures.
@@ -265,8 +273,10 @@ module DesktopKit
     # supports it (EGL with `EGL_MESA_image_dma_buf_export`); the context
     # must be current. GL textures name *owner* as their context, which GSK
     # uses on the GTK thread.
-    def initialize(@context : GLContext, @depth_stencil : Bool, offload : Bool, @owner : GLContext = context)
-      @offload = offload && Dmabuf.supported?
+    def initialize(@context : GLContext, @depth_stencil : Bool, offload : Bool, @owner : GLContext = context,
+                   @thread : RenderThread? = nil)
+      @export = Dmabuf.supported?
+      @offload = offload && @export
     end
 
     # Returns a free buffer of *width* × *height* pixels, bound as the draw
@@ -276,7 +286,7 @@ module DesktopKit
       collect
       resize(width, height) unless width == @width && height == @height
       free = @buffers.reject(&.busy?)
-      buffer = free.max_by?(&.drawn) || Buffer.new(self, @context, width, height, @depth, @offload).tap { |made| @buffers << made }
+      buffer = free.max_by?(&.drawn) || Buffer.new(self, @context, width, height, @depth, @export, @offload).tap { |made| @buffers << made }
       age = buffer.drawn == 0 ? 0 : (@frames + 1 - buffer.drawn).to_i32
       buffer.busy = true
       @frames += 1
@@ -351,7 +361,17 @@ module DesktopKit
         @returned << buffer unless @closed
         @closed
       end
-      UIThread.dispatch { buffer.delete_later } if closed
+      UIThread.dispatch { dispose(buffer) } if closed
+    end
+
+    # Deletes *buffer* of the released pool, on the GTK thread. While the
+    # pool's render thread still has the context current, the thread
+    # deletes it: a context is current on one thread at a time.
+    private def dispose(buffer : Buffer) : Nil
+      # On the GTK thread instead: "gdk_gl_context_make_current() failed"
+      # and the buffer's GL objects leaked.
+      posted = @thread.try(&.dispose(@context) { buffer.delete })
+      buffer.delete_later unless posted
     end
 
     # Deletes the free buffers and the renderbuffer and leaves the busy

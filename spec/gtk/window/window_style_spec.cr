@@ -223,11 +223,15 @@ describe "window style" do
       WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq DesktopKit::C::AdwTabViewShortcuts::AllShortcuts.value
       app.window_style = DesktopKit::WindowStyle.new(header_bar: false)
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 0
+      window.@header.visible?.should be_false
+      window.@tab_bar.visible?.should be_false
       WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq 0
       other = app.new_window
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(other.@toolbar).should eq 0
       app.window_style = DesktopKit::WindowStyle.new
       WindowStyleSpecLib.adw_toolbar_view_get_reveal_top_bars(window.@toolbar).should eq 1
+      window.@header.visible?.should be_true
+      window.@tab_bar.visible?.should be_true
       WindowStyleSpecLib.adw_tab_view_get_shortcuts(window.@tab_view).should eq DesktopKit::C::AdwTabViewShortcuts::AllShortcuts.value
     end
   end

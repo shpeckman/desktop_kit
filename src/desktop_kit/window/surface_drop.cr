@@ -16,9 +16,38 @@ module DesktopKit
 
     @data_drop_target = Pointer(Void).null
 
+    @handle_source = Pointer(Void).null
+
+    @header_source = Pointer(Void).null
+
+    # Drags the pane header of a floating surface to move it.
+    @float_move = Pointer(Void).null
+
+    # The corner a floating surface is resized by.
+    @float_grip = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 0))
+
+    # The pointer in the tab area and the bounds as a float drag began.
+    @float_drag : {Float64, Float64, Float64, Float64, Bounds}? = nil
+
     protected def draggable=(draggable : Bool) : Bool
       @handle.visible = draggable
       draggable
+    end
+
+    # Styles the surface as a float or a split: a float always shows its
+    # header, which moves it instead of carrying it onto other surfaces,
+    # shows the resize grip and refuses surfaces dropped on it.
+    protected def floating=(floating : Bool) : Bool
+      return floating if @closed || floating == @floating
+      @floating = floating
+      floating ? @host.add_css_class("floating") : @host.remove_css_class("floating")
+      apply_style(@app.window_style)
+      split_phase = floating ? C::GtkPropagationPhase::None : C::GtkPropagationPhase::Bubble
+      C.gtk_event_controller_set_propagation_phase(@header_source, split_phase)
+      C.gtk_event_controller_set_propagation_phase(@surface_drop_target, split_phase)
+      C.gtk_event_controller_set_propagation_phase(@float_move, floating ? C::GtkPropagationPhase::Bubble : C::GtkPropagationPhase::None)
+      @float_grip.visible = floating
+      floating
     end
 
     # Returns the side of the surface nearest to (*x*, *y*), in surface
@@ -33,8 +62,8 @@ module DesktopKit
     end
 
     # Lets the drag handle and the pane header carry the surface id onto
-    # other surfaces, and hands files and text dropped on the surface to the
-    # content.
+    # other surfaces, the header and the grip of a float move and resize it,
+    # and hands files and text dropped on the surface to the content.
     private def install_drag_and_drop : Nil
       value = C::GValue.new
       C.g_value_init(pointerof(value), C::TYPE_UINT64)
@@ -42,14 +71,19 @@ module DesktopKit
       provider = C.gdk_content_provider_new_for_value(pointerof(value))
       C.g_value_unset(pointerof(value))
       # Header buttons claim their clicks: drags start from free header area.
-      {@handle, @header}.each do |widget|
-        source = C.gtk_drag_source_new
-        C.gtk_drag_source_set_actions(source, C::GdkDragAction::Move)
-        C.gtk_drag_source_set_content(source, provider)
-        Signals.connect(source, "drag-begin", ->(_drag : Void*) { drag_icon(source) })
-        widget.add_controller(source)
-      end
+      @handle_source = drag_source(@handle, provider)
+      @header_source = drag_source(@header, provider)
       C.g_object_unref(provider)
+
+      @float_move = float_drag(@header, resize: false)
+      C.gtk_event_controller_set_propagation_phase(@float_move, C::GtkPropagationPhase::None)
+      @float_grip.add_css_class("surface-float-grip")
+      @float_grip.cursor_name = "se-resize"
+      @float_grip.visible = false
+      C.gtk_widget_set_halign(@float_grip, C::GtkAlign::End)
+      C.gtk_widget_set_valign(@float_grip, C::GtkAlign::End)
+      float_drag(@float_grip, resize: true)
+      C.gtk_overlay_add_overlay(@overlay, @float_grip)
 
       # Host targets: Canvas's own target refuses surface moves (`uint64`
       # `GValue`) and refused drags, which bubble up here.
@@ -65,6 +99,54 @@ module DesktopKit
       C.gtk_drop_target_set_gtypes(data, types.to_unsafe, types.size)
       Signals.connect(data, "drop", ->(value : Void*, _x : Float64, _y : Float64) : Bool { drop_data(value) })
       @host.add_controller(data)
+    end
+
+    private def drag_source(widget : Widget, provider : Void*) : Void*
+      source = C.gtk_drag_source_new
+      C.gtk_drag_source_set_actions(source, C::GdkDragAction::Move)
+      C.gtk_drag_source_set_content(source, provider)
+      Signals.connect(source, "drag-begin", ->(_drag : Void*) { drag_icon(source) })
+      widget.add_controller(source)
+      source
+    end
+
+    # Drags on *widget* move the floating surface, or *resize* it from its
+    # bottom-right corner.
+    private def float_drag(widget : Widget, *, resize : Bool) : Void*
+      drag = C.gtk_gesture_drag_new
+      C.gtk_gesture_single_set_button(drag, 1)
+      Signals.connect(drag, "drag-begin", ->(x : Float64, y : Float64) { begin_float_drag(widget, x, y) })
+      Signals.connect(drag, "drag-update", ->(dx : Float64, dy : Float64) { update_float_drag(widget, dx, dy, resize) })
+      Signals.connect(drag, "drag-end", ->(_dx : Float64, _dy : Float64) { @float_drag = nil })
+      widget.add_controller(drag)
+      drag
+    end
+
+    private def begin_float_drag(widget : Widget, x : Float64, y : Float64) : Nil
+      @float_drag = nil
+      bounds = float_bounds || return
+      area = @host.parent || return
+      return if C.gtk_widget_translate_coordinates(widget, area, x, y, out area_x, out area_y) == 0
+      @float_drag = {x, y, area_x, area_y, bounds}
+    end
+
+    # The offsets count in *widget*'s coordinates, which move with the
+    # float: they are taken to the tab area, which stays.
+    private def update_float_drag(widget : Widget, dx : Float64, dy : Float64, resize : Bool) : Nil
+      start_x, start_y, area_x, area_y, bounds = @float_drag || return
+      tab = @tab || return
+      area = @host.parent || return
+      width, height = area.width, area.height
+      return if width <= 0 || height <= 0
+      return if C.gtk_widget_translate_coordinates(widget, area, start_x + dx, start_y + dy, out x, out y) == 0
+      dx = (x - area_x) / width
+      dy = (y - area_y) / height
+      if resize
+        min_width, min_height = tab.float_minimum(self)
+        tab.place_float(self, bounds.resized(dx, dy, min_width, min_height))
+      else
+        tab.place_float(self, bounds.moved(dx, dy))
+      end
     end
 
     private def drag_icon(source : Void*) : Nil
@@ -107,6 +189,7 @@ module DesktopKit
 
     private def drop_surface(value : Void*, x : Float64, y : Float64) : Bool
       indicate(nil)
+      return false if @floating
       source = @app.surface(C.g_value_get_uint64(value)) || return false
       tab = @tab || return false
       return false if source == self || source.closed?

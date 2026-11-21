@@ -47,6 +47,20 @@ module DesktopKit
       target.tab.try(&.goto(target, action.direction)) || false
     end
 
+    protected def perform(target : Surface, action : Action::SwapSplit) : Bool
+      target.tab.try(&.swap(target, action.direction)) || false
+    end
+
+    protected def perform(target : Surface, action : Action::MoveSurfaceToNewWindow) : Bool
+      target.tab.try(&.window).try(&.move_surface_to_new_window(target)) || false
+    end
+
+    protected def perform(target : Surface, action : Action::MoveSurfaceToPreviousWindow) : Bool
+      window = target.tab.try(&.window) || return false
+      previous = previous_window(window) || return false
+      window.move_surface(target, previous)
+    end
+
     protected def perform(target : Surface, action : Action::ResizeSplit) : Bool
       target.tab.try(&.resize(target, action.direction, action.amount)) || false
     end
@@ -57,6 +71,26 @@ module DesktopKit
 
     protected def perform(target : Surface, action : Action::ToggleSplitZoom) : Bool
       target.tab.try(&.toggle_zoom(target)) || false
+    end
+
+    protected def perform(target : Surface, action : Action::ToggleFloat) : Bool
+      target.floating? ? target.tile : target.float
+    end
+
+    protected def perform(target : Surface, action : Action::MoveFloat) : Bool
+      target.tab.try(&.move_float(target, action.direction, action.amount)) || false
+    end
+
+    protected def perform(target : Surface, action : Action::StackInto) : Bool
+      target.stack_into(action.direction)
+    end
+
+    protected def perform(target : Surface, action : Action::Unstack) : Bool
+      target.unstack(action.layout)
+    end
+
+    protected def perform(target : Surface, action : Action::GotoStacked) : Bool
+      target.tab.try(&.goto_stacked(target, action.index)) || false
     end
 
     protected def perform(target : Surface, action : Action::CloseSurface) : Bool

@@ -243,6 +243,61 @@ describe "drag and drop" do
     end
   end
 
+  it "docks a float dropped on a split" do
+    app = TestApp.new
+    run_steps(app) do
+      tab = app.new_window.tabs.first
+      first = tab.surfaces.first
+      second = first.split(:right)
+      third = second.split(:right)
+      settle
+      third.float.should be_true
+      settle
+      drop_surface(third, first, 0.1, 0.5).should be_true
+      settle
+      tab.floats.should be_empty
+      third.floating?.should be_false
+      tab.surfaces.should eq [third, first, second]
+      tab.active_surface.should eq third
+      eventually { third.focused? }.should be_true
+    end
+  end
+
+  it "refuses surfaces dropped on a float" do
+    app = TestApp.new
+    run_steps(app) do
+      tab = app.new_window.tabs.first
+      first = tab.surfaces.first
+      second = first.split(:right)
+      third = second.split(:right)
+      settle
+      third.float.should be_true
+      settle
+      drop_surface(first, third, 0.1, 0.5).should be_false
+      settle
+      tab.surfaces.should eq [first, second, third]
+      tab.floats.should eq [third]
+    end
+  end
+
+  it "shows the drag handle while a float shares the tab" do
+    app = TestApp.new
+    run_steps(app) do
+      tab = app.new_window.tabs.first
+      first = tab.surfaces.first
+      second = first.split(:right)
+      settle
+      second.float.should be_true
+      settle
+      handle_visible?(first).should be_true
+      handle_visible?(second).should be_true
+      first.close
+      settle
+      tab.surfaces.should eq [second]
+      handle_visible?(second).should be_false
+    end
+  end
+
   it "refuses a surface dropped on itself" do
     app = TestApp.new
     run_steps(app) do

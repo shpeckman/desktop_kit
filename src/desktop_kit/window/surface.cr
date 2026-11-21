@@ -52,8 +52,8 @@ module DesktopKit
     @banner_action : Proc(Nil)? = nil
 
     # :nodoc:
-    # The style of the pane header, the drag handle and the drop indicator,
-    # which the app loads at application priority.
+    # The style of the pane header, the drag handle, the drop indicator and
+    # floating surfaces, which the app loads at application priority.
     STYLE = <<-CSS
       .surface-header { padding: 2px 4px 2px 10px; }
       .surface-read-only { margin: 8px; padding: 6px; border-radius: 6px; }
@@ -70,15 +70,24 @@ module DesktopKit
       .canvas-frame { transform: scaleY(-1); }
       .surface-search { padding: 6px; border-radius: 8px; }
       .surface-size { padding: 6px 12px; border-radius: 6px; }
+      .surface-pick { padding: 12px 24px; border-radius: 12px; font-size: 2.5em; font-weight: bold; }
       .surface-hover { margin: 4px; padding: 2px 8px; border-radius: 6px; }
       .surface-drop-indicator.drop-left { opacity: 1; background: linear-gradient(to right, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-right { opacity: 1; background: linear-gradient(to left, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-up { opacity: 1; background: linear-gradient(to bottom, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
       .surface-drop-indicator.drop-down { opacity: 1; background: linear-gradient(to top, alpha(@accent_bg_color, 0.3) 50%, transparent 50%); }
+      window.desktop-kit-window .surface.floating {
+        margin: 0;
+        border-radius: 12px;
+        background-color: @view_bg_color;
+        box-shadow: 0 0 0 1px alpha(@borders, 0.6), 0 6px 18px alpha(black, 0.3);
+      }
+      .surface-float-grip { min-width: 16px; min-height: 16px; }
       CSS
 
     @tab : Tab?
     @closed = false
+    @floating = false
     @icon : Icon?
 
     protected def initialize(@app : App, @content : Content)
@@ -94,6 +103,7 @@ module DesktopKit
       @header = Widget.new(C.gtk_box_new(C::GtkOrientation::Horizontal, 6))
       @header_icon = Widget.new(C.gtk_image_new_from_icon_name(nil))
       @header_title = Widget.new(C.gtk_label_new(Window.default_title))
+      @stack_badge = Widget.new(C.gtk_label_new(nil))
       @read_only_badge = Widget.new(C.gtk_image_new_from_icon_name("changes-prevent-symbolic"))
       @progress_bar = Widget.new(C.gtk_progress_bar_new)
       @bell_border = Widget.new(C.gtk_revealer_new)
@@ -260,6 +270,14 @@ module DesktopKit
       @tab.try(&.activate(self))
     end
 
+    # Trades places with *other*, a surface of the same tab, and returns
+    # whether it could; the focus stays where it was.
+    def swap_with(other : Surface) : Bool
+      tab = @tab || return false
+      return false unless other.tab.same?(tab)
+      tab.swap(self, other)
+    end
+
     # Focuses the surface and raises its window.
     def present : Nil
       tab = @tab || return
@@ -276,11 +294,73 @@ module DesktopKit
       @notifications.send(title, body, @focused) unless @closed
     end
 
-    # Opens a new surface beside this one, in *direction*, focuses it and
-    # returns it. Raises `RuntimeError` when the surface is closed.
+    # Opens a new surface beside this one, or beside the split focused last
+    # when this one floats, in *direction*, focuses it and returns it.
+    # Raises `RuntimeError` when the surface is closed.
     def split(direction : Direction) : Surface
       tab = @tab || raise RuntimeError.new("the surface is closed")
       tab.split(self, direction)
+    end
+
+    # Returns whether the surface floats over its tab instead of filling a
+    # split.
+    def floating? : Bool
+      @floating
+    end
+
+    # Returns the bounds of a floating surface in fractions of its tab area,
+    # else `nil`.
+    def float_bounds : Bounds?
+      @tab.try(&.floating(self)).try(&.bounds)
+    end
+
+    # Lifts the surface out of the splits to float over its tab at *bounds*,
+    # fractions of the tab area, or cascaded near the middle, and focuses it;
+    # moves a floating surface to *bounds*. False for the tab's only split
+    # or a closed surface.
+    def float(bounds : Bounds? = nil) : Bool
+      @tab.try(&.float(self, bounds)) || false
+    end
+
+    # Splits a floating surface back in beside the split under its centre
+    # and focuses it. False when the surface does not float.
+    def tile : Bool
+      @tab.try(&.tile(self)) || false
+    end
+
+    # Returns whether the surface shares its split with other surfaces, one
+    # shown at a time.
+    def stacked? : Bool
+      @tab.try(&.stacked?(self)) || false
+    end
+
+    # Returns the surfaces stacked with this one, itself included, in order;
+    # just itself when it is not stacked.
+    def stack : Array(Surface)
+      @tab.try(&.stack(self)) || [self]
+    end
+
+    # Moves the surface into the stack of the split next to it in
+    # *direction*, the split becoming a stack if it is none, shows it and
+    # focuses it. False for a floating surface or without a split there.
+    def stack_into(direction : Direction) : Bool
+      @tab.try(&.stack_into(self, direction)) || false
+    end
+
+    # Moves the surface into the stack of the split *other* fills, the split
+    # becoming a stack if it is none, shows it and focuses it. False unless
+    # *other* is another split of the same tab.
+    def stack_with(other : Surface) : Bool
+      tab = @tab || return false
+      return false unless other.tab == tab
+      tab.stack_with(self, other)
+    end
+
+    # Takes the stacked surface out of its stack to split the stack's place
+    # with it, beside the stack along *layout*, and focuses it. False when
+    # the surface is not stacked.
+    def unstack(layout : Action::Unstack::Layout = :auto) : Bool
+      @tab.try(&.unstack(self, layout)) || false
     end
 
     # Closes the surface, asking the user first when `#confirm_close?`.
@@ -308,10 +388,20 @@ module DesktopKit
       @tab = tab
     end
 
-    # Shows the drag handle while the surface shares its tab.
-    # Shows or hides the pane header.
+    # Shows the place of a stacked surface in its stack, counted from 1, in
+    # the pane header; `nil` hides it.
+    protected def stack_position=(position : {Int32, Int32}?) : {Int32, Int32}?
+      if position
+        C.gtk_label_set_label(@stack_badge, "#{position[0]}/#{position[1]}")
+      end
+      @stack_badge.visible = !position.nil?
+      position
+    end
+
+    # Shows or hides the pane header; a floating surface keeps it, to be
+    # dragged by.
     protected def apply_style(style : WindowStyle) : Nil
-      @header.visible = style.pane_headers?
+      @header.visible = style.pane_headers? || @floating
     end
 
     # Marks the surface as its tab's active one, for styling.
@@ -383,6 +473,10 @@ module DesktopKit
       C.gtk_label_set_ellipsize(@header_title, C::PANGO_ELLIPSIZE_END)
       @header_title.hexpand = true
       C.gtk_box_append(@header, @header_title)
+      @stack_badge.add_css_class("surface-stack-badge")
+      @stack_badge.add_css_class("dim-label")
+      @stack_badge.visible = false
+      C.gtk_box_append(@header, @stack_badge)
       {
         {"view-dual-symbolic", DesktopKit.tr("Split Right"), Action::NewSplit.new(:right)},
         {"view-paged-symbolic", DesktopKit.tr("Split Down"), Action::NewSplit.new(:down)},
@@ -448,6 +542,7 @@ module DesktopKit
       @app.sync_progress if @progress
       @app.sync_logout_inhibit if @confirm_close
       C.g_object_unref(@host)
+      @content.close
     end
 
     # Updates the bar: a fraction, or a pulse every `PULSE` while the

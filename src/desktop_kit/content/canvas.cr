@@ -24,6 +24,7 @@ module DesktopKit
   # Positions and sizes are in framebuffer pixels: logical pixels times
   # `#scale`. Use a canvas on the GTK thread only; `App#post` reaches it from
   # other threads. A *threaded* canvas (see `.new`) is the exception.
+  # Threaded canvases may share a `RenderThread`, its GL context included.
   #
   # ```
   # class Clear < DesktopKit::Canvas
@@ -106,18 +107,18 @@ module DesktopKit
     @scale_surface = Pointer(Void).null
     @presenting = [] of Int64
     @threaded : Bool
-    # The render thread's job queue and the thread, while a threaded canvas
-    # is realized.
-    @jobs : Channel(Job)?
-    @renderer : Fiber::ExecutionContext::Isolated?
+    # The thread a threaded canvas draws on: given to `.new`, or made at the
+    # first realize.
+    @thread : RenderThread?
+    # The thread while a threaded canvas is realized.
+    @attached : RenderThread?
+    # Counts realizes, so frames of an earlier one are dropped.
+    @generation = 0
     @rendering = false
     # A frame the render thread finished, shown at the next tick.
     @finished = Pointer(Void).null
 
     @widget_destroyed = false
-
-    # A frame for the render thread to draw at *width* × *height*.
-    private record Job, width : Int32, height : Int32
 
     private RENDER_TICK = ->(_widget : Void*, clock : Void*, data : Void*) do
       Handles.get(data, Canvas).tick(clock) ? 1 : 0
@@ -132,17 +133,20 @@ module DesktopKit
     # export them, and the compositor may show them on a subsurface without
     # GTK copying them; `#dmabuf?` tells whether the last frame went so.
     #
-    # A *threaded* canvas draws on a thread of its own: `#on_realize`,
-    # `#on_unrealize`, `#on_resize` and `#on_render` run there, never on the
-    # GTK thread, and must not call GTK. `#queue_render` may be called from
-    # either thread. GTK keeps showing the previous frame until the thread
-    # finishes the next; one frame is drawn at a time.
+    # A *threaded* canvas draws on another thread: its own with `true`, or
+    # the given `RenderThread`, shared with other canvases, whose context
+    # flavour replaces *api* and *version*. `#on_realize`, `#on_unrealize`,
+    # `#on_resize` and `#on_render` run there, never on the GTK thread, and
+    # must not call GTK. `#queue_render` may be called from either thread.
+    # GTK keeps showing the previous frame until the thread finishes the
+    # next; one frame of the canvas is drawn at a time.
     def initialize(*, api : API = API::All, version : {Int32, Int32}? = nil,
                    depth_buffer : Bool = false, stencil_buffer : Bool = false,
                    input_purpose : InputPurpose = InputPurpose::FreeForm, offload : Bool = false,
-                   threaded : Bool = false)
+                   threaded : Bool | RenderThread = false)
       @api = api
-      @threaded = threaded
+      @threaded = threaded != false
+      @thread = threaded.as?(RenderThread)
       @version = version
       @depth_stencil = depth_buffer || stencil_buffer
       @offload = offload
@@ -212,9 +216,15 @@ module DesktopKit
       end
     end
 
-    # Returns whether the canvas draws on a thread of its own.
+    # Returns whether the canvas draws on a thread other than GTK's.
     def threaded? : Bool
       @threaded
+    end
+
+    # Returns the thread a threaded canvas draws on, or `nil` before its
+    # first realize or when not threaded.
+    def render_thread : RenderThread?
+      @thread
     end
 
     # :showdoc:
@@ -260,12 +270,11 @@ module DesktopKit
     private def realize : Nil
       C.gtk_im_context_set_client_widget(@im_context, @widget)
       watch_scale
-      context = GLContext.new(api: @api, version: @version)
       @error = nil
-      @context = context
       if @threaded
-        start_renderer(context, GLContext.new(api: @api, version: @version))
+        start_renderer(@thread ||= RenderThread.new(api: @api, version: @version))
       else
+        context = @context = GLContext.new(api: @api, version: @version)
         context.make_current
         @buffers = CanvasBuffers.new(context, @depth_stencil, @offload)
         on_realize
@@ -279,8 +288,8 @@ module DesktopKit
     private def unrealize : Nil
       stop_ticking
       C.gtk_picture_set_paintable(@picture, nil)
-      if renderer = @renderer
-        stop_renderer(renderer)
+      if thread = @attached
+        stop_renderer(thread)
       elsif context = @context
         context.make_current
         begin
@@ -362,9 +371,10 @@ module DesktopKit
       width = (@logical_width * scale).round.to_i32
       height = (@logical_height * scale).round.to_i32
       return if width <= 0 || height <= 0
-      if jobs = @jobs
+      if thread = @attached
         @rendering = true
-        jobs.send(Job.new(width, height))
+        generation = @generation
+        thread.post { render_on_thread(generation, width, height) }
       else
         buffers = @buffers || return
         context.make_current
@@ -397,33 +407,41 @@ module DesktopKit
       @presenting << @frame
     end
 
-    # Starts the render thread, which realizes the canvas with *context*.
-    # Its textures name *owner*, a context of the GTK thread: GSK's Vulkan
-    # renderer exports a GL texture as a DMA-BUF through the texture's
-    # context on the GTK thread, which corrupts the driver's heap while the
-    # render thread has that context current. Jobs never block the GTK thread: one frame is
-    # drawn at a time and the queue holds it and the close.
+    # Realizes the canvas on *thread*, started for it when needed. Its
+    # textures name the thread's owner context, a context of the GTK thread:
+    # GSK's Vulkan renderer exports a GL texture as a DMA-BUF through the
+    # texture's context on the GTK thread, which corrupts the driver's heap
+    # while the render thread has that context current. Jobs never block the
+    # GTK thread: one frame of the canvas is drawn at a time.
     #
     # Owner detail: `gskvulkanframe.c` calls `gdk_gl_context_export_dmabuf`
     # on the texture's context; with the render context current elsewhere
     # Mesa iris died with `malloc(): unaligned tcache chunk detected` in
     # `glFenceSync`. GTK specs force `ngl` (`GDK_DISABLE=vulkan`): only the
     # live `threaded-canvas` case covers this.
-    private def start_renderer(context : GLContext, owner : GLContext) : Nil
-      jobs = Channel(Job).new(2)
-      @jobs = jobs
+    private def start_renderer(thread : RenderThread) : Nil
+      context, owner = thread.attach
+      @context = owner
+      @attached = thread
       @rendering = false
-      @renderer = Fiber::ExecutionContext::Isolated.new("canvas") { run_renderer(context, owner, jobs) }
+      @generation += 1
+      thread.post do
+        buffers = CanvasBuffers.new(context, @depth_stencil, @offload, owner, thread)
+        @buffers = buffers
+        logged { on_realize }
+      end
     end
 
-    # Closes the job queue and waits until the render thread unrealized the
-    # canvas.
-    private def stop_renderer(renderer : Fiber::ExecutionContext::Isolated) : Nil
-      @jobs.try(&.close)
-      renderer.wait
+    # Unrealizes the canvas on *thread* and waits until it did; the last
+    # canvas of the thread stops it.
+    private def stop_renderer(thread : RenderThread) : Nil
+      thread.detach do
+        logged { on_unrealize }
+        @buffers.try(&.release)
+      end
     ensure
-      @jobs = nil
-      @renderer = nil
+      @attached = nil
+      @generation += 1
       @rendering = false
       unless @finished.null?
         C.g_object_unref(@finished)
@@ -431,25 +449,21 @@ module DesktopKit
       end
     end
 
-    private def run_renderer(context : GLContext, owner : GLContext, jobs : Channel(Job)) : Nil
-      context.make_current
-      buffers = CanvasBuffers.new(context, @depth_stencil, @offload, owner)
-      @buffers = buffers
-      logged { on_realize }
-      while job = jobs.receive?
-        texture = Pointer(Void).null
-        logged { draw(buffers, job.width, job.height) { |drawn| texture = drawn } }
-        UIThread.post { finished(jobs, texture) }
+    # Draws a frame of *width* × *height* on the render thread and hands it
+    # to the GTK thread.
+    private def render_on_thread(generation : Int32, width : Int32, height : Int32) : Nil
+      texture = Pointer(Void).null
+      if buffers = @buffers
+        logged { draw(buffers, width, height) { |drawn| texture = drawn } }
       end
-      logged { on_unrealize }
-      buffers.release
-      GLContext.clear_current
+      UIThread.post { finished(generation, texture) }
     end
 
-    # Takes the frame the render thread drew for *jobs*, null if it failed,
-    # and shows it at the next tick; a frame of a stopped thread is dropped.
-    private def finished(jobs : Channel(Job), texture : Void*) : Nil
-      unless jobs.same?(@jobs)
+    # Takes the frame the render thread drew for realize *generation*, null
+    # if it failed, and shows it at the next tick; a frame of an earlier
+    # realize is dropped.
+    private def finished(generation : Int32, texture : Void*) : Nil
+      unless generation == @generation && @attached
         C.g_object_unref(texture) unless texture.null?
         return
       end

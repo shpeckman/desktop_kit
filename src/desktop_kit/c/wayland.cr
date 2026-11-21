@@ -36,8 +36,10 @@ module DesktopKit
       n : UInt32
     end
 
-    alias Dispatcher = (Void*, Void*, UInt32, Message*, Argument*) -> Int32
-
+    # The dispatcher is a C function `(data : Void*, target : Void*,
+    # opcode : UInt32, message : Message*, args : Argument*) -> Int32`,
+    # passed untyped: a program that also binds libwayland-client with
+    # structs of its own (crwin) must declare the same signature.
     fun wl_display_create_queue(display : Void*) : Void*
     fun wl_display_roundtrip_queue(display : Void*, queue : Void*) : Int32
     fun wl_display_flush(display : Void*) : Int32
@@ -47,7 +49,7 @@ module DesktopKit
     fun wl_proxy_set_queue(proxy : Void*, queue : Void*)
     fun wl_proxy_marshal_array_flags(proxy : Void*, opcode : UInt32, interface : Interface*, version : UInt32,
                                      flags : UInt32, args : Argument*) : Void*
-    fun wl_proxy_add_dispatcher(proxy : Void*, dispatcher : Dispatcher, dispatcher_data : Void*, data : Void*) : Int32
+    fun wl_proxy_add_dispatcher(proxy : Void*, dispatcher : Void*, dispatcher_data : Void*, data : Void*) : Int32
     fun wl_proxy_get_version(proxy : Void*) : UInt32
     fun wl_proxy_destroy(proxy : Void*)
   end

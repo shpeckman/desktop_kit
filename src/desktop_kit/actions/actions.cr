@@ -147,7 +147,33 @@ module DesktopKit
       end
     end
 
-    # Moves the divider of the focused split *amount* pixels in *direction*.
+    # Swaps the focused surface with the split in *direction*: a neighbor,
+    # the previous or next in order (wrapping), or the first. The surface
+    # keeps the focus.
+    DesktopKit.action SwapSplit, "swap-split", scope: :split, payload: {direction: Direction} do
+      enum Direction
+        Previous
+        Next
+        Left
+        Right
+        Up
+        Down
+        First
+      end
+    end
+
+    # Moves the focused surface into a tab of a new window; a surface alone
+    # in its tab moves with the tab.
+    DesktopKit.action MoveSurfaceToNewWindow, "move-surface-to-new-window", scope: :split
+
+    # Moves the focused surface into a new tab of the window focused before
+    # this one; a surface alone in its tab moves with the tab. A window left
+    # without tabs closes.
+    DesktopKit.action MoveSurfaceToPreviousWindow, "move-surface-to-previous-window", scope: :split
+
+    # Moves the divider of the focused split *amount* pixels in *direction*;
+    # a floating surface grows to the right or down and shrinks to the left
+    # or up instead.
     DesktopKit.action ResizeSplit, "resize-split", scope: :split, payload: {direction: ::DesktopKit::Direction, amount: UInt32}
 
     # Gives every split of the tab the same size.
@@ -155,6 +181,38 @@ module DesktopKit
 
     # Toggles the focused split filling the tab.
     DesktopKit.action ToggleSplitZoom, "toggle-split-zoom", scope: :split
+
+    # Lifts the focused surface out of the splits to float over the tab, or
+    # splits a floating surface back in beside the split under its centre.
+    # A tab's only split does not float.
+    DesktopKit.action ToggleFloat, "toggle-float", scope: :split
+
+    # Moves the focused floating surface *amount* pixels in *direction*,
+    # keeping it inside the tab.
+    DesktopKit.action MoveFloat, "move-float", scope: :split, payload: {direction: ::DesktopKit::Direction, amount: UInt32}
+
+    # Moves the focused surface into the stack of the split next to it in
+    # *direction*, that split becoming a stack if it is none.
+    DesktopKit.action StackInto, "stack-into", scope: :split, payload: {direction: ::DesktopKit::Direction}
+
+    # Takes the focused surface out of its stack to split the stack's place
+    # with it along *layout*; `Auto` takes the longer side.
+    DesktopKit.action Unstack, "unstack", scope: :split, payload: {layout: Layout} do
+      enum Layout
+        Auto
+        Horizontal
+        Vertical
+      end
+    end
+
+    # Shows and focuses the surface at *index* of the focused surface's
+    # stack, counted from 0, or `PREVIOUS`, `NEXT` or `LAST`; previous and
+    # next wrap.
+    DesktopKit.action GotoStacked, "goto-stacked", scope: :split, payload: {index: Int32} do
+      PREVIOUS = -1
+      NEXT     = -2
+      LAST     = -3
+    end
 
     # Closes the focused surface, asking first when it has
     # `Surface#confirm_close?`.

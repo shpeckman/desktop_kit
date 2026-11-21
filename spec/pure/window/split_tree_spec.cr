@@ -30,6 +30,12 @@ private def grid : Tree
   ac.split(handle(ac, "B"), :down, "D", 0.3)
 end
 
+# A | (B with C stacked, C shown)
+private def stacked : Tree
+  tree = ab
+  tree.join(handle(tree, "B"), "C")
+end
+
 describe DesktopKit::SplitTree do
   it "tells splits from leaves" do
     Tree.new.split?.should be_false
@@ -299,6 +305,19 @@ describe DesktopKit::SplitTree do
     removed_other.to_s.should eq("(zoomed) leaf: A\n")
   end
 
+  it "swaps two leaves and keeps the zoom on its view" do
+    tree = abcd
+    a = handle(tree, "A")
+    d = handle(tree, "D")
+    swapped = tree.zoom(a).swap(a, d)
+    swapped.view(a).should eq("D")
+    swapped.view(d).should eq("A")
+    swapped.zoomed.should eq(d)
+    swapped.spatial.should eq(tree.spatial)
+    tree.swap(a, a).same?(tree).should be_true
+    expect_raises(ArgumentError) { tree.swap(Tree::ROOT, a) }
+  end
+
   it "leaves the original tree unchanged" do
     tree = ab
     text = tree.to_s
@@ -338,5 +357,122 @@ describe DesktopKit::SplitTree do
     expect_raises(ArgumentError, "resize delta must be between -1 and 1, not 2.0") do
       tree.resize(handle(tree, "B"), :horizontal, 2.0)
     end
+  end
+
+  it "stacks a view after the shown one and shows it" do
+    tree = stacked
+    b = handle(ab, "B")
+    tree.to_s.should eq(lines(
+      "split (layout: horizontal, ratio: 0.50)",
+      "  leaf: A",
+      "  stack: B, [C]"))
+    tree.to_diagram.should eq(lines("+-------++-------+", "|   A   || C 2/2 |", "+-------++-------+"))
+    tree.view(b).should eq("C")
+    tree.views(b).should eq(%w(B C))
+    tree.stacked?(b).should be_true
+    tree.stacked?(handle(tree, "A")).should be_false
+    tree.node_count.should eq(ab.node_count)
+
+    shown_first = tree.show(b, 0)
+    shown_first.join(b, "D").to_s.should eq(lines(
+      "split (layout: horizontal, ratio: 0.50)",
+      "  leaf: A",
+      "  stack: B, [D], C"))
+  end
+
+  it "yields and locates every stacked view" do
+    tree = stacked
+    b = handle(tree, "B")
+    tree.to_a.should eq([{b, "B"}, {b, "C"}, {handle(tree, "A"), "A"}])
+    tree.size.should eq(3)
+    tree.locate("B").should eq(b)
+    tree.locate("C").should eq(b)
+    tree.views(handle(tree, "A")).should eq(%w(A))
+  end
+
+  it "shows another view of a stack" do
+    tree = stacked
+    b = handle(tree, "B")
+    shown = tree.zoom(b).show(b, 0)
+    shown.view(b).should eq("B")
+    shown.zoomed.should eq(b)
+    shown.to_diagram.should eq(lines("+-------++-------+", "|   A   || B 1/2 |", "+-------++-------+"))
+    expect_raises(ArgumentError, "stack index 2 outside 0...2") { tree.show(b, 2) }
+    expect_raises(ArgumentError, "stack index -1 outside 0...2") { tree.show(b, -1) }
+    expect_raises(ArgumentError, "split tree node 2 is not a stack") { tree.show(handle(tree, "A"), 0) }
+    expect_raises(ArgumentError, "split tree node 0 is a split") { tree.join(Tree::ROOT, "D") }
+    expect_raises(ArgumentError, "the view is already in the tree") { tree.join(b, "A") }
+  end
+
+  it "takes a view out of its stack" do
+    tree = stacked.join(handle(ab, "B"), "D")
+    b = handle(tree, "B")
+    tree.to_s.should contain("stack: B, C, [D]")
+
+    tree.without("D").to_s.should contain("stack: B, [C]")
+    tree.show(b, 1).without("C").to_s.should contain("stack: B, [D]")
+    tree.show(b, 0).without("C").to_s.should contain("stack: [B], D")
+    tree.show(b, 1).without("B").to_s.should contain("stack: [C], D")
+
+    dissolved = stacked.without("C")
+    dissolved.to_s.should eq(ab.to_s)
+    dissolved.stacked?(b).should be_false
+    stacked.without("B").view(b).should eq("C")
+    stacked.without("A").to_s.should eq("stack: B, [C]\n")
+    expect_raises(ArgumentError, "the view is not in the tree") { tree.without("E") }
+  end
+
+  it "splits a view out of its stack" do
+    tree = stacked.zoom(handle(ab, "B"))
+    unstacked = tree.unstack("B", :horizontal)
+    unstacked.zoomed.should be_nil
+    unstacked.to_s.should eq(lines(
+      "split (layout: horizontal, ratio: 0.50)",
+      "  leaf: A",
+      "  split (layout: horizontal, ratio: 0.50)",
+      "    leaf: C",
+      "    leaf: B"))
+    tree.unstack("C", :vertical).to_s.should contain(lines(
+      "  split (layout: vertical, ratio: 0.50)",
+      "    leaf: B",
+      "    leaf: C"))
+    expect_raises(ArgumentError, "the view is not stacked") { tree.unstack("A", :horizontal) }
+    expect_raises(ArgumentError, "the view is not stacked") { tree.unstack("E", :horizontal) }
+  end
+
+  it "treats a stack as one leaf in moves, swaps and splits" do
+    tree = stacked
+    a = handle(tree, "A")
+    b = handle(tree, "B")
+    tree.spatial.should eq(ab.spatial)
+    tree.goto(a, DesktopKit::Direction::Right).should eq(b)
+    tree.goto(a, :next).should eq(b)
+    tree.deepest(:right).should eq(b)
+
+    swapped = tree.swap(a, b)
+    swapped.to_s.should eq(lines(
+      "split (layout: horizontal, ratio: 0.50)",
+      "  stack: B, [C]",
+      "  leaf: A"))
+
+    beside = tree.split(b, :down, "D")
+    beside.to_s.should eq(lines(
+      "split (layout: horizontal, ratio: 0.50)",
+      "  leaf: A",
+      "  split (layout: vertical, ratio: 0.50)",
+      "    stack: B, [C]",
+      "    leaf: D"))
+    beside.remove(handle(beside, "D")).to_s.should eq(tree.to_s)
+  end
+
+  it "leaves the original tree unchanged by stack operations" do
+    tree = stacked
+    text = tree.to_s
+    b = handle(tree, "B")
+    tree.join(b, "D")
+    tree.show(b, 0)
+    tree.without("C")
+    tree.unstack("B", :vertical)
+    tree.to_s.should eq(text)
   end
 end

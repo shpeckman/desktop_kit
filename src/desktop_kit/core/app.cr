@@ -195,6 +195,20 @@ module DesktopKit
       @windows.find { |window| window.widget.to_unsafe == active } || @windows.last?
     end
 
+    # The window focused last before *window*, or `nil`.
+    protected def previous_window(window : Window) : Window?
+      return if @application.null?
+      list = C.gtk_application_get_windows(@application)
+      until list.null?
+        widget = list.value.data
+        unless widget == window.widget.to_unsafe
+          found = @windows.find { |other| other.widget.to_unsafe == widget && !other.closed? }
+          return found if found
+        end
+        list = list.value.next_
+      end
+    end
+
     # Returns the active surface of `#active_window`.
     def active_surface : Surface?
       active_window.try(&.active_surface)

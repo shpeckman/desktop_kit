@@ -6,11 +6,15 @@ module DesktopKit
   # again.
   class UndoStack
     # A surface closed out of a tab that stays open: *before* is the tab's
-    # tree with it, *after* the tree without it.
-    record ClosedSurface, surface : Surface, tab : Tab, before : SplitTree(Surface), after : SplitTree(Surface)
+    # tree with it, *after* the tree without it. *float* holds the bounds
+    # of a closed float; *promoted* is the float that took the place of a
+    # closed last split.
+    record ClosedSurface, surface : Surface, tab : Tab, before : SplitTree(Surface), after : SplitTree(Surface),
+      float : Bounds? = nil, promoted : Tab::Floating? = nil
 
-    # A tab's tree, its active surface and title override.
-    record TabState, tree : SplitTree(Surface), active : Surface?, title_override : String?
+    # A tab's tree, its active surface, title override and floats.
+    record TabState, tree : SplitTree(Surface), active : Surface?, title_override : String?,
+      floats : Array(Tab::Floating) = [] of Tab::Floating
 
     # A closed tab and its position in *window*.
     record ClosedTab, state : TabState, window : Window, position : Int32
@@ -93,13 +97,14 @@ module DesktopKit
 
     private def release(state : TabState) : Nil
       state.tree.each { |_, surface| surface.release }
+      state.floats.each(&.surface.release)
     end
 
     # Puts the surface back into its tab, or into a new tab when the tab is
     # gone.
     private def reopen(closed : ClosedSurface) : Surface
       surface = closed.surface
-      return surface if closed.tab.restore(surface, closed.before, closed.after)
+      return surface if closed.tab.restore(surface, closed.before, closed.after, closed.float, closed.promoted)
       reopen_tab(TabState.new(SplitTree(Surface).new(surface), surface, nil), window, nil)
       surface
     end
@@ -117,7 +122,7 @@ module DesktopKit
     end
 
     private def reopen_tab(state : TabState, target : Window, position : Int32?) : Tab
-      tab = Tab.new(@app, state.tree, state.active)
+      tab = Tab.new(@app, state.tree, state.active, state.floats)
       tab.title_override = state.title_override
       target.add_tab(tab, position)
       target.present

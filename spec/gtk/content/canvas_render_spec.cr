@@ -225,3 +225,31 @@ describe "Canvas rendering" do
     end
   end
 end
+
+describe DesktopKit::RenderThread do
+  it "draws canvases of one thread with one context" do
+    thread = DesktopKit::RenderThread.new(name: "shared")
+    app = TestApp.new.tap do |test_app|
+      test_app.make_content = ->(context : DesktopKit::SurfaceContext) { HalvesCanvas.new(threaded: thread).as(DesktopKit::Content) }
+    end
+    run_steps(app) do |test_app|
+      window = test_app.new_window
+      first = window.active_surface.not_nil!.content.as(HalvesCanvas)
+      eventually { first.ages.size > 0 }.should be_true
+      trigger(window, DesktopKit::Action::NewSplit.new(:right))
+      second = window.active_surface.not_nil!.content.as(HalvesCanvas)
+      second.should_not be first
+      eventually { second.ages.size > 0 }.should be_true
+      first.render_thread.should be thread
+      second.render_thread.should be thread
+      (first.threads + second.threads).uniq.should eq ["shared"]
+      thread.running?.should be_true
+      window.close
+      eventually { window.closed? }.should be_true
+      settle
+      thread.running?.should be_false
+      first.gl_context.should be_nil
+      second.gl_context.should be_nil
+    end
+  end
+end

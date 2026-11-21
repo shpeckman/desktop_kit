@@ -149,6 +149,148 @@ describe "App#restore_session?" do
     end
   end
 
+  it "reopens floats with their bounds, titles and focus" do
+    with_state_home do
+      id = AppIds.next
+      app = session_app(id)
+      app.on_activated = ->(app : TestApp) do
+        window = app.new_window
+        window.active_surface.not_nil!.content.as(StateContent).state = "a"
+        right = split(window, :right)
+        right.content.as(StateContent).state = "b"
+        below = split(window, :down)
+        below.content.as(StateContent).state = "c"
+        below.title_override = "Sea"
+        right.float(DesktopKit::Bounds.new(0.1, 0.2, 0.5, 0.4)).should be_true
+        below.float(DesktopKit::Bounds.new(0.3, 0.1, 0.25, 0.5)).should be_true
+        settle
+        app.quit
+      end
+      run_app(app).should eq 0
+      File.read(Path[ENV["XDG_STATE_HOME"], id, "session.json"]).should contain(%("floats"))
+
+      restored = session_app(id)
+      run_restored(restored) do
+        tab = restored.windows.first.tabs.first
+        tab.surfaces.map { |surface| state(surface) }.should eq ["a", "b", "c"]
+        tab.floats.map { |surface| state(surface) }.should eq ["b", "c"]
+        right, below = tab.floats
+        state(tab.active_surface).should eq "c"
+        below.title_override.should eq "Sea"
+        {right, below}.zip({DesktopKit::Bounds.new(0.1, 0.2, 0.5, 0.4), DesktopKit::Bounds.new(0.3, 0.1, 0.25, 0.5)}) do |surface, expected|
+          bounds = surface.float_bounds.not_nil!
+          {bounds.x, bounds.y, bounds.width, bounds.height}.zip({expected.x, expected.y, expected.width, expected.height}) do |value, want|
+            value.should be_close(want, 1e-9)
+          end
+        end
+        eventually { below.@host.mapped? }.should be_true
+      end
+    end
+  end
+
+  it "reads and writes sessions without floats as before" do
+    with_state_home do
+      id = AppIds.next
+      file = Path[ENV["XDG_STATE_HOME"], id, "session.json"]
+      Dir.mkdir_p(file.parent)
+      content = %({"version":1,"windows":[{"width":640,"height":480,"maximized":false,"fullscreen":false,"selected":0,"tabs":[{"root":{"state":"x","active":true,"zoomed":false}}]}]})
+      DesktopKit::Session::Data.from_json(content).to_json.should eq content
+      File.write(file, content)
+      app = session_app(id)
+      run_restored(app) do
+        tab = app.windows.first.tabs.first
+        tab.surfaces.map { |surface| state(surface) }.should eq ["x"]
+        tab.floats.should be_empty
+      end
+      saved = File.read(file)
+      saved.should contain(%("state":"x"))
+      saved.should_not contain(%("floats"))
+    end
+  end
+
+  it "ignores a session with floats outside the tab" do
+    with_state_home do
+      [%({"x":0.1,"y":0.1,"width":0.0,"height":0.5}), %({"x":0.6,"y":0.1,"width":0.5,"height":0.5})].each do |bounds|
+        id = AppIds.next
+        file = Path[ENV["XDG_STATE_HOME"], id, "session.json"]
+        Dir.mkdir_p(file.parent)
+        float = %({"surface":{"state":"f","active":false,"zoomed":false},) + bounds[1..]
+        File.write(file, %({"version":1,"windows":[{"width":0,"height":0,"maximized":false,"fullscreen":false,"selected":0,"tabs":[{"root":{"state":"x","active":true,"zoomed":false},"floats":[#{float}]}]}]}))
+        app = session_app(id)
+        run_app(app)
+        app.events.should contain("activate")
+        app.contexts.should be_empty
+      end
+    end
+  end
+
+  it "reopens stacks with their order, shown surface and focus" do
+    with_state_home do
+      id = AppIds.next
+      app = session_app(id)
+      app.on_activated = ->(app : TestApp) do
+        window = app.new_window
+        window.active_surface.not_nil!.content.as(StateContent).state = "a"
+        right = split(window, :right)
+        right.content.as(StateContent).state = "b"
+        below = split(window, :down)
+        below.content.as(StateContent).state = "c"
+        below.title_override = "Sea"
+        below.stack_into(:up).should be_true
+        right.focus
+        settle
+        app.quit
+      end
+      run_app(app).should eq 0
+      saved = File.read(Path[ENV["XDG_STATE_HOME"], id, "session.json"])
+      saved.should contain(%("state":"b","active":true,"zoomed":false,"stack":[{"state":"c","title":"Sea","active":false,"zoomed":false}],"index":0))
+
+      restored = session_app(id)
+      run_restored(restored) do
+        tab = restored.windows.first.tabs.first
+        tab.surfaces.map { |surface| state(surface) }.should eq ["a", "b", "c"]
+        right = tab.surfaces[1]
+        below = tab.surfaces[2]
+        right.stack.should eq [right, below]
+        below.title_override.should eq "Sea"
+        tab.active_surface.should eq right
+        eventually { right.@host.mapped? }.should be_true
+        below.@host.visible?.should be_false
+      end
+    end
+  end
+
+  it "shows a stacked surface saved as focused" do
+    with_state_home do
+      id = AppIds.next
+      file = Path[ENV["XDG_STATE_HOME"], id, "session.json"]
+      Dir.mkdir_p(file.parent)
+      File.write(file, %({"version":1,"windows":[{"width":0,"height":0,"maximized":false,"fullscreen":false,"selected":0,"tabs":[{"root":{"state":"x","active":false,"zoomed":false,"stack":[{"state":"y","active":true,"zoomed":false}],"index":0}}]}]}))
+      app = session_app(id)
+      run_restored(app) do
+        tab = app.windows.first.tabs.first
+        tab.surfaces.map { |surface| state(surface) }.should eq ["x", "y"]
+        state(tab.active_surface).should eq "y"
+        hidden, shown = tab.surfaces
+        eventually { shown.@host.mapped? }.should be_true
+        hidden.@host.visible?.should be_false
+      end
+    end
+  end
+
+  it "ignores a session with a stack index outside the stack" do
+    with_state_home do
+      id = AppIds.next
+      file = Path[ENV["XDG_STATE_HOME"], id, "session.json"]
+      Dir.mkdir_p(file.parent)
+      File.write(file, %({"version":1,"windows":[{"width":0,"height":0,"maximized":false,"fullscreen":false,"selected":0,"tabs":[{"root":{"state":"x","active":true,"zoomed":false,"stack":[{"state":"y","active":false,"zoomed":false}],"index":2}}]}]}))
+      app = session_app(id)
+      run_app(app)
+      app.events.should contain("activate")
+      app.contexts.should be_empty
+    end
+  end
+
   it "activates as usual without a saved session or when disabled" do
     with_state_home do
       id = AppIds.next

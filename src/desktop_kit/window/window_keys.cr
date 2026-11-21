@@ -12,6 +12,60 @@ module DesktopKit
     # Key table stack lives per window, not per surface.
     @key_tables = [] of {String, Bool}
 
+    # Keys labelling the surfaces `#pick_surface` offers, in order.
+    private PICK_LABELS = "asdfghjklqwertyuiopzxcvbnm"
+
+    # The surfaces `#pick_surface` labelled by their key, and its block;
+    # nil while no pick waits.
+    @pick : {Hash(Char, Surface), Proc(Surface, Nil)}? = nil
+
+    # Labels the surfaces of the active tab, except *except*, with a key
+    # each and calls the block with the surface whose key is typed next;
+    # any other key cancels without calling it. Returns false when no
+    # surface is left to label. A newer pick replaces a waiting one.
+    def pick_surface(*, except : Surface? = nil, &block : Surface ->) : Bool
+      cancel_pick
+      tab = active_tab || return false
+      labels = {} of Char => Surface
+      tab.shown_surfaces.each do |surface|
+        next if surface.same?(except)
+        break if labels.size == PICK_LABELS.size
+        key = PICK_LABELS[labels.size]
+        labels[key] = surface
+        surface.pick_label = key.to_s
+      end
+      return false if labels.empty?
+      @pick = {labels, block}
+      true
+    end
+
+    # Returns whether `#pick_surface` waits for a key.
+    def picking? : Bool
+      !@pick.nil?
+    end
+
+    # Ends a waiting `#pick_surface` without calling its block.
+    def cancel_pick : Nil
+      pick = @pick || return
+      @pick = nil
+      pick[0].each_value { |surface| surface.pick_label = nil }
+    end
+
+    # Takes the key a waiting pick asked for: a label calls the pick's
+    # block, any other key but a modifier cancels.
+    private def pick_key(keyval : UInt32) : Bool
+      pick = @pick || return false
+      event = C.gtk_event_controller_get_current_event(@sequence_keys)
+      return false if !event.null? && C.gdk_key_event_is_modifier(event) != 0
+      code = C.gdk_keyval_to_unicode(keyval)
+      surface = code == 0 ? nil : pick[0][code.unsafe_chr.downcase]?
+      cancel_pick
+      if surface && !surface.closed?
+        pick[1].call(surface)
+      end
+      true
+    end
+
     # Returns the names of the active key tables, the innermost last.
     def key_tables : Array(String)
       @key_tables.map(&.[0])
@@ -49,6 +103,7 @@ module DesktopKit
     # taken, one that completes it performs its action, and any other key
     # while one is pending ends it and is dropped.
     private def sequence_key(keyval : UInt32, state : UInt32) : Bool
+      return pick_key(keyval) if @pick
       # Fast path: nothing pending, no table, no sequences.
       return false if @sequence.empty? && @key_tables.empty? && !@app.sequences?
       event = C.gtk_event_controller_get_current_event(@sequence_keys)

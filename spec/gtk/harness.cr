@@ -175,6 +175,12 @@ class TestApp < DesktopKit::App
     @off_thread = true unless DesktopKit::UIThread.current? && Thread.current.name == "gtk"
     @events << event
   end
+
+  # Performs *action* on *target* as a key binding does, without running
+  # the main loop, and returns whether it applied.
+  def perform_action(target, action : DesktopKit::Action) : Bool
+    dispatch(target, action)
+  end
 end
 
 # Runs *app* with *arguments* and quits it when it still runs after

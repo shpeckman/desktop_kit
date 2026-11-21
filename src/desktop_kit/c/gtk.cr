@@ -153,6 +153,7 @@ module DesktopKit
     fun gtk_widget_get_scale_factor(widget : Void*) : Int32
     fun gtk_widget_get_realized(widget : Void*) : Int32
     fun gtk_widget_get_mapped(widget : Void*) : Int32
+    fun gtk_widget_get_last_child(widget : Void*) : Void*
     fun gtk_widget_set_hexpand(widget : Void*, expand : Int32)
     fun gtk_widget_set_vexpand(widget : Void*, expand : Int32)
     fun gtk_widget_set_size_request(widget : Void*, width : Int32, height : Int32)
@@ -298,9 +299,12 @@ module DesktopKit
     fun gtk_snapshot_new : Void*
     fun gtk_snapshot_scale(snapshot : Void*, factor_x : Float32, factor_y : Float32)
     fun gtk_snapshot_free_to_paintable(snapshot : Void*, size : Void*) : Void*
+    fun gtk_snapshot_free_to_node(snapshot : Void*) : Void*
+    fun gtk_native_get_renderer(self_ : Void*) : Void*
     fun gtk_overlay_new : Void*
     fun gtk_overlay_set_child(overlay : Void*, child : Void*)
     fun gtk_overlay_add_overlay(overlay : Void*, widget : Void*)
+    fun gtk_widget_insert_before(widget : Void*, parent : Void*, next_sibling : Void*)
     fun gtk_center_box_new : Void*
     fun gtk_center_box_set_center_widget(self_ : Void*, child : Void*)
     fun gtk_image_new_from_icon_name(icon_name : UInt8*) : Void*

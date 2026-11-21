@@ -11,6 +11,7 @@ module DesktopKit
     @created = Time.instant
     @size_label = Widget.new(C.gtk_label_new(""))
     @size_timer = 0_u32
+    @pick_label = Widget.new(C.gtk_label_new(""))
     @hover_left = Widget.new(C.gtk_label_new(""))
     @hover_right = Widget.new(C.gtk_label_new(""))
     @hover_motion = {C.gtk_event_controller_motion_new, C.gtk_event_controller_motion_new}
@@ -99,8 +100,23 @@ module DesktopKit
       @content.search_navigate(forward) if search_active?
     end
 
-    # Adds the size, hover and search overlays to *overlay*.
+    # Shows *label* large in the middle of the surface while
+    # `Window#pick_surface` waits for a key; `nil` hides it.
+    protected def pick_label=(label : String?) : String?
+      C.gtk_label_set_label(@pick_label, label || "")
+      @pick_label.visible = !label.nil?
+      label
+    end
+
+    # Adds the size, hover, pick and search overlays to *overlay*.
     private def layout_overlays(overlay : Void*) : Nil
+      @pick_label.add_css_class("osd")
+      @pick_label.add_css_class("surface-pick")
+      @pick_label.visible = false
+      C.gtk_widget_set_can_target(@pick_label, 0)
+      C.gtk_widget_set_halign(@pick_label, C::GtkAlign::Center)
+      C.gtk_widget_set_valign(@pick_label, C::GtkAlign::Center)
+      C.gtk_overlay_add_overlay(overlay, @pick_label)
       @size_label.add_css_class("osd")
       @size_label.add_css_class("surface-size")
       @size_label.visible = false

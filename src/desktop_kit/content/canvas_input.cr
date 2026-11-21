@@ -170,10 +170,16 @@ module DesktopKit
       return if pointer.null?
       drag = Drag.new(pointer, types)
       @drag = drag
-      icon.try { |image| drag_icon(pointer, image) }
+      icon.try { |image| drag.icon = image }
       Signals.connect(drag, "dnd-finished", -> { drag_ended(drag, true) })
       Signals.connect(drag, "cancel", ->(_reason : C::GdkDragCancelReason) { drag_ended(drag, false) })
       drag
+    end
+
+    # Cancels the drag `#drag` started while it runs; `#on_drag_end` reports
+    # `DragAction::None`.
+    def cancel_drag : Nil
+      @drag.try { |drag| drag_ended(drag, false) }
     end
 
     private def set_input_purpose(purpose : InputPurpose) : Nil
@@ -361,15 +367,6 @@ module DesktopKit
       @drop = nil
       scale = self.scale
       on_drop(drop, x * scale, y * scale)
-    end
-
-    private def drag_icon(drag : Void*, icon : Drag::Icon) : Nil
-      raise ArgumentError.new("icon pixels do not match its size") unless icon.pixels.size == icon.width * icon.height * 4
-      bytes = Stream.bytes(icon.pixels)
-      texture = C.gdk_memory_texture_new(icon.width, icon.height, C::GdkMemoryFormat::R8g8b8a8, bytes, icon.width * 4)
-      C.g_bytes_unref(bytes)
-      C.gtk_drag_icon_set_from_paintable(drag, texture, icon.hot_x, icon.hot_y)
-      C.g_object_unref(texture)
     end
 
     private def drag_ended(drag : Drag, finished : Bool) : Nil

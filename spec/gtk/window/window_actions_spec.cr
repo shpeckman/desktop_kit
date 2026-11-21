@@ -117,7 +117,10 @@ describe "window actions" do
       settle
       window.app_id = "org.example.Other"
       window.app_id.should eq("org.example.Other")
-      expect_raises(ArgumentError) { window.app_id = "not an id" }
+      window.app_id = "scratchpad"
+      window.app_id.should eq("scratchpad")
+      expect_raises(ArgumentError) { window.app_id = "" }
+      expect_raises(ArgumentError) { window.app_id = "a\0b" }
       window.app_id = nil
       window.app_id.should be_nil
     end
@@ -149,6 +152,37 @@ describe "window actions" do
       app.idle_timeout = nil
       app.user_idle?.should be_false
       app.idles.should eq([true, false])
+    end
+  end
+
+  it "opens a window at the size its surface asks for" do
+    app = TestApp.new
+    run_steps(app) do
+      app.window_style = DesktopKit::WindowStyle.new(header_bar: false)
+      window = app.new_window
+      window.decoration = :none
+      trigger(window, DesktopKit::Action::SizeLimit.new(0, 0, 0, 0))
+      host = window.active_surface.not_nil!.@host
+      trigger(window, DesktopKit::Action::ResizeWindow.new(120, 60))
+      eventually { host.mapped? && {host.width, host.height} == {120, 60} }.should be_true
+      {window.widget.width, window.widget.height}.should eq({120, 60})
+      trigger(window, DesktopKit::Action::ResizeWindow.new(90, 40))
+      eventually { {host.width, host.height} == {90, 40} }.should be_true
+    end
+  end
+
+  it "keeps the tab overview's page hidden while closed" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      page = DesktopKit::Widget.new(DesktopKit::C.gtk_widget_get_last_child(window.@overview))
+      page.visible?.should be_false
+      trigger(window, DesktopKit::Action::ToggleTabOverview.new)
+      page.visible?.should be_true
+      eventually { page.mapped? }.should be_true
+      trigger(window, DesktopKit::Action::ToggleTabOverview.new)
+      eventually { !page.visible? }.should be_true
     end
   end
 end

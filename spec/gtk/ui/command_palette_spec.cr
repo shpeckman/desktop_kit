@@ -36,7 +36,7 @@ describe "command palette" do
       trigger(window, DesktopKit::Action::ToggleCommandPalette.new)
       palette = palette(window)
       search(palette, "split right")
-      palette.shown.map(&.title).should eq ["Split Right"]
+      palette.shown.map(&.title).should eq ["Split Right", "Stack With Right Split"]
       palette.selected.try(&.title).should eq "Split Right"
       palette.activate
       settle

@@ -202,6 +202,7 @@ module DesktopKit
     fun gdk_file_list_get_files(file_list : Void*) : GSList*
     fun gdk_content_provider_new_for_value(value : Void*) : Void*
     fun gdk_paintable_snapshot(paintable : Void*, snapshot : Void*, width : Float64, height : Float64)
+    fun gdk_texture_save_to_png(texture : Void*, filename : UInt8*) : Int32
     fun gdk_toplevel_get_state(toplevel : Void*) : GdkToplevelState
     fun gdk_toplevel_inhibit_system_shortcuts(toplevel : Void*, event : Void*)
     fun gdk_toplevel_restore_system_shortcuts(toplevel : Void*)

@@ -188,6 +188,8 @@ showing it. The `DesktopKit::SurfaceContext` tells where the surface opens:
 `kind` is `Window`, `Tab`, `Split` or `Restore` (a saved session reopens),
 `parent` is the surface it opens from, if any, and `session_state` is what
 the saved surface's content returned from `Content#session_state`.
+`Content#on_close` runs once the surface closed for good (past the reach
+of undo), so the content can free what it holds, such as a child process.
 
 The window, tab and surface methods run on the GTK thread only: in hooks,
 in `perform`, or in `#post` blocks. `App#new_window` raises `RuntimeError`
@@ -204,7 +206,8 @@ elsewhere.
 | `Window#tabs`, `#active_tab`     | the tabs in tab bar order, the selected tab                       |
 | `Window#active_surface`          | the focused surface of the selected tab                           |
 | `Window#present`, `#close`       | brings the window to the front, closes it                         |
-| `Tab#surfaces`                   | the surfaces from left or top to right or bottom                  |
+| `Tab#surfaces`                   | the splits from left or top to right or bottom, then the floats from the bottom one up |
+| `Tab#floats`                     | the floating surfaces, from the bottom one to the top one         |
 | `Tab#active_surface`, `#zoomed?` | the focused surface, whether one surface fills the tab            |
 | `Tab#window`, `#close`           | the window showing the tab, closes it                             |
 | `Surface#split(direction)`       | opens a surface beside it, in an `DesktopKit::Direction`, and focuses it |
@@ -236,7 +239,15 @@ elsewhere.
 | `Window#activate(token)`         | raises and focuses it with an activation token from another application |
 | `Window#monitor_size`            | the logical size of its monitor, `nil` while not shown            |
 | `Window#suspended?`              | whether the desktop stopped showing it (`on_window_suspended`)    |
+| `Window#snapshot(path)`          | writes what it shows to a PNG at the output's scale; `false` while not shown or when the file cannot be written |
+| `Window#pick_surface(except:) { \|surface\| }` | labels the active tab's surfaces with a key each and yields the one whose key is typed next; other keys cancel. `#picking?`, `#cancel_pick` |
+| `Window#add_overlay(content, x, y, width, height, modal:)` | shows content over its tabs at a rectangle of the tab area, above earlier overlays, and returns a `Window::Overlay` (`#place`, `#modal=`, `#raise`, `#close`, `#on_outside_press`); input outside the rectangle reaches the splits unless modal, when `#on_outside_press { |button, x, y| }` gets each press there (logical pixels from the overlay's top left corner); the content's `on_close` runs once the overlay closed, by `#close` or with its window. `#overlays` lists them, `#overlay_area` gives the tab area's size in logical pixels |
 | `Window#pack_start`, `#pack_end` | adds a widget, or a button with an `DesktopKit::Icon` performing an action, to the header bar |
+| `Surface#swap_with(other)`       | trades places with another surface of its tab; the focus stays |
+| `Surface#float(bounds = nil)`, `#tile` | lifts it out of the splits to float over its tab (`ToggleFloat`), moves a float to *bounds*, splits a float back in |
+| `Surface#floating?`, `#float_bounds` | whether it floats, and where as a `DesktopKit::Bounds`; `nil` for a split |
+| `Surface#stack_into(direction)`, `#stack_with(other)`, `#unstack(layout = :auto)` | moves it into the stack of a neighbouring split (`StackInto`) or of *other*, or splits it out beside its stack (`Unstack`) |
+| `Surface#stacked?`, `#stack` | whether it shares its split with other surfaces, and the surfaces of its stack in order |
 | `Surface#icon=`                  | sets an `DesktopKit::Icon` for its pane header and, while active, its tab; `nil` removes it |
 | `Surface#read_only=`             | marks it read-only with a lock badge (`ToggleReadOnly`); the content reads `#read_only?` and decides what to refuse |
 | `Window#key_tables`              | the names of its active key tables, innermost last                |
@@ -252,6 +263,36 @@ while there is more than one tab. Closing the last surface of a tab closes
 the tab, and closing the last tab closes the window. Once closed,
 `#closed?` is true, `Window#new_tab` and `Surface#split` raise
 `RuntimeError`, and the objects leave the registries.
+
+A surface can float over its tab instead of taking a split: `Surface#float`
+places it at a `DesktopKit::Bounds`, its `x`, `y`, `width` and `height` in
+fractions of the tab area, or cascades it near the middle at 60% of the
+tab. A tab's only split does not float. The focused float rises above the
+others, and a float stays inside the tab: dragging its pane header moves
+it, the grip at its bottom-right corner resizes it down to its content's
+minimum size, and `MoveFloat` and `ResizeSplit` do the same from the
+keyboard. `Surface#tile` splits a float back in beside the split under its
+centre, as dropping it on a split does; surfaces dropped on a float are
+refused. `GotoSplit` `Previous` and `Next` go through the splits, then the
+floats; a float has no neighbours in a direction, and does not swap or
+zoom. While a split is zoomed the floats hide; focusing one ends the zoom.
+Closing the last split of a tab that has floats turns the top float into
+the split; moving a float to another tab or window makes it a split there.
+Saved sessions and `Undo` keep floats where they were.
+
+A stack is several surfaces in one split, one shown at a time; the pane
+header of each shows its place, such as `2/3`. `Surface#stack_into` and
+`StackInto` move a surface into the stack of the split next to it, the
+split becoming a stack if it is none; `Surface#stack_with` moves a split or
+a float into the stack of another split. The surface moved in shows after
+the one shown before and takes the focus. `GotoStacked` shows another
+surface of the focused one's stack, and focusing a hidden surface shows it;
+neither rebuilds the splits. `Unstack` splits the focused surface out beside
+its stack, along the stack's longer side for `Auto`. Closing or moving the
+shown surface shows the next one, and a stack left with one surface is a
+plain split again. A stack moves, swaps, resizes and zooms as one split;
+`GotoSplit` and `Window#pick_surface` see only its shown surface. Saved
+sessions and `Undo` keep stacks with their order and shown surface.
 
 `Undo` reopens the latest closed surface, tab or window within
 `App#undo_timeout`: a surface returns to its place in the split tree when
@@ -362,8 +403,9 @@ end
 ```
 
 The surface widget carries the CSS class `surface`, plus `active` on each
-tab's active surface; the pane header is `.surface-header`. Windows carry
-`desktop-kit-window`. `App#css=` can restyle them.
+tab's active surface; the pane header is `.surface-header`. A float carries
+`floating` too and, whatever the style, shows its pane header and a framed
+card with a shadow. Windows carry `desktop-kit-window`. `App#css=` can restyle them.
 
 Closing asks the user first when a surface it closes has
 `Surface#confirm_close = true`: a split, a tab, a window, all windows or
@@ -502,7 +544,8 @@ an override restores the default.
 Window extras work on Wayland and do nothing elsewhere. `Decoration::Auto`
 uses the compositor's preference where it tells one (KDE's server
 decoration protocol), else client-side decorations; `Server` falls back to
-`Client` without that protocol, and `None` hides them.
+`Client` without that protocol, and `None` hides them: the window then
+has square corners, no outline and no shadow.
 `ToggleWindowDecorations` switches between `None` and the previous choice.
 Blur needs a compositor with `ext-background-effect-v1`; the region follows
 the window's rounded corners. Urgency uses `xdg-activation-v1`: a ringing
@@ -623,6 +666,21 @@ finishes. Share state between the hooks and the input hooks (still on
 the GTK thread) under a lock, or hand it over with `App#post` and a
 `Channel`.
 
+`threaded: thread`, a `RenderThread`, draws several canvases on one
+thread with one GL context, so programs, textures and caches made in one
+canvas's hooks serve every canvas of the thread. The canvases draw one
+after another; GL state one hook leaves is what the next finds. The
+thread starts with the first realized canvas and ends with the last one
+unrealized. `RenderThread.new(*, api, version, name)` picks the context
+as `Canvas.new` does; the canvases' own `api` and `version` are not used.
+`Canvas#render_thread` returns the thread of a threaded canvas.
+
+```crystal
+thread = DesktopKit::RenderThread.new(version: {4, 3}, name: "terminal")
+left = MyCanvas.new(threaded: thread)
+right = MyCanvas.new(threaded: thread)
+```
+
 Each frame goes to a framebuffer of exactly the canvas's size at the
 output's scale, fractional scales included (`#scale` is a `Float64` such
 as `1.5`), with the GL origin at the bottom left. The canvas keeps several
@@ -709,7 +767,8 @@ pointer would perform), or `nil` while the canvas is not on screen. The
 data is produced on demand: the block gets an `DesktopKit::Drag::Request` for
 each MIME type a target asks for and answers it once with
 `reply(bytes)` or `fail`, now or later. An `DesktopKit::Drag::Icon` holds
-straight RGBA pixels and the pointer's spot on them.
+straight RGBA pixels and the pointer's spot on them; `icon=` on the drag
+changes it while the drag runs. `#cancel_drag` cancels the running drag.
 
 ```crystal
 protected def on_drop_accept(drop : DesktopKit::Drop) : Bool
@@ -848,15 +907,20 @@ Built-in actions, all nested in `DesktopKit::Action`:
 | `app`    | `Quit`, `NewWindow` (ipc), `CloseAllWindows`, `ReloadConfig`, `PresentSurface(surface_id : UInt64)` (ipc), `DesktopNotification(title, body : String)`, `OpenUrl(url : String)`, `ToggleVisibility`, `TogglePanel(panel : String)` (ipc), `ShowGtkInspector`, `Undo`, `Redo`                                                                            |
 | `window` | `CloseWindow`, `ToggleMaximize`, `ToggleFullscreen`, `ToggleWindowDecorations`, `ToggleTabOverview`, `ToggleCommandPalette`, `ShowShortcuts`, `GotoWindow(direction : Previous/Next)`, `SetWindowTitle(title)`, `InitialSize(width, height)`, `SizeLimit(min_width, min_height, max_width, max_height)`, `ResizeWindow(width, height)`, `SetWindowTheme(appearance)`, `NewTab`, `GotoTab(index)`, `ResetWindowSize`, `ToggleBackgroundOpacity`, `ActivateKeyTable(table : String)`, `ActivateKeyTableOnce(table : String)`, `DeactivateKeyTable`, `DeactivateAllKeyTables` |
 | `tab`    | `CloseTab(mode : This/Other/Right)`, `MoveTab(amount : Int32)`, `MoveTabToNewWindow`, `SetTabTitle(title)`                                                                                                                                                                                    |
-| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard`, `StartSearch`, `EndSearch`, `Search(needle)`, `NavigateSearch(direction : Previous/Next)` |
+| `split`  | `NewSplit(direction)`, `GotoSplit(direction : Previous/Next/Left/Right/Up/Down)`, `SwapSplit(direction : Previous/Next/Left/Right/Up/Down/First)`, `MoveSurfaceToNewWindow`, `MoveSurfaceToPreviousWindow`, `ResizeSplit(direction, amount : UInt32)`, `EqualizeSplits`, `ToggleSplitZoom`, `ToggleFloat`, `MoveFloat(direction, amount : UInt32)`, `StackInto(direction)`, `Unstack(layout : Auto/Horizontal/Vertical)`, `GotoStacked(index)`, `CloseSurface`, `SetTitle(title)`, `PromptTitle(kind : Surface/Tab/Window)`, `RingBell`, `MouseVisibility(visible : Bool)`, `CopyTitleToClipboard`, `ToggleReadOnly`, `ShowOnScreenKeyboard`, `StartSearch`, `EndSearch`, `Search(needle)`, `NavigateSearch(direction : Previous/Next)` |
 
 Sizes are `UInt32` pixels. `SizeLimit` sets the smallest window size and
 treats 0 as no limit; GTK 4 windows have no largest size, so its maximum is
 ignored. `ResizeWindow` sizes the window so that its surface gets the size,
 only while the window shows one surface and is neither maximized nor
-fullscreen. `SetWindowTheme` sets the appearance of the whole application.
+fullscreen. A window that is not on screen yet opens at that size. `SetWindowTheme` sets the appearance of the whole application.
+`ToggleFloat` floats the focused split over its tab, or splits a float back
+in; `MoveFloat` moves a float by *amount* pixels, stopping at the tab's
+edges. On a float, `ResizeSplit` grows it to the right or down and shrinks
+it to the left or up, its top-left corner kept.
 `GotoTab` counts from 0 and also takes `GotoTab::PREVIOUS`, `NEXT` and
-`LAST`; previous and next wrap around, as `MoveTab` does.
+`LAST`; previous and next wrap around, as `MoveTab` does. `GotoStacked`
+counts the same way within the focused surface's stack.
 `ResetWindowSize` returns a window that is neither maximized nor
 fullscreen to its `InitialSize`, 800x600 by default.
 `ToggleBackgroundOpacity` makes a window opaque and back while the
@@ -1019,6 +1083,8 @@ translates:
 | Keyboard Shortcuts |
 | Leave blank to restore the default title. |
 | Main Menu |
+| Move Split to New Window |
+| Move Split to Previous Window |
 | Move Tab to New Window |
 | New Tab |
 | New Window |
@@ -1042,16 +1108,25 @@ translates:
 | Select Color |
 | Select Folder |
 | Select Font |
+| Show Next Stacked Split |
 | Show On-Screen Keyboard |
+| Show Previous Stacked Split |
 | Some windows ask before closing |
 | Split |
 | Split Down |
 | Split Left |
 | Split Right |
 | Split Up |
+| Stack With Left Split |
+| Stack With Right Split |
+| Stack With Split Above |
+| Stack With Split Below |
+| Swap With Next Split |
+| Swap With Previous Split |
 | Tab |
 | Tab Overview |
 | Toggle Background Opacity |
+| Toggle Floating Split |
 | Toggle Fullscreen |
 | Toggle Maximize |
 | Toggle Read-Only |
@@ -1062,6 +1137,7 @@ translates:
 | Unsaved work in this tab will be lost. |
 | Unsaved work in this window will be lost. |
 | Unsaved work will be lost. |
+| Unstack Split |
 | View Open Tabs |
 | Warning: Potentially Unsafe Paste |
 | Window |

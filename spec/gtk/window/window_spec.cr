@@ -191,6 +191,48 @@ describe DesktopKit::Window do
     end
   end
 
+  it "writes a snapshot of the window as a PNG" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      settle
+      path = File.tempname("window", ".png")
+      begin
+        window.snapshot(path).should be_true
+        bytes = File.open(path, &.read_bytes(UInt64, IO::ByteFormat::BigEndian))
+        bytes.should eq 0x89504E470D0A1A0A_u64
+        File.size(path).should be > 100
+        window.snapshot("/nonexistent/dir/shot.png").should be_false
+      ensure
+        File.delete?(path)
+      end
+    end
+  end
+
+  it "moves a split to a new window and back to the previous window" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      first = window.tabs.first.surfaces.first
+      second = first.split(:right)
+      settle
+      trigger(window, DesktopKit::Action::MoveSurfaceToNewWindow.new)
+      app.windows.size.should eq 2
+      other = app.windows.last
+      window.tabs.first.surfaces.should eq [first]
+      other.tabs.size.should eq 1
+      other.tabs.first.surfaces.should eq [second]
+      second.window.should eq other
+      eventually { app.active_window == other }.should be_true
+      trigger(other, DesktopKit::Action::MoveSurfaceToPreviousWindow.new)
+      window.tabs.size.should eq 2
+      window.tabs.last.surfaces.should eq [second]
+      second.window.should eq window
+      eventually { other.closed? }.should be_true
+      app.windows.should eq [window]
+    end
+  end
+
   it "closes other tabs and the tabs after the selected one" do
     app = TestApp.new
     run_steps(app) do
@@ -486,6 +528,30 @@ describe DesktopKit::Tab do
       tab.active_surface.should eq second
       second.focus
       third.focus
+      tab.active_surface.should eq third
+      app.active_surface.should eq third
+    end
+  end
+
+  it "swaps the focused split with another" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      tab = window.tabs.first
+      first = tab.surfaces.first
+      second = first.split(:right)
+      third = second.split(:down)
+      settle
+      trigger(window, DesktopKit::Action::SwapSplit.new(:first))
+      tab.surfaces.should eq [third, second, first]
+      tab.active_surface.should eq third
+      trigger(window, DesktopKit::Action::SwapSplit.new(:right))
+      tab.surfaces.should eq [second, third, first]
+      trigger(window, DesktopKit::Action::SwapSplit.new(:down))
+      tab.surfaces.should eq [second, first, third]
+      trigger(window, DesktopKit::Action::SwapSplit.new(:previous))
+      tab.surfaces.should eq [second, third, first]
+      settle
       tab.active_surface.should eq third
       app.active_surface.should eq third
     end

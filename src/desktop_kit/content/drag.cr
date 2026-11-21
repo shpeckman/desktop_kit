@@ -142,6 +142,17 @@ module DesktopKit
       DragAction.from_gdk(C.gdk_drag_get_selected_action(self))
     end
 
+    # Shows *icon* under the pointer from now on.
+    def icon=(icon : Icon) : Icon
+      raise ArgumentError.new("icon pixels do not match its size") unless icon.pixels.size == icon.width * icon.height * 4
+      bytes = Stream.bytes(icon.pixels)
+      texture = C.gdk_memory_texture_new(icon.width, icon.height, C::GdkMemoryFormat::R8g8b8a8, bytes, icon.width * 4)
+      C.g_bytes_unref(bytes)
+      C.gtk_drag_icon_set_from_paintable(self, texture, icon.hot_x, icon.hot_y)
+      C.g_object_unref(texture)
+      icon
+    end
+
     # Ends the drag once; returns whether this call ended it.
     protected def end! : Bool
       ended = @ended

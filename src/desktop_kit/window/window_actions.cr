@@ -37,7 +37,9 @@ module DesktopKit
     end
 
     protected def toggle_overview : Nil
-      C.adw_tab_overview_set_open(@overview, C.adw_tab_overview_get_open(@overview) != 0 ? 0 : 1)
+      open = C.adw_tab_overview_get_open(@overview) != 0
+      overview_page.visible = true unless open
+      C.adw_tab_overview_set_open(@overview, open ? 0 : 1)
     end
 
     protected def default_size(width : Int32, height : Int32) : Nil
@@ -83,17 +85,36 @@ module DesktopKit
     end
 
     # Grows or shrinks the window so that its only surface gets *width* by
-    # *height* pixels. Does nothing while the window is maximized or
-    # fullscreen, or shows more than one surface.
+    # *height* pixels; a window not shown yet opens at that size. Does
+    # nothing while the window is maximized or fullscreen, or shows more
+    # than one surface.
     protected def resize(width : Int32, height : Int32) : Bool
       return false if maximized? || fullscreen?
       return false unless page_count == 1
       surfaces = tabs.first?.try(&.surfaces) || return false
       return false unless surfaces.size == 1
       host = surfaces.first.host
-      return false unless host.mapped?
-      default_size(@widget.width + width - host.width, @widget.height + height - host.height)
+      if host.mapped? && host.width > 0
+        default_size(@widget.width + width - host.width, @widget.height + height - host.height)
+      else
+        # Not laid out: the window opens at its natural size around a host
+        # that asks for the size. `#settle_fit` takes the request back.
+        host.size_request(width, height)
+        default_size(-1, -1)
+        @pending_fit = {host, width, height}
+      end
       true
+    end
+
+    # Ends the size request `#resize` made of a host not laid out, once
+    # it is: the window can shrink again, and bars wider than the host,
+    # which widened the natural size, no longer count.
+    private def settle_fit : Nil
+      host, width, height = @pending_fit || return
+      return unless host.mapped? && host.width > 0
+      @pending_fit = nil
+      host.size_request(-1, -1)
+      resize(width, height)
     end
   end
 

@@ -212,7 +212,7 @@ module DesktopKit
       # Routes the proxy's events to *block*.
       def listen(&block : UInt32, Wl::Argument* ->) : Nil
         @listener = Handles.retain(Listener.new { |opcode, args| block.call(opcode, args) })
-        Wl.wl_proxy_add_dispatcher(@to_unsafe, DISPATCH, @listener, Pointer(Void).null)
+        Wl.wl_proxy_add_dispatcher(@to_unsafe, DISPATCH.pointer, @listener, Pointer(Void).null)
       end
 
       # Sends destructor request *opcode*, or destroys the proxy locally

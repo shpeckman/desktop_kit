@@ -1,0 +1,6 @@
+# data/gir/Gsk-4.0.txt
+# Gsk symbols of DesktopKit::C (src/desktop_kit/c/gsk.cr); see tools/gir/generator.cr.
+
+# rendering a window snapshot
+gsk_renderer_render_texture
+gsk_render_node_unref

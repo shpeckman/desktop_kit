@@ -2,10 +2,11 @@
 module DesktopKit
   # :nodoc:
   # Immutable binary tree of views. Nodes live in one array with the root
-  # at `ROOT`; a node is a view (a leaf) or a `Split` holding the handles of its
-  # two children. Every operation returns a new tree, and trees share node
-  # arrays, which are never mutated after construction. A handle is an index
-  # into one tree's array and is only valid for that tree.
+  # at `ROOT`; a node is a leaf, a view or a `Stack` of views, or a
+  # `Split` holding the handles of its two children. Every operation returns
+  # a new tree, and trees share node arrays, which are never mutated after
+  # construction. A handle is an index into one tree's array and is only
+  # valid for that tree; the views of a stack share its handle.
   struct SplitTree(V)
     include Enumerable({Int32, V})
 
@@ -52,6 +53,14 @@ module DesktopKit
       end
     end
 
+    # Leaf of several views sharing one place, the one at *index* shown;
+    # it holds at least two.
+    record Stack(T), views : Array(T), index : Int32 do
+      def view : T
+        @views.unsafe_fetch(@index)
+      end
+    end
+
     # Rectangle of a node on the unit square (`#spatial`).
     record Slot, x : Float64, y : Float64, width : Float64, height : Float64 do
       def max_x : Float64
@@ -75,21 +84,21 @@ module DesktopKit
 
     getter zoomed : Int32?
 
-    protected getter nodes : Array(V | Split)
+    protected getter nodes : Array(V | Split | Stack(V))
 
     # Creates an empty tree.
     def initialize
-      @nodes = [] of V | Split
+      @nodes = [] of V | Split | Stack(V)
       @zoomed = nil
     end
 
     # Creates a tree holding only *view*.
     def initialize(view : V)
-      @nodes = [view] of V | Split
+      @nodes = [view] of V | Split | Stack(V)
       @zoomed = nil
     end
 
-    protected def initialize(@nodes : Array(V | Split), @zoomed : Int32?)
+    protected def initialize(@nodes : Array(V | Split | Stack(V)), @zoomed : Int32?)
     end
 
     def empty? : Bool
@@ -106,7 +115,7 @@ module DesktopKit
     end
 
     # Returns the node at *handle*. Raises `IndexError` for an invalid handle.
-    def [](handle : Int32) : V | Split
+    def [](handle : Int32) : V | Split | Stack(V)
       check(handle)
       @nodes.unsafe_fetch(handle)
     end
@@ -117,17 +126,34 @@ module DesktopKit
       @nodes.same?(other.nodes) && @zoomed == other.zoomed
     end
 
-    # Returns the view at *handle*. Raises `ArgumentError` when it is a split.
+    # Returns the view at *handle*, the shown one of a stack. Raises
+    # `ArgumentError` when it is a split.
     def view(handle : Int32) : V
-      node = self[handle]
-      raise ArgumentError.new("split tree node #{handle} is a split") if node.is_a?(Split)
-      node
+      node = leaf(handle)
+      node.is_a?(Stack(V)) ? node.view : node
     end
 
-    # Yields the handle and view of every leaf, in node order.
+    # Returns the views at *handle*: a stack's in order, else the one view.
+    # Raises `ArgumentError` when it is a split.
+    def views(handle : Int32) : Array(V)
+      node = leaf(handle)
+      node.is_a?(Stack(V)) ? node.views.dup : [node]
+    end
+
+    # Returns whether the leaf at *handle* is a stack.
+    def stacked?(handle : Int32) : Bool
+      self[handle].is_a?(Stack(V))
+    end
+
+    # Yields the handle and view of every view in node order, the hidden
+    # views of a stack included; stacked views share their handle.
     def each(& : {Int32, V} ->) : Nil
       @nodes.each_with_index do |node, handle|
-        yield({handle, node}) unless node.is_a?(Split)
+        case node
+        when Split    then next
+        when Stack(V) then node.views.each { |view| yield({handle, view}) }
+        else               yield({handle, node})
+        end
       end
     end
 
@@ -186,7 +212,7 @@ module DesktopKit
 
       # Existing handles stay valid except *at*: its view moves to the end.
       offset = @nodes.size
-      nodes = Array(V | Split).new(offset + other.node_count + 1)
+      nodes = Array(V | Split | Stack(V)).new(offset + other.node_count + 1)
       nodes.concat(@nodes)
       other.nodes.each { |node| nodes << (node.is_a?(Split) ? node.offset(offset) : node) }
       moved = nodes.size
@@ -209,9 +235,77 @@ module DesktopKit
       check(at)
       return SplitTree(V).new if at == ROOT
       # Renumbers nodes: callers re-`locate` their handles.
-      nodes = Array(V | Split).new(@nodes.size)
+      nodes = Array(V | Split | Stack(V)).new(@nodes.size)
       zoomed = prune(nodes, ROOT, at)
       SplitTree(V).new(nodes, zoomed)
+    end
+
+    # Returns a tree where the leaves at *a* and *b* trade places, a stack
+    # moving whole. Handles stay valid; the zoom follows its leaf. Raises
+    # `ArgumentError` when either is a split.
+    def swap(a : Int32, b : Int32) : SplitTree(V)
+      first = leaf(a)
+      second = leaf(b)
+      return self if a == b
+      nodes = @nodes.dup
+      nodes[a] = second
+      nodes[b] = first
+      zoomed = case @zoomed
+               when a then b
+               when b then a
+               else        @zoomed
+               end
+      SplitTree(V).new(nodes, zoomed)
+    end
+
+    # Returns a tree where *view*, not yet in the tree, joins the leaf at
+    # *at* after its shown view and shows. Handles stay valid and the zoom
+    # is kept. Raises `ArgumentError` when *at* is a split or *view* is in
+    # the tree.
+    def join(at : Int32, view : V) : SplitTree(V)
+      node = leaf(at)
+      raise ArgumentError.new("the view is already in the tree") if locate(view)
+      views = node.is_a?(Stack(V)) ? node.views.dup : [node]
+      index = node.is_a?(Stack(V)) ? node.index + 1 : 1
+      views.insert(index, view)
+      with_node(at, Stack(V).new(views, index))
+    end
+
+    # Returns a tree where the stack at *at* shows its view at *index*.
+    # Raises `ArgumentError` when *at* is not a stack or *index* is outside
+    # it.
+    def show(at : Int32, index : Int32) : SplitTree(V)
+      stack = self[at]
+      raise ArgumentError.new("split tree node #{at} is not a stack") unless stack.is_a?(Stack(V))
+      size = stack.views.size
+      raise ArgumentError.new("stack index #{index} outside 0...#{size}") unless 0 <= index < size
+      with_node(at, stack.copy_with(index: index))
+    end
+
+    # Returns a tree without *view*. A stacked view leaves its stack, which
+    # then shows the view after it, or the one before when it was last; a
+    # stack left with one view turns back into a plain leaf, and handles
+    # stay valid. Any other view goes as by `#remove`. Raises
+    # `ArgumentError` when *view* is not in the tree.
+    def without(view : V) : SplitTree(V)
+      handle = locate(view) || raise ArgumentError.new("the view is not in the tree")
+      stack = @nodes.unsafe_fetch(handle)
+      return remove(handle) unless stack.is_a?(Stack(V))
+      views = stack.views.dup
+      index = views.index(view) || raise ArgumentError.new("the view is not in the tree")
+      views.delete_at(index)
+      shown = stack.index
+      shown -= 1 if index < shown || (index == shown && shown == views.size)
+      with_node(handle, views.size == 1 ? views.first : Stack(V).new(views, shown))
+    end
+
+    # Returns a tree where the stacked *view* leaves its stack to split the
+    # stack's place with it, *view* second along *layout*. The zoom is
+    # reset. Raises `ArgumentError` when *view* is not stacked.
+    def unstack(view : V, layout : Layout) : SplitTree(V)
+      handle = locate(view)
+      raise ArgumentError.new("the view is not stacked") unless handle && stacked?(handle)
+      without(view).split(handle, layout.horizontal? ? Direction::Right : Direction::Down, view)
     end
 
     # Returns a tree where each split shares its space by the number of
@@ -291,14 +385,16 @@ module DesktopKit
       end
 
       boxes = [] of Box
-      each do |handle, view|
+      @nodes.each_with_index do |node, handle|
+        next if node.is_a?(Split)
         slot = slots.unsafe_fetch(handle)
         next if slot.width == 0 || slot.height == 0
         x = cell(slot.x / min_width)
         y = cell(slot.y / min_height)
         width = Math.max(cell(slot.max_x / min_width) - x, 1)
         height = Math.max(cell(slot.max_y / min_height) - y, 1)
-        boxes << Box.new(x, y, width, height, view.to_s)
+        label = node.is_a?(Stack(V)) ? "#{node.view} #{node.index + 1}/#{node.views.size}" : node.to_s
+        boxes << Box.new(x, y, width, height, label)
       end
 
       cell_width = boxes.max_of(&.label.size) + 4
@@ -314,6 +410,20 @@ module DesktopKit
           io << '\n'
         end
       end
+    end
+
+    # The leaf at *handle*. Raises `ArgumentError` when it is a split.
+    private def leaf(handle : Int32) : V | Stack(V)
+      node = self[handle]
+      raise ArgumentError.new("split tree node #{handle} is a split") if node.is_a?(Split)
+      node
+    end
+
+    # A copy with *node* at *at*; handles stay valid and the zoom is kept.
+    private def with_node(at : Int32, node : V | Split | Stack(V)) : SplitTree(V)
+      nodes = @nodes.dup
+      nodes[at] = node
+      SplitTree(V).new(nodes, @zoomed)
     end
 
     private def check(handle : Int32) : Nil
@@ -396,7 +506,7 @@ module DesktopKit
 
     # Appends the subtree at *current* without *target* to *nodes* in depth
     # first order and returns the new handle of the zoomed node, if kept.
-    private def prune(nodes : Array(V | Split), current : Int32, target : Int32) : Int32?
+    private def prune(nodes : Array(V | Split | Stack(V)), current : Int32, target : Int32) : Int32?
       zoomed = nodes.size if current == @zoomed
       node = @nodes.unsafe_fetch(current)
       unless node.is_a?(Split)
@@ -462,6 +572,17 @@ module DesktopKit
         io << ")\n"
         write_node(io, node.left, depth + 1)
         write_node(io, node.right, depth + 1)
+      elsif node.is_a?(Stack(V))
+        io << "stack: "
+        node.views.each_with_index do |view, index|
+          io << ", " unless index == 0
+          if index == node.index
+            io << '[' << view << ']'
+          else
+            io << view
+          end
+        end
+        io << '\n'
       else
         io << "leaf: " << node << '\n'
       end

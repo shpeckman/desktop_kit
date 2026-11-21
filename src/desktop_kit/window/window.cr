@@ -10,11 +10,14 @@ module DesktopKit
   class Window
     # :nodoc:
     # `.opaque` rules carry one class more than `WindowStyle#to_css` so they
-    # win and restore opaque backgrounds.
+    # win and restore opaque backgrounds. `.undecorated` squares the frame
+    # libadwaita keeps on a window GTK does not decorate (its hidden title
+    # bar leaves the `csd` class on).
     STYLE = <<-CSS
       .key-state { margin: 12px; padding: 6px 12px; border-radius: 8px; font-feature-settings: "tnum"; }
       window.desktop-kit-window.opaque { background-color: @window_bg_color; }
       window.desktop-kit-window.opaque .surface { background-color: @view_bg_color; }
+      window.desktop-kit-window.undecorated { border-radius: 0; outline: none; box-shadow: none; }
       CSS
 
     # The title the user chose; shown instead of the tab titles while set.
@@ -40,6 +43,9 @@ module DesktopKit
     @winproto : Winproto?
     @palette : CommandPalette?
     @initial_size = {800, 600}
+    # The host and the size `#resize` asked for before the host was laid
+    # out.
+    @pending_fit : {Widget, Int32, Int32}? = nil
     @opaque = false
     @tabs_in_header = false
     @subtitle : String?
@@ -65,6 +71,7 @@ module DesktopKit
       @tab_bar = Widget.new(C.adw_tab_bar_new)
       @toolbar = Widget.new(C.adw_toolbar_view_new)
       @key_state = Widget.new(C.gtk_label_new(nil))
+      @overlay_parent = Widget.new(C.gtk_overlay_new)
       @widget.add_css_class("desktop-kit-window")
       layout
       apply_style(@app.window_style)
@@ -109,7 +116,10 @@ module DesktopKit
     # bar and the row below it.
     protected def apply_style(style : WindowStyle) : Nil
       header = style.header_bar?
-      @header.visible = !@panel
+      # Hidden, not only unrevealed: an unrevealed bar still counts in the
+      # window's smallest width.
+      @header.visible = header && !@panel
+      @tab_bar.visible = header
       C.adw_toolbar_view_set_reveal_top_bars(@toolbar, header ? 1 : 0)
       # No header bar: clear the tab view shortcuts too, else libadwaita's
       # capture-phase keys eat Ctrl+Tab/Alt+digits.
@@ -223,10 +233,11 @@ module DesktopKit
     getter app_id : String?
 
     # Sets the application id the desktop groups this window under, for its
-    # icon and window rules; `nil` restores the application's own. Raises
-    # `ArgumentError` when *app_id* is not a valid application id.
+    # icon and window rules; `nil` restores the application's own. Any name
+    # will do, such as `"scratchpad"`. Raises `ArgumentError` when *app_id*
+    # is empty or holds a NUL.
     def app_id=(app_id : String?) : String?
-      if app_id && C.g_application_id_is_valid(app_id) == 0
+      if app_id && (app_id.empty? || app_id.includes?('\0'))
         raise ArgumentError.new("invalid application id: #{app_id.inspect}")
       end
       @app_id = app_id
@@ -333,6 +344,32 @@ module DesktopKit
       toast = C.adw_toast_new(message)
       C.adw_toast_set_timeout(toast, timeout.total_seconds.ceil.to_u32)
       C.adw_toast_overlay_add_toast(@toasts, toast)
+    end
+
+    # Writes what the window shows to *path* as a PNG at the output's
+    # scale, and returns whether it could: false while the window is not
+    # shown or when the file cannot be written.
+    def snapshot(path : Path | String) : Bool
+      return false if @closed
+      surface = C.gtk_native_get_surface(@widget)
+      renderer = C.gtk_native_get_renderer(@widget)
+      width = @widget.width.to_f
+      height = @widget.height.to_f
+      return false if surface.null? || renderer.null? || width <= 0 || height <= 0
+      scale = C.gdk_surface_get_scale(surface)
+      paintable = C.gtk_widget_paintable_new(@widget)
+      snapshot = C.gtk_snapshot_new
+      C.gtk_snapshot_scale(snapshot, scale.to_f32, scale.to_f32)
+      C.gdk_paintable_snapshot(paintable, snapshot, width, height)
+      C.g_object_unref(paintable)
+      node = C.gtk_snapshot_free_to_node(snapshot)
+      return false if node.null?
+      texture = C.gsk_renderer_render_texture(renderer, node, Pointer(Void).null)
+      C.gsk_render_node_unref(node)
+      return false if texture.null?
+      saved = C.gdk_texture_save_to_png(texture, path.to_s) != 0
+      C.g_object_unref(texture)
+      saved
     end
 
     # Returns the tabs in their order on the tab bar.
@@ -446,6 +483,39 @@ module DesktopKit
       true
     end
 
+    # Moves *surface* into a tab of a new window, with its tab when it is
+    # alone there.
+    protected def move_surface_to_new_window(surface : Surface) : Bool
+      tab = surface.tab || return false
+      return move_to_new_window(tab) if tab.surface_count == 1
+      tab.detach(surface, release_widgets: true)
+      window = @app.open_window
+      window.add_tab(Tab.new(@app, surface), 0)
+      window.present
+      true
+    end
+
+    # Moves *surface* into a new tab of *window*, with its tab when it is
+    # alone there, and presents *window*.
+    protected def move_surface(surface : Surface, window : Window) : Bool
+      tab = surface.tab || return false
+      return false if window == self || window.closed?
+      if tab.surface_count > 1
+        tab.detach(surface, release_widgets: true)
+        window.add_tab(Tab.new(@app, surface), nil)
+      else
+        page = tab.page(self)
+        return false if page.null?
+        selected = C.adw_tab_view_get_selected_page(window.tab_view)
+        position = selected.null? ? 0 : C.adw_tab_view_get_page_position(window.tab_view, selected) + 1
+        C.adw_tab_view_transfer_page(@tab_view, page, window.tab_view, position)
+        window.select(tab)
+      end
+      window.present
+      surface.grab_focus
+      true
+    end
+
     protected def close_tabs(tab : Tab, mode : Action::CloseTab::Mode) : Bool
       page = tab.page(self)
       return false if @closed || page.null?
@@ -515,7 +585,7 @@ module DesktopKit
       toolbar = @toolbar
       C.adw_toolbar_view_add_top_bar(toolbar, header)
       C.adw_toolbar_view_add_top_bar(toolbar, tab_bar)
-      overlay = C.gtk_overlay_new
+      overlay = @overlay_parent.to_unsafe
       C.gtk_overlay_set_child(overlay, @tab_view)
       @key_state.add_css_class("osd")
       @key_state.add_css_class("key-state")
@@ -531,6 +601,19 @@ module DesktopKit
       C.adw_tab_overview_set_child(@overview, toolbar)
       C.adw_tab_overview_set_enable_new_tab(@overview, 1)
       C.adw_application_window_set_content(@widget, @overview)
+      # The overview's own page (its last child) counts in the window's
+      # smallest size (166 x 126) even while closed: it stays hidden until
+      # `#toggle_overview` opens it. libadwaita unmaps it once closed. A
+      # panel keeps it: its size comes from its edge, and without a tab it
+      # has nothing else to give it one.
+      return if @panel
+      page = overview_page
+      page.visible = false
+      Signals.connect(page, "unmap", -> { overview_page.visible = false })
+    end
+
+    private def overview_page : Widget
+      Widget.new(C.gtk_widget_get_last_child(@overview))
     end
 
     private def button(icon : Icon, tooltip : String, action : Action) : Void*
@@ -597,6 +680,7 @@ module DesktopKit
         winproto.urgent = true if @urgent
       end
       surface = C.gtk_native_get_surface(@widget)
+      Signals.connect(surface, "layout", ->(_width : Int32, _height : Int32) { settle_fit })
       Signals.notify(surface, "state", -> { sync_suspended })
       sync_app_id
       sync_shortcuts
@@ -649,6 +733,7 @@ module DesktopKit
       winproto = @winproto
       csd = winproto ? winproto.client_side?(@decoration) : !@decoration.none?
       C.gtk_window_set_decorated(@widget, csd ? 1 : 0)
+      csd ? @widget.remove_css_class("undecorated") : @widget.add_css_class("undecorated")
       winproto.try(&.sync_decoration(@decoration))
       sync_blur
     end
@@ -708,6 +793,8 @@ module DesktopKit
     end
 
     private def destroyed : Nil
+      @pick = nil
+      forget_overlays
       release_idle
       stop_sequence_timer
       forget unless @closed
