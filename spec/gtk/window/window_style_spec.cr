@@ -91,31 +91,18 @@ describe DesktopKit::WindowStyle do
     css.should contain ".surface:not(.active) { opacity: 0.5; }"
   end
 
-  it "rejects a negative gap or radius and a tint that is no color" do
+  it "rejects a negative gap or radius" do
     expect_raises(ArgumentError, "gap -1 is negative") { DesktopKit::WindowStyle.new(gap: -1) }
     expect_raises(ArgumentError, "radius -2 is negative") { DesktopKit::WindowStyle.new(radius: -2) }
-    expect_raises(ArgumentError, "tint red is not #rrggbb") { DesktopKit::WindowStyle.new(tint: "red") }
   end
 
-  it "shapes the cards and the window corners by gap and radius" do
+  it "shapes the cards by gap and radius and leaves the window's corners to the theme" do
     DesktopKit::WindowStyle.new(gap: 8, radius: 10).to_css.should be_empty
     css = DesktopKit::WindowStyle.new(cards: true, gap: 8, radius: 10).to_css
     css.should contain ".surface { margin: 8px; border-radius: 10px;"
     css.should contain "tabview { margin: 0 8px 8px 8px; }"
     css.should contain ".surface-header { padding: 4px 8px 4px 14px; }"
-    css.should contain ":not(.maximized)"
-    css.should contain "{ border-radius: 26px; }"
-  end
-
-  it "styles pill tabs and a tint" do
-    css = DesktopKit::WindowStyle.new(pill_tabs: true).to_css
-    css.should contain "tabbar tab { border-radius: 9999px; }"
-    css.should contain "tabbar tab > image"
-    css.should contain "tabbar tab { padding: 0 6px; border: none; }"
-    css = DesktopKit::WindowStyle.new(tint: "#5a2d2d").to_css
-    css.should contain "linear-gradient(135deg, alpha(#5a2d2d, 0.4), alpha(#5a2d2d, 0.1))"
-    css.should contain "headerbar"
-    css.should_not contain "@window_bg_color"
+    css.should_not contain "window.desktop-kit-window {"
   end
 end
 
