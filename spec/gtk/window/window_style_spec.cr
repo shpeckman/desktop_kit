@@ -85,8 +85,11 @@ describe DesktopKit::WindowStyle do
 
   it "has no style sheet by default" do
     DesktopKit::WindowStyle.new.to_css.should be_empty
-    css = DesktopKit::WindowStyle.new(cards: true, opacity: 0.8, unfocused_opacity: 0.5).to_css
-    css.should contain "alpha(@window_bg_color, 0.8)"
+    DesktopKit::WindowStyle.new.opacity_css.should be_empty
+    style = DesktopKit::WindowStyle.new(cards: true, opacity: 0.8, unfocused_opacity: 0.5)
+    style.opacity_css.should contain "alpha(@window_bg_color, 0.8)"
+    css = style.to_css
+    css.should_not contain "@window_bg_color"
     css.should contain "border-radius"
     css.should contain ".surface:not(.active) { opacity: 0.5; }"
   end

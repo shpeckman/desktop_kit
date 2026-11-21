@@ -382,7 +382,7 @@ plain look, with the header bar on and the other options off:
 | `radius`            | corner radius of the cards, in pixels (12)                     |
 | `tabs_in_header`    | the tab bar in the header bar, in place of the window title, always shown |
 | `header_bar`        | the header bar with the title, the tabs and their buttons; `false` leaves windows without a title bar of their own and passes libadwaita's tab keys (Ctrl+Tab, Ctrl+Page Up, Alt+1 …) to the content |
-| `opacity`           | opacity of the window background, 0 to 1; pair it with `Window#background_blur=` |
+| `opacity`           | opacity of the window background, 0 to 1, also over a system theme that paints it; pair it with `Window#background_blur=` |
 | `unfocused_opacity` | opacity of the surfaces of a split other than the tab's active one, 0 to 1 |
 
 The style applies to open windows at once. `on_window` adds header bar

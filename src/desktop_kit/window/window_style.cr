@@ -57,14 +57,9 @@ module DesktopKit
 
     # :nodoc:
     # The style sheet of the options, for windows with the `desktop-kit-window`
-    # class; empty for the defaults.
+    # class; empty for the defaults. Leaves out what `#opacity_css` holds.
     def to_css : String
       String.build do |css|
-        if @opacity < 1.0
-          css << "window.desktop-kit-window { background-color: alpha(@window_bg_color, #{@opacity}); }\n"
-          css << "window.desktop-kit-window headerbar, window.desktop-kit-window tabbar .box, " \
-                 "window.desktop-kit-window toolbarview > .top-bar { background: none; box-shadow: none; }\n"
-        end
         if @cards
           css << "window.desktop-kit-window .surface { margin: #{@gap}px; border-radius: #{@radius}px; " \
                  "background-color: alpha(@view_bg_color, #{@opacity}); " \
@@ -77,6 +72,17 @@ module DesktopKit
           css << "window.desktop-kit-window .surface:not(.active) { opacity: #{@unfocused_opacity}; }\n"
         end
       end
+    end
+
+    # :nodoc:
+    # The style sheet of `#opacity`, empty for an opaque background. Apart
+    # from `#to_css`: it loads over the user's gtk.css, since a theme that
+    # paints the window itself would leave the option without effect.
+    def opacity_css : String
+      return "" unless @opacity < 1.0
+      "window.desktop-kit-window { background-color: alpha(@window_bg_color, #{@opacity}); }\n" \
+      "window.desktop-kit-window headerbar, window.desktop-kit-window tabbar .box, " \
+      "window.desktop-kit-window toolbarview > .top-bar { background: none; box-shadow: none; }\n"
     end
   end
 
@@ -103,6 +109,7 @@ module DesktopKit
       # Provider ivar is `@runtime_style`: `@style` collided with a spec
       # subclass ivar (subclasses share the ivar namespace).
       C.gtk_css_provider_load_from_string(@runtime_style, Surface::STYLE + Window::STYLE + @window_style.to_css)
+      C.gtk_css_provider_load_from_string(@opacity_style, @window_style.opacity_css)
     end
   end
 end
