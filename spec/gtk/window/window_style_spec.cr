@@ -220,12 +220,14 @@ describe "window style" do
       settle
       inside?(tab_bar, window.@header).should be_true
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 0
+      window.@title_widget.visible?.should be_false
       other = app.new_window
       inside?(other.@tab_bar, other.@header).should be_true
       app.window_style = DesktopKit::WindowStyle.new
       settle
       inside?(tab_bar, window.@header).should be_false
       WindowStyleSpecLib.adw_tab_bar_get_autohide(tab_bar).should eq 1
+      window.@title_widget.visible?.should be_true
     end
   end
 

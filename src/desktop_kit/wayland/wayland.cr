@@ -20,6 +20,8 @@ module DesktopKit
       Decoration
       IdleNotifier
       IdleNotification
+      KdeBlurManager
+      KdeBlur
     end
 
     # Each interface: wire name, version, request and event signatures in
@@ -37,10 +39,13 @@ module DesktopKit
       {name: "org_kde_kwin_server_decoration", version: 1, requests: ["", "u"], events: ["u"]},
       {name: "ext_idle_notifier_v1", version: 1, requests: ["", "nuo"], events: [] of String},
       {name: "ext_idle_notification_v1", version: 1, requests: [""], events: ["", ""]},
+      {name: "org_kde_kwin_blur_manager", version: 1, requests: ["no", "o"], events: [] of String},
+      {name: "org_kde_kwin_blur", version: 1, requests: ["", "?o", ""], events: [] of String},
     ]
 
     # Globals bound from the registry; the others are created from them.
-    GLOBALS = {Iface::Activation, Iface::BackgroundEffectManager, Iface::DecorationManager, Iface::IdleNotifier}
+    GLOBALS = {Iface::Activation, Iface::BackgroundEffectManager, Iface::DecorationManager, Iface::IdleNotifier,
+               Iface::KdeBlurManager}
 
     # Request opcodes.
     DISPLAY_GET_REGISTRY      = 1_u32
@@ -62,6 +67,11 @@ module DesktopKit
     DECORATION_REQUEST_MODE   = 1_u32
     IDLE_NOTIFIER_GET         = 1_u32
     IDLE_NOTIFICATION_DESTROY = 0_u32
+    KDE_BLUR_MANAGER_CREATE   = 0_u32
+    KDE_BLUR_MANAGER_UNSET    = 1_u32
+    KDE_BLUR_COMMIT           = 0_u32
+    KDE_BLUR_SET_REGION       = 1_u32
+    KDE_BLUR_RELEASE          = 2_u32
 
     # Event opcodes.
     REGISTRY_GLOBAL             = 0_u32
@@ -242,6 +252,7 @@ module DesktopKit
       getter background_effect : Proxy?
       getter decoration : Proxy?
       getter idle_notifier : Proxy?
+      getter kde_blur : Proxy?
       getter? blur = false
       # The compositor's preferred `org_kde_kwin_server_decoration` mode.
       getter default_mode : UInt32?
@@ -288,6 +299,8 @@ module DesktopKit
           proxy.listen { |opcode, args| @blur = args[0].u & CAPABILITY_BLUR != 0 if opcode == EFFECT_MANAGER_CAPABILITIES }
         when .idle_notifier?
           @idle_notifier = proxy
+        when .kde_blur_manager?
+          @kde_blur = proxy
         when .decoration_manager?
           @decoration = proxy
           proxy.listen { |opcode, args| @default_mode = args[0].u if opcode == DECORATION_DEFAULT_MODE }

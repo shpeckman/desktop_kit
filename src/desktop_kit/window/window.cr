@@ -139,6 +139,8 @@ module DesktopKit
       C.g_object_unref(@tab_bar)
       @tab_bar.hexpand = inside
       @title_box.hexpand = inside
+      # The tabs name the window there: its title would say it twice.
+      @title_widget.visible = !inside
       C.adw_tab_bar_set_autohide(@tab_bar, inside ? 0 : 1)
     end
 

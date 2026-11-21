@@ -2,8 +2,8 @@
 module DesktopKit
   # :nodoc:
   # The Wayland extras of one realized window: KDE server decorations,
-  # background blur (`ext_background_effect_v1`) and urgency through
-  # `xdg_activation_v1`. `.attach` returns nil off Wayland. Use it on the
+  # background blur (`ext_background_effect_v1`, else KWin's
+  # `org_kde_kwin_blur`) and urgency through `xdg_activation_v1`. `.attach` returns nil off Wayland. Use it on the
   # GTK thread only.
   class Winproto
     # Modes of `org_kde_kwin_server_decoration_manager`.
@@ -30,6 +30,7 @@ module DesktopKit
 
     @decoration : Wayland::Proxy?
     @effect : Wayland::Proxy?
+    @kde_blur : Wayland::Proxy?
     @token : Wayland::Proxy?
     @slices : Array(Slice)?
 
@@ -80,10 +81,9 @@ module DesktopKit
     # Sets the blur region behind the window, or clears it unless
     # *enabled*; *csd* tells whether GTK draws the decorations.
     def sync_blur(enabled : Bool, csd : Bool) : Nil
-      effect = @effect || return
-      return unless @globals.blur?
+      return unless blur?
       unless enabled
-        effect.request(Wayland::EFFECT_SET_BLUR_REGION, nil) if @slices
+        clear_blur if @slices
         @slices = nil
         return
       end
@@ -92,7 +92,7 @@ module DesktopKit
       region = Wayland::Proxy.new(Wayland.request(@globals.compositor, Wayland::COMPOSITOR_CREATE_REGION,
         {Wayland::NEW_ID}, created: :region), :region)
       slices.each { |slice| region.request(Wayland::REGION_ADD, slice.x, slice.y, slice.width, slice.height) }
-      effect.request(Wayland::EFFECT_SET_BLUR_REGION, region)
+      blur(region)
       region.destroy(Wayland::REGION_DESTROY)
       @slices = slices
     end
@@ -121,23 +121,59 @@ module DesktopKit
     def release : Nil
       @token.try(&.destroy(Wayland::TOKEN_DESTROY))
       @effect.try(&.destroy(Wayland::EFFECT_DESTROY))
+      @kde_blur.try(&.destroy(Wayland::KDE_BLUR_RELEASE))
       @decoration.try(&.destroy(Wayland::DECORATION_RELEASE))
-      @token = @effect = @decoration = nil
+      @token = @effect = @kde_blur = @decoration = nil
+    end
+
+    # The `ext_background_effect_v1` object, while the compositor blurs
+    # through it.
+    private def effect : Wayland::Proxy?
+      @effect if @globals.blur?
+    end
+
+    private def blur? : Bool
+      !effect.nil? || !@globals.kde_blur.nil?
+    end
+
+    # Blurs *region* through the standard protocol, else through KWin's,
+    # whose object lives from the first region to `#clear_blur`. Both take
+    # effect with the surface's next commit.
+    private def blur(region : Wayland::Proxy) : Nil
+      if effect = self.effect
+        effect.request(Wayland::EFFECT_SET_BLUR_REGION, region)
+      elsif manager = @globals.kde_blur
+        blur = @kde_blur ||= manager.create(Wayland::KDE_BLUR_MANAGER_CREATE, :kde_blur, Wayland::NEW_ID, @wl_surface)
+        blur.request(Wayland::KDE_BLUR_SET_REGION, region)
+        blur.request(Wayland::KDE_BLUR_COMMIT)
+      end
+    end
+
+    private def clear_blur : Nil
+      if effect = self.effect
+        effect.request(Wayland::EFFECT_SET_BLUR_REGION, nil)
+      elsif manager = @globals.kde_blur
+        manager.request(Wayland::KDE_BLUR_MANAGER_UNSET, @wl_surface)
+        @kde_blur.try(&.destroy(Wayland::KDE_BLUR_RELEASE))
+        @kde_blur = nil
+      end
     end
 
     # The window's blur region: the surface minus GTK's shadow (and the
-    # 1 px CSD border), with rounded corners while floating.
+    # 1 px CSD border), with rounded corners while floating. The standard
+    # protocol takes it in surface coordinates; KWin's reads it from the
+    # window geometry's corner, inside the shadow.
     private def blur_region(csd : Bool) : Array(Slice)
       x = y = 0.0
       C.gtk_native_get_surface_transform(@native, pointerof(x), pointerof(y))
-      offset_x = x.to_i + (csd ? 1 : 0)
-      offset_y = y.to_i + (csd ? 1 : 0)
-      width = C.gdk_surface_get_width(@surface) - 2 * offset_x
-      height = C.gdk_surface_get_height(@surface) - 2 * offset_y
+      border = csd ? 1 : 0
+      width = C.gdk_surface_get_width(@surface) - 2 * (x.to_i + border)
+      height = C.gdk_surface_get_height(@surface) - 2 * (y.to_i + border)
       return [] of Slice if width <= 0 || height <= 0
       state = C.gdk_toplevel_get_state(@surface)
       rounded = csd && (state & SQUARE_STATES).none?
-      Winproto.slices(offset_x, offset_y, width, height, rounded ? CORNER_RADIUS : 0)
+      origin_x, origin_y = effect ? {x.to_i, y.to_i} : {0, 0}
+      Winproto.slices(origin_x + border, origin_y + border, width, height, rounded ? CORNER_RADIUS : 0)
     end
 
     # Approximates a rectangle with corners of *radius* by a middle
