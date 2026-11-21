@@ -145,6 +145,7 @@ module DesktopKit
     fun g_notification_set_icon(notification : Void*, icon : Void*)
     fun g_notification_set_default_action_and_target_value(notification : Void*, action : UInt8*, target : Void*)
     fun g_themed_icon_new(iconname : UInt8*) : Void*
+    fun g_themed_icon_new_from_names(iconnames : UInt8**, len : Int32) : Void*
     fun g_cancellable_new : Void*
     fun g_cancellable_cancel(cancellable : Void*)
     fun g_async_result_get_source_object(res : Void*) : Void*

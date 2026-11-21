@@ -486,12 +486,14 @@ module DesktopKit
       @stack_badge.visible = false
       C.gtk_box_append(@header, @stack_badge)
       {
-        {"view-dual-symbolic", DesktopKit.tr("Split Right"), Action::NewSplit.new(:right)},
-        {"view-paged-symbolic", DesktopKit.tr("Split Down"), Action::NewSplit.new(:down)},
-        {"view-fullscreen-symbolic", DesktopKit.tr("Zoom Split"), Action::ToggleSplitZoom.new},
-        {"window-close-symbolic", DesktopKit.tr("Close Split"), Action::CloseSurface.new},
-      }.each do |icon, tooltip, action|
-        button = Widget.new(C.gtk_button_new_from_icon_name(icon))
+        # Each icon by the names themes give it, Adwaita's first.
+        { {"view-dual-symbolic", "view-split-left-right-symbolic"}, DesktopKit.tr("Split Right"), Action::NewSplit.new(:right) },
+        { {"view-paged-symbolic", "view-split-top-bottom-symbolic"}, DesktopKit.tr("Split Down"), Action::NewSplit.new(:down) },
+        { {"view-fullscreen-symbolic"}, DesktopKit.tr("Zoom Split"), Action::ToggleSplitZoom.new },
+        { {"window-close-symbolic"}, DesktopKit.tr("Close Split"), Action::CloseSurface.new },
+      }.each do |icons, tooltip, action|
+        button = Widget.new(C.gtk_button_new)
+        C.gtk_button_set_child(button, GIcon.image(icons))
         C.gtk_button_set_has_frame(button, 0)
         button.focusable = false
         button.tooltip = tooltip

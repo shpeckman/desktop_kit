@@ -103,7 +103,9 @@ module DesktopKit
         if @pill_tabs
           css << "window.desktop-kit-window tabbar tabbox > tabboxchild, window.desktop-kit-window tabbar tab " \
                  "{ border-radius: 9999px; }\n"
-          css << "window.desktop-kit-window tabbar tab { padding: 0 6px; }\n"
+          # Themes frame the tabs and underline their bar: pills have neither.
+          css << "window.desktop-kit-window tabbar .box { border: none; }\n"
+          css << "window.desktop-kit-window tabbar tab { padding: 0 6px; border: none; }\n"
           css << "window.desktop-kit-window tabbar tab:selected { background-color: alpha(currentColor, 0.12); " \
                  "box-shadow: inset 0 0 0 1px alpha(currentColor, 0.18); }\n"
           css << "window.desktop-kit-window tabbar tab > image { padding: 3px; border-radius: 6px; " \

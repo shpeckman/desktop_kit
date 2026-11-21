@@ -111,6 +111,7 @@ describe DesktopKit::WindowStyle do
     css = DesktopKit::WindowStyle.new(pill_tabs: true).to_css
     css.should contain "tabbar tab { border-radius: 9999px; }"
     css.should contain "tabbar tab > image"
+    css.should contain "tabbar tab { padding: 0 6px; border: none; }"
     css = DesktopKit::WindowStyle.new(tint: "#5a2d2d").to_css
     css.should contain "linear-gradient(135deg, alpha(#5a2d2d, 0.4), alpha(#5a2d2d, 0.1))"
     css.should contain "headerbar"

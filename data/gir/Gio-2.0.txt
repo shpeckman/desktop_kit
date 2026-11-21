@@ -49,6 +49,7 @@ g_notification_set_priority
 g_notification_set_icon
 g_notification_set_default_action_and_target_value
 g_themed_icon_new
+g_themed_icon_new_from_names
 
 # async
 g_cancellable_new

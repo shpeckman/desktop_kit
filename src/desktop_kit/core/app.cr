@@ -423,10 +423,14 @@ module DesktopKit
       @session_saved = false
       @provider = C.gtk_css_provider_new
       Signals.connect(@provider, "parsing-error", ->(section : Void*, error : Void*) { css_error(section, error) })
-      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
       @runtime_style = C.gtk_css_provider_new
       load_runtime_style
-      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_APPLICATION)
+      # Both at user priority, the runtime style first: among equals the
+      # provider added last wins, so the runtime style beats a theme in
+      # ~/.config/gtk-4.0/gtk.css (themes restyle tabs and would undo the
+      # window style) and the application's own CSS beats the runtime style.
+      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @runtime_style, C::STYLE_PROVIDER_PRIORITY_USER)
+      C.gtk_style_context_add_provider_for_display(C.gdk_display_get_default, @provider, C::STYLE_PROVIDER_PRIORITY_USER)
       # Before load_css/apply_appearance: mutators act only while running.
       @running.set(true)
       @actions = C.g_simple_action_group_new
