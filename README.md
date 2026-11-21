@@ -378,8 +378,12 @@ plain look, with the header bar on and the other options off:
 |---------------------|----------------------------------------------------------------|
 | `pane_headers`      | a header over each surface: its icon, its title and buttons to split right, split down, zoom and close it |
 | `cards`             | surfaces as rounded cards with gaps between them               |
+| `gap`               | space around each card, in pixels (4)                          |
+| `radius`            | corner radius of the cards, in pixels (12); windows that draw their own frame round their corners to match |
 | `tabs_in_header`    | the tab bar in the header bar, beside the window title, always shown |
 | `header_bar`        | the header bar with the title, the tabs and their buttons; `false` leaves windows without a title bar of their own and passes libadwaita's tab keys (Ctrl+Tab, Ctrl+Page Up, Alt+1 …) to the content |
+| `pill_tabs`         | tabs as pills, the selected one outlined, each with its icon on a badge |
+| `tint`              | a `#rrggbb` color that washes over the window background, fading from its top left corner |
 | `opacity`           | opacity of the window background, 0 to 1; pair it with `Window#background_blur=` |
 | `unfocused_opacity` | opacity of the surfaces of a split other than the tab's active one, 0 to 1 |
 
