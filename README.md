@@ -210,7 +210,7 @@ elsewhere.
 | `Tab#floats`                     | the floating surfaces, from the bottom one to the top one         |
 | `Tab#active_surface`, `#zoomed?` | the focused surface, whether one surface fills the tab            |
 | `Tab#window`, `#close`           | the window showing the tab, closes it                             |
-| `Surface#split(direction)`       | opens a surface beside it, in an `DesktopKit::Direction`, and focuses it |
+| `Surface#split(direction, share)` | opens a surface beside it, in an `DesktopKit::Direction`, and focuses it; the new one takes *share* of their room (default a half) |
 | `Surface#focus`, `#close`        | focuses the surface and selects its tab, closes it                |
 | `Surface#present`                | focuses the surface and raises its window (`PresentSurface`)      |
 | `Surface#tab`, `#window`, `#id`  | where it is shown, its identifier, unique in the process          |

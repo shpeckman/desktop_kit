@@ -88,8 +88,7 @@ module DesktopKit
       # Host targets: Canvas's own target refuses surface moves (`uint64`
       # `GValue`) and refused drags, which bubble up here.
       @surface_drop_target = surfaces = C.gtk_drop_target_new(C::TYPE_UINT64, C::GdkDragAction::Move)
-      Signals.notify(surfaces, "value", -> { reject_self(surfaces) })
-      Signals.connect(surfaces, "motion", ->(x : Float64, y : Float64) : Int32 { indicate(x, y) })
+      Signals.connect(surfaces, "motion", ->(x : Float64, y : Float64) : Int32 { own_drag?(surfaces) ? 0 : indicate(x, y) })
       Signals.connect(surfaces, "leave", -> { indicate(nil) })
       Signals.connect(surfaces, "drop", ->(value : Void*, x : Float64, y : Float64) : Bool { drop_surface(value, x, y) })
       @host.add_controller(surfaces)
@@ -165,10 +164,12 @@ module DesktopKit
       C.g_object_unref(paintable)
     end
 
-    # Refuses a drag of this surface onto itself.
-    private def reject_self(target : Void*) : Nil
+    # Returns whether *target* holds a drag of this surface. Such a drag
+    # gets no action rather than `gtk_drop_target_reject`: GTK still emits
+    # "drop" on a target that rejected, with no value and no drop.
+    private def own_drag?(target : Void*) : Bool
       value = C.gtk_drop_target_get_value(target)
-      C.gtk_drop_target_reject(target) if !value.null? && C.g_value_get_uint64(value) == @id
+      !value.null? && C.g_value_get_uint64(value) == @id
     end
 
     private def indicate(x : Float64, y : Float64) : Int32

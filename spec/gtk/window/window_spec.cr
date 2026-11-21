@@ -513,6 +513,25 @@ describe DesktopKit::Tab do
     end
   end
 
+  it "gives a new split the share it is asked for" do
+    app = TestApp.new
+    run_steps(app) do
+      window = app.new_window
+      first = window.tabs.first.surfaces.first
+      settle
+      second = first.split(:right, 0.25)
+      settle
+      eventually { divided?(first) && host(second).width > 0 }.should be_true
+      total = host(first).width + host(second).width
+      (host(second).width - total * 0.25).abs.should be <= 8
+      third = first.split(:left, 0.25)
+      settle
+      eventually { divided?(third) && host(third).width > 0 }.should be_true
+      (host(third).width - (host(first).width + host(third).width) * 0.25).abs.should be <= 8
+      expect_raises(ArgumentError) { first.split(:down, 1.5) }
+    end
+  end
+
   it "moves the focus between surfaces" do
     app = TestApp.new
     run_steps(app) do

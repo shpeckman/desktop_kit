@@ -295,11 +295,13 @@ module DesktopKit
     end
 
     # Opens a new surface beside this one, or beside the split focused last
-    # when this one floats, in *direction*, focuses it and returns it.
-    # Raises `RuntimeError` when the surface is closed.
-    def split(direction : Direction) : Surface
+    # when this one floats, in *direction*, focuses it and returns it. The
+    # new surface takes *share* of the room the two then divide.
+    # Raises `RuntimeError` when the surface is closed and `ArgumentError`
+    # for a *share* outside `0..1`.
+    def split(direction : Direction, share : Float64 = 0.5) : Surface
       tab = @tab || raise RuntimeError.new("the surface is closed")
-      tab.split(self, direction)
+      tab.split(self, direction, share)
     end
 
     # Returns whether the surface floats over its tab instead of filling a

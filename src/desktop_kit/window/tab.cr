@@ -154,15 +154,18 @@ module DesktopKit
     end
 
     # Splits a new surface off *from*, or off the split focused last when
-    # *from* floats.
-    protected def split(from : Surface, direction : Direction) : Surface
+    # *from* floats; the new surface takes *share* of their room.
+    protected def split(from : Surface, direction : Direction, share : Float64 = 0.5) : Surface
       raise RuntimeError.new("the tab is closed") if @destroyed
       raise ArgumentError.new("the surface is not in this tab") unless contains?(from)
+      raise ArgumentError.new("split share must be between 0 and 1, not #{share}") unless 0.0 <= share <= 1.0
       anchor = floating?(from) ? last_tile : from
       handle = anchor.try { |anchor| @view.tree.locate(anchor) } || raise ArgumentError.new("the tab has no split")
       surface = @app.create_surface(:split, from)
       surface.tab = self
-      @view.tree = @view.tree.split(handle, direction, surface)
+      # The tree's ratio is the share of the left or top child.
+      ratio = direction.left? || direction.up? ? share : 1.0 - share
+      @view.tree = @view.tree.split(handle, direction, surface, ratio)
       activate(surface)
       surface
     end

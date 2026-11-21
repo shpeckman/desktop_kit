@@ -171,6 +171,28 @@ describe "window actions" do
     end
   end
 
+  it "keeps a window the user can't resize at the size its surface asks for" do
+    app = TestApp.new
+    run_steps(app) do
+      app.window_style = DesktopKit::WindowStyle.new(header_bar: false)
+      window = app.new_window
+      window.decoration = :none
+      window.resizable = false
+      trigger(window, DesktopKit::Action::SizeLimit.new(0, 0, 0, 0))
+      first = window.active_surface.not_nil!
+      host = first.@host
+      trigger(window, DesktopKit::Action::ResizeWindow.new(120, 60))
+      eventually { host.mapped? && {host.width, host.height} == {120, 60} }.should be_true
+      trigger(window, DesktopKit::Action::ResizeWindow.new(90, 40))
+      eventually { {host.width, host.height} == {90, 40} }.should be_true
+      trigger(window, DesktopKit::Action::ResizeWindow.new(200, 100))
+      eventually { {host.width, host.height} == {200, 100} }.should be_true
+      first.split(:right)
+      settle
+      {window.widget.width, window.widget.height}.should eq({200, 100})
+    end
+  end
+
   it "keeps the tab overview's page hidden while closed" do
     app = TestApp.new
     run_steps(app) do
